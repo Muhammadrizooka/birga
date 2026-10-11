@@ -254,8 +254,19 @@ the current `user_auth.role`).
 
 #### Edit profile
 
-Body: any of `name`, `username`, `phone_number`, `photo_id`. Omitted or `null` fields are kept;
-`""` clears `name`, `username` or `photo_id`. The rules are the admin update's
+Body: any of `name`, `username`, `phone_number`, `photo_id`, `agreed_on_conditions`,
+`reminder_enabled`, `reminder_time`. Omitted or `null` fields are kept;
+`""` clears `name`, `username` or `photo_id`.
+
+The last three are the user's own settings and exist only here, not in the admin update:
+
+| Field | Rules |
+|---|---|
+| `reminder_enabled` | boolean, the "Kunlik eslatma" switch |
+| `reminder_time` | `HH:MM`, 24-hour, Uzbekistan time, e.g. `"18:00"` (422 otherwise); kept while the reminder is off |
+| `agreed_on_conditions` | only `true` (422 for `false`): records consent for a user who signed up without it. Withdrawing consent means deleting the account |
+
+The server only stores the reminder setting; the app schedules the notification on the phone. The rules are the admin update's
 (`usecases/user_updater`): `name` at most 100 characters, `username` 3 to 32 of `a-z`, `0-9`,
 `_`, `.` (lowercased), `photo_id` an id from `POST /v1/media` (422 if unknown), 409 when the
 username or phone number belongs to someone else. Response `data` is the same as Get profile.
@@ -559,7 +570,8 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
   "password": "s3cret-pass",
   "phone_number": "+998901234567",
   "relationship": "mother",
-  "goals": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"]
+  "goals": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"],
+  "agreed_on_conditions": true
 }
 ```
 
@@ -571,6 +583,7 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
 | `phone_number` | Uzbek number, `+998` and 9 digits; not verified |
 | `relationship` | required: `father`, `mother`, `educator` or `nanny` (trimmed, case-insensitive) |
 | `goals` | optional, up to 20 goal ids from [`GET /v1/goals`](#goals); repeats are stored once; every id must be an active goal |
+| `agreed_on_conditions` | optional boolean, the consent tick on the sign-up screen; stored in `users.agreed_on_conditions`, omitted means `false`. Sign-up does not refuse `false` yet; the app should only let the user continue once it is ticked |
 
 Any other field (for example an old client's `user_role` or `photo_id`) is ignored.
 
@@ -818,6 +831,9 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `photo_id` | UUID string or `null` | profile photo, a media id from `POST /v1/media` |
 | `relationship` | string or `null` | `father`, `mother`, `educator` or `nanny`; `null` for users created before sign-up asked for it, or by an admin |
 | `goal_ids` | array of UUID strings | goals picked at sign-up, always an array (may be empty); see [Goals](#goals) |
+| `agreed_on_conditions` | bool | consent given at sign-up (or later through `PATCH /v1/me`); `false` for older users and users created by an admin |
+| `reminder_enabled` | bool | daily reminder on or off, `false` by default |
+| `reminder_time` | string | daily reminder time, `HH:MM` in Uzbekistan time, `"18:00"` by default |
 | `created_at`, `updated_at` | RFC 3339 timestamp | `updated_at` changes on every update and on delete |
 
 `deleted_at` is never returned: deleted users are not returned at all.

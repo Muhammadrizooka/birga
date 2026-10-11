@@ -91,7 +91,7 @@ func newUseCase(f *fakes) *UseCase {
 
 func req() domain.SignUpRequest {
 	return domain.SignUpRequest{Name: " Dilnoza ", Username: " Dilnoza_K ", Password: "s3cret-pass", PhoneNumber: "+998901234567",
-		Relationship: " Mother ", GoalIDs: []string{goalID, strings.ToUpper(goalID)}}
+		Relationship: " Mother ", GoalIDs: []string{goalID, strings.ToUpper(goalID)}, AgreedOnConditions: true}
 }
 
 func TestExecute(t *testing.T) {
@@ -107,6 +107,10 @@ func TestExecute(t *testing.T) {
 	}
 
 	checkUser(t, f.user)
+
+	if !f.user.AgreedOnConditions {
+		t.Fatal("agreed_on_conditions was not stored")
+	}
 
 	if f.auth.UserID != userID || f.auth.Username != "dilnoza_k" || f.auth.Role != domain.UserRoleUnverifiedUser ||
 		f.auth.AccessTokenHash != domain.HashToken(pair.AccessToken) || f.auth.RefreshTokenHash != domain.HashToken(pair.RefreshToken) {

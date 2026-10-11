@@ -86,6 +86,9 @@ setting `deleted_at`.
 | `photo_id` | `UUID` | yes | | id of the profile photo, references `media(id)` `ON DELETE SET NULL` (constraint `users_photo_id_fkey`, added by `000003_create_media_table`); NULL after sign-up, set through `PATCH /v1/me` |
 | `relationship` | `user_relationship` | yes | | enum `father`, `mother`, `educator`, `nanny` (added by `000010_add_relationship_and_goals`); required by sign-up, NULL for older users and users created by an admin |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of `goals` the user picked at sign-up (added by `000010_add_relationship_and_goals`); no foreign key, see [`goals`](#goals) |
+| `agreed_on_conditions` | `BOOLEAN` | no | `FALSE` | consent to the terms, the tick on the sign-up screen (added by `000012_add_user_consent_and_reminder`); FALSE for older users and users created by an admin |
+| `reminder_enabled` | `BOOLEAN` | no | `FALSE` | daily reminder on or off (`000012`) |
+| `reminder_time` | `VARCHAR(5)` | no | `'18:00'` | daily reminder time, `HH:MM` 24-hour, Uzbekistan time (`000012`); check `users_reminder_time_chk` |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |

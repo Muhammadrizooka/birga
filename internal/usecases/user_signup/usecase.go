@@ -98,6 +98,8 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			PhoneNumber:  &req.PhoneNumber,
 			Relationship: &req.Relationship,
 			GoalIDs:      req.GoalIDs,
+
+			AgreedOnConditions: req.AgreedOnConditions,
 		})
 		if err != nil {
 			return err

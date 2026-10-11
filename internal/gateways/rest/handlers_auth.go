@@ -16,6 +16,8 @@ type SignUpRequest struct {
 	// Relationship is who the user is to the children.
 	Relationship string   `json:"relationship" example:"mother" enums:"father,mother,educator,nanny"`
 	Goals        []string `json:"goals" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"` // goal ids from GET /v1/goals, optional
+	// AgreedOnConditions is the consent tick on the sign-up screen; omitted means false.
+	AgreedOnConditions bool `json:"agreed_on_conditions" example:"true"`
 }
 
 // signUpView is the sign-up response: the new user's id and their tokens.
@@ -70,6 +72,8 @@ func (s *Server) SignUp() gin.HandlerFunc {
 			PhoneNumber:  req.PhoneNumber,
 			Relationship: req.Relationship,
 			GoalIDs:      req.Goals,
+
+			AgreedOnConditions: req.AgreedOnConditions,
 		})
 		if err != nil {
 			Return(c, nil, err)

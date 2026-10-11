@@ -41,6 +41,7 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.UserUpdate
 	upd.Username = trimmed(upd.Username, true)
 	upd.PhoneNumber = trimmed(upd.PhoneNumber, false)
 	upd.PhotoID = trimmed(upd.PhotoID, false)
+	upd.ReminderTime = trimmed(upd.ReminderTime, false)
 
 	if err := validate(upd); err != nil {
 		return domain.User{}, err
@@ -80,6 +81,10 @@ func validate(upd domain.UserUpdate) error {
 		return errs.Errf(errs.ErrValidation, "name must be at most %d characters", domain.MaxUserNameLength)
 	case upd.PhotoID != nil && *upd.PhotoID != "" && uuid.Validate(*upd.PhotoID) != nil:
 		return errs.Errf(errs.ErrValidation, "photo_id must be a UUID")
+	case upd.ReminderTime != nil && !domain.IsValidReminderTime(*upd.ReminderTime):
+		return errs.Errf(errs.ErrValidation, "reminder_time must be a 24-hour time HH:MM, e.g. 18:00")
+	case upd.AgreedOnConditions != nil && !*upd.AgreedOnConditions:
+		return errs.Errf(errs.ErrValidation, "agreed_on_conditions can only be set to true; to withdraw consent, delete the account")
 	}
 
 	return nil

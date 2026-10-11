@@ -223,10 +223,15 @@ type userView struct {
 	PhoneNumber *string `json:"phone_number" example:"+998901234567"`
 	PhotoID     *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	// Relationship is null for users created before sign-up asked for it, or by an admin.
-	Relationship *string   `json:"relationship" example:"mother" enums:"father,mother,educator,nanny"`
-	GoalIDs      []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Relationship *string  `json:"relationship" example:"mother" enums:"father,mother,educator,nanny"`
+	GoalIDs      []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	// AgreedOnConditions is the consent to the terms given at sign-up.
+	AgreedOnConditions bool `json:"agreed_on_conditions" example:"true"`
+	// ReminderEnabled and ReminderTime are the daily reminder setting (HH:MM, Uzbekistan time).
+	ReminderEnabled bool      `json:"reminder_enabled" example:"true"`
+	ReminderTime    string    `json:"reminder_time" example:"18:00"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type userListView struct {
@@ -245,7 +250,11 @@ func toUserView(u domain.User) userView {
 		PhotoID:      u.PhotoID,
 		Relationship: u.Relationship,
 		GoalIDs:      u.GoalIDs,
-		CreatedAt:    u.CreatedAt,
-		UpdatedAt:    u.UpdatedAt,
+
+		AgreedOnConditions: u.AgreedOnConditions,
+		ReminderEnabled:    u.ReminderEnabled,
+		ReminderTime:       u.ReminderTime,
+		CreatedAt:          u.CreatedAt,
+		UpdatedAt:          u.UpdatedAt,
 	}
 }
