@@ -327,7 +327,7 @@ means users request a new code (and verify again before signing up).
 | `birga:otp:code:<purpose>:<phone>` | hash `{hash, attempts}` | `OTP_TTL` (2 min) | SHA-256 of `<phone>:<purpose>:<code>` (`domain.HashOTPCode`) and wrong attempts so far; deleted on a match or after `OTP_MAX_VERIFY_ATTEMPTS` wrong codes |
 | `birga:otp:cooldown:<purpose>:<phone>` | string | `OTP_RESEND_COOLDOWN` (1 min) | present while a new code may not be sent |
 | `birga:otp:limit:phone:<phone>` | counter | 1 hour from the first code | codes sent to the phone, any purpose |
-| `birga:otp:limit:ip:<ip>` | counter | 1 hour from the first code | codes requested from the IP (canonical form, e.g. `2001:db8::1`) |
+| `birga:otp:limit:client:<sha256>` | counter | 1 hour from the first code | codes requested with one `User-Agent` value; the key holds the SHA-256 hex of the header |
 | `birga:otp:verified:<purpose>:<phone>` | string `1` | `OTP_VERIFIED_TTL` (10 min) | set by the verify script when a code matches, or by `MarkVerified` for `OTP_DEFAULT_CODE`; `PATCH /v1/me` requires the `update_user` one for a new phone number, `PUT /v1/me/password` and `POST /v1/auth/forgot-password` the `reset_password` one for the user's number; each deletes it after its write |
 
 `<phone>` is E.164 (`+998901234567`), `<purpose>` is `sign_up`, `update_user` or `reset_password`.

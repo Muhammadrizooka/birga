@@ -34,12 +34,12 @@ func (p OTPPurpose) IsKnown() bool {
 // OTPPurposesHint lists the supported purposes for validation messages.
 const OTPPurposesHint = `"sign_up", "update_user" or "reset_password"`
 
-// OTPSendRequest asks for a code to be sent to PhoneNumber. IPAddress is the end user's IP,
-// used for rate limiting.
+// OTPSendRequest asks for a code to be sent to PhoneNumber. UserAgent is the request's User-Agent
+// header, which identifies the client app for rate limiting.
 type OTPSendRequest struct {
 	PhoneNumber string
 	Purpose     OTPPurpose
-	IPAddress   string
+	UserAgent   string
 }
 
 // OTPSendResult tells the client how long the code lives and when it may ask for another one.
@@ -60,7 +60,7 @@ type OTPLimits struct {
 	ResendCooldown time.Duration // one code per phone and purpose per cooldown
 	Window         time.Duration // window of the counters below
 	MaxPerPhone    int           // codes per phone (any purpose) per window
-	MaxPerIP       int           // codes per IP per window
+	MaxPerClient   int           // codes per client (User-Agent) per window
 }
 
 // OTPVerifyOutcome is the result of comparing a code with the stored one.

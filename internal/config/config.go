@@ -63,7 +63,8 @@ type OTPConfig struct {
 	TTL             time.Duration `env:"TTL, default=2m"`
 	ResendCooldown  time.Duration `env:"RESEND_COOLDOWN, default=1m"`
 	MaxPerPhoneHour int           `env:"MAX_PER_PHONE_HOUR, default=5"`
-	MaxPerIPHour    int           `env:"MAX_PER_IP_HOUR, default=20"`
+	// MaxPerUserAgentHour caps codes per User-Agent header value per hour.
+	MaxPerUserAgentHour int `env:"MAX_PER_USER_AGENT_HOUR, default=20"`
 	// MaxVerifyAttempts wrong codes delete the code; the user must request a new one.
 	MaxVerifyAttempts int `env:"MAX_VERIFY_ATTEMPTS, default=5"`
 	// VerifiedTTL is how long a verified sign_up code lets the phone number sign up.

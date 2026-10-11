@@ -13,21 +13,21 @@ import (
 )
 
 var (
-	testCfg = config.OTPConfig{TTL: 2 * time.Minute, ResendCooldown: time.Minute, MaxPerPhoneHour: 5, MaxPerIPHour: 20}
+	testCfg = config.OTPConfig{TTL: 2 * time.Minute, ResendCooldown: time.Minute, MaxPerPhoneHour: 5, MaxPerUserAgentHour: 20}
 	codeRe  = regexp.MustCompile(`\b(\d{6})\b`)
 )
 
 type fakeOTPs struct {
 	acquireErr error
 	limits     domain.OTPLimits
-	ip         string
+	client     string
 	hash       string
 	ttl        time.Duration
 	released   bool
 }
 
-func (f *fakeOTPs) AcquireSend(_ context.Context, _ string, _ domain.OTPPurpose, ip string, lim domain.OTPLimits) error {
-	f.ip, f.limits = ip, lim
+func (f *fakeOTPs) AcquireSend(_ context.Context, _ string, _ domain.OTPPurpose, client string, lim domain.OTPLimits) error {
+	f.client, f.limits = client, lim
 
 	return f.acquireErr
 }
@@ -60,7 +60,7 @@ func (f *fakeSMS) Send(_ context.Context, id, phone, text string) error {
 }
 
 func validReq() domain.OTPSendRequest {
-	return domain.OTPSendRequest{PhoneNumber: " +998901234567 ", Purpose: domain.OTPPurposeSignUp, IPAddress: " 2001:DB8::1 "}
+	return domain.OTPSendRequest{PhoneNumber: " +998901234567 ", Purpose: domain.OTPPurposeSignUp, UserAgent: " Birga/1.0 (Android 14) "}
 }
 
 func TestExecute_Sends(t *testing.T) {
@@ -75,8 +75,8 @@ func TestExecute_Sends(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 
-	wantLimits := domain.OTPLimits{ResendCooldown: time.Minute, Window: time.Hour, MaxPerPhone: 5, MaxPerIP: 20}
-	if otps.limits != wantLimits || otps.ip != "2001:db8::1" || otps.ttl != testCfg.TTL || otps.released {
+	wantLimits := domain.OTPLimits{ResendCooldown: time.Minute, Window: time.Hour, MaxPerPhone: 5, MaxPerClient: 20}
+	if otps.limits != wantLimits || otps.client != clientKey("Birga/1.0 (Android 14)") || len(otps.client) != 64 || otps.ttl != testCfg.TTL || otps.released {
 		t.Fatalf("unexpected store calls: %+v", otps)
 	}
 
@@ -92,14 +92,13 @@ func TestExecute_Sends(t *testing.T) {
 
 func TestExecute_Validation(t *testing.T) {
 	cases := map[string]func(*domain.OTPSendRequest){
-		"no phone":       func(r *domain.OTPSendRequest) { r.PhoneNumber = "" },
-		"foreign phone":  func(r *domain.OTPSendRequest) { r.PhoneNumber = "+79001234567" },
-		"local phone":    func(r *domain.OTPSendRequest) { r.PhoneNumber = "901234567" },
-		"bad purpose":    func(r *domain.OTPSendRequest) { r.Purpose = "login" },
-		"no purpose":     func(r *domain.OTPSendRequest) { r.Purpose = "" },
-		"no ip":          func(r *domain.OTPSendRequest) { r.IPAddress = "" },
-		"bad ip":         func(r *domain.OTPSendRequest) { r.IPAddress = "300.1.1.1" },
-		"hostname as ip": func(r *domain.OTPSendRequest) { r.IPAddress = "example.com" },
+		"no phone":      func(r *domain.OTPSendRequest) { r.PhoneNumber = "" },
+		"foreign phone": func(r *domain.OTPSendRequest) { r.PhoneNumber = "+79001234567" },
+		"local phone":   func(r *domain.OTPSendRequest) { r.PhoneNumber = "901234567" },
+		"bad purpose":   func(r *domain.OTPSendRequest) { r.Purpose = "login" },
+		"no purpose":    func(r *domain.OTPSendRequest) { r.Purpose = "" },
+		"no user agent": func(r *domain.OTPSendRequest) { r.UserAgent = "" },
+		"blank agent":   func(r *domain.OTPSendRequest) { r.UserAgent = "   " },
 	}
 
 	for name, mutate := range cases {

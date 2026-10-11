@@ -113,7 +113,7 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `OTP_TTL` | `2m` | how long a code is valid (Redis key TTL) |
 | `OTP_RESEND_COOLDOWN` | `1m` | minimum gap between codes for one phone and purpose |
 | `OTP_MAX_PER_PHONE_HOUR` | `5` | codes per phone per hour |
-| `OTP_MAX_PER_IP_HOUR` | `20` | codes per IP address per hour |
+| `OTP_MAX_PER_USER_AGENT_HOUR` | `20` | codes per `User-Agent` header value per hour (replaces `OTP_MAX_PER_IP_HOUR`) |
 | `OTP_MAX_VERIFY_ATTEMPTS` | `5` | wrong codes before the code is deleted |
 | `OTP_DEFAULT_CODE` | empty | 6 digits that `POST /v1/otp/verify` accepts for any phone without checking (development, testing, app review). Empty turns it off; the process exits if it is set with `ENVIRONMENT=production` or is not 6 digits. `.env.example` sets `654321` |
 | `OTP_VERIFIED_TTL` | `10m` | how long a matched code marks the phone as verified; `POST /v1/auth/signup` needs a `sign_up` mark, `PATCH /v1/me` (new phone) an `update_user` one, `PUT /v1/me/password` a `reset_password` one |

@@ -31,7 +31,7 @@ Every response, success or failure, has the same shape:
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
 | -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
-| -70 | 429 | rate limited | OTP requested again too soon, too many OTPs for a phone or IP, too many wrong OTP codes |
+| -70 | 429 | rate limited | OTP requested again too soon, too many OTPs for a phone or a User-Agent, too many wrong OTP codes |
 
 For 500s the client only sees `"internal error"`. Find the real message in the logs by the
 request id.
@@ -44,6 +44,7 @@ request id.
 | `X-Admin-Key` | request | admin key for `/v1/admin/*` (when no `Authorization` header is sent) |
 | `Authorization: Bearer <access_token>` | request | signed-in user for `/v1/children` and `/v1/children/*`; an admin user for `/v1/admin/*` |
 | `Content-Type: application/json` | request | for bodies |
+| `User-Agent` | request | sent by the apps on every request; required by `POST /v1/otp/send`, whose rate limit counts per value (see [Send](#send)) |
 
 CORS allows any origin.
 
@@ -428,16 +429,21 @@ Body (all fields required):
 ```json
 {
   "phone_number": "+998901234567",
-  "purpose": "sign_up",
-  "ip_address": "203.0.113.7"
+  "purpose": "sign_up"
 }
 ```
+
+The `User-Agent` header is required too (422 `the User-Agent header is required` when it is
+missing or blank): the rate limiter counts codes per User-Agent value. The apps send a
+User-Agent on every request; the mobile app should make it identify the install (for example
+`Birga/1.0.0 (Android 14; <install id>)`), because every client with the same value shares one
+counter. Browsers send their own User-Agent and cannot change it. The `ip_address` field older
+clients send is ignored.
 
 | Field | Rules |
 |---|---|
 | `phone_number` | Uzbek mobile number in E.164: `+998` and 9 digits (422). Play Mobile only delivers in Uzbekistan |
 | `purpose` | `sign_up` (registration; not required by sign-up for now), `update_user` (a new phone number for `PATCH /v1/me`) or `reset_password` (`POST /v1/auth/forgot-password` and `PUT /v1/me/password`) (422) |
-| `ip_address` | the end user's IPv4 or IPv6 address, as seen by the app or proxy in front of the API (422) |
 
 Response `data`:
 
@@ -459,7 +465,8 @@ Behaviour (`usecases/otp_sender`):
   - one code per phone and purpose every `OTP_RESEND_COOLDOWN` (60 s): `a code was sent
     recently, request a new one in N seconds`;
   - at most `OTP_MAX_PER_PHONE_HOUR` (5) codes per phone per hour, all purposes together;
-  - at most `OTP_MAX_PER_IP_HOUR` (20) codes per `ip_address` per hour.
+  - at most `OTP_MAX_PER_USER_AGENT_HOUR` (20) codes per `User-Agent` value per hour:
+    `too many codes requested from this device, try again in N seconds`.
 
   The hour is a fixed window that starts with the first code. The check and the counting are
   one atomic Redis script, so parallel requests and several API instances cannot slip past it.
@@ -506,7 +513,8 @@ Examples:
 
 ```bash
 curl -X POST localhost:8080/v1/otp/send -H 'Content-Type: application/json' \
-  -d '{"phone_number": "+998901234567", "purpose": "sign_up", "ip_address": "203.0.113.7"}'
+  -H 'User-Agent: Birga/1.0.0 (Android 14; 5b1e0c7a)' \
+  -d '{"phone_number": "+998901234567", "purpose": "sign_up"}'
 
 curl -X POST localhost:8080/v1/otp/verify -H 'Content-Type: application/json' \
   -d '{"phone_number": "+998901234567", "purpose": "sign_up", "code": "480569"}'

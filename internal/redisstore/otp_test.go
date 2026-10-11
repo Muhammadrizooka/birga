@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	phone = "+998901234567"
-	ip    = "203.0.113.7"
+	phone  = "+998901234567"
+	client = "c0ffee"
 )
 
-var limits = domain.OTPLimits{ResendCooldown: time.Minute, Window: time.Hour, MaxPerPhone: 3, MaxPerIP: 4}
+var limits = domain.OTPLimits{ResendCooldown: time.Minute, Window: time.Hour, MaxPerPhone: 3, MaxPerClient: 4}
 
 func newStore(t *testing.T) (*Store, *miniredis.Miniredis) {
 	t.Helper()
@@ -33,46 +33,46 @@ func TestAcquireSend_Limits(t *testing.T) {
 	s, mr := newStore(t)
 	ctx := context.Background()
 
-	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, ip, limits); err != nil {
+	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, client, limits); err != nil {
 		t.Fatalf("first send: %v", err)
 	}
 
-	err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, ip, limits)
+	err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, client, limits)
 	if !errors.Is(err, errs.ErrRateLimited) || err.Error() != "a code was sent recently, request a new one in 60 seconds" {
 		t.Fatalf("cooldown: %v", err)
 	}
 
 	// The cooldown is per purpose; the phone counter is shared.
-	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeUpdateUser, ip, limits); err != nil {
+	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeUpdateUser, client, limits); err != nil {
 		t.Fatalf("other purpose: %v", err)
 	}
 
 	mr.FastForward(time.Minute)
 
-	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, ip, limits); err != nil {
+	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, client, limits); err != nil {
 		t.Fatalf("after cooldown: %v", err)
 	}
 
 	mr.FastForward(time.Minute)
 
-	err = s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, ip, limits)
+	err = s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, client, limits)
 	if !errors.Is(err, errs.ErrRateLimited) || !strings.HasPrefix(err.Error(), "too many codes requested for this phone number, try again in 3480 seconds") {
 		t.Fatalf("phone limit: %v", err)
 	}
 
-	// A fourth send from the same IP to another phone passes; the fifth hits the IP limit.
-	if err := s.OTP().AcquireSend(ctx, "+998901111111", domain.OTPPurposeSignUp, ip, limits); err != nil {
+	// A fourth send from the same client to another phone passes; the fifth hits the client limit.
+	if err := s.OTP().AcquireSend(ctx, "+998901111111", domain.OTPPurposeSignUp, client, limits); err != nil {
 		t.Fatalf("other phone: %v", err)
 	}
 
-	err = s.OTP().AcquireSend(ctx, "+998902222222", domain.OTPPurposeSignUp, ip, limits)
-	if !errors.Is(err, errs.ErrRateLimited) || !strings.HasPrefix(err.Error(), "too many codes requested from this IP address") {
-		t.Fatalf("ip limit: %v", err)
+	err = s.OTP().AcquireSend(ctx, "+998902222222", domain.OTPPurposeSignUp, client, limits)
+	if !errors.Is(err, errs.ErrRateLimited) || !strings.HasPrefix(err.Error(), "too many codes requested from this device") {
+		t.Fatalf("client limit: %v", err)
 	}
 
 	mr.FastForward(time.Hour)
 
-	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, ip, limits); err != nil {
+	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, client, limits); err != nil {
 		t.Fatalf("after window: %v", err)
 	}
 }
@@ -81,7 +81,7 @@ func TestReleaseSend(t *testing.T) {
 	s, mr := newStore(t)
 	ctx := context.Background()
 
-	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, ip, limits); err != nil {
+	if err := s.OTP().AcquireSend(ctx, phone, domain.OTPPurposeSignUp, client, limits); err != nil {
 		t.Fatalf("AcquireSend: %v", err)
 	}
 
@@ -89,7 +89,7 @@ func TestReleaseSend(t *testing.T) {
 		t.Fatalf("SaveCode: %v", err)
 	}
 
-	if err := s.OTP().ReleaseSend(ctx, phone, domain.OTPPurposeSignUp, ip); err != nil {
+	if err := s.OTP().ReleaseSend(ctx, phone, domain.OTPPurposeSignUp, client); err != nil {
 		t.Fatalf("ReleaseSend: %v", err)
 	}
 
@@ -102,10 +102,10 @@ func TestReleaseSend(t *testing.T) {
 	}
 
 	// Releasing again never goes below zero.
-	_ = s.OTP().ReleaseSend(ctx, phone, domain.OTPPurposeSignUp, ip)
+	_ = s.OTP().ReleaseSend(ctx, phone, domain.OTPPurposeSignUp, client)
 
-	if v, _ := mr.Get(ipLimitKey(ip)); v != "0" {
-		t.Fatalf("ip counter = %q, want 0", v)
+	if v, _ := mr.Get(clientLimitKey(client)); v != "0" {
+		t.Fatalf("client counter = %q, want 0", v)
 	}
 }
 

@@ -32,12 +32,13 @@ func TestSendOTP(t *testing.T) {
 	s, d := newTestServer("")
 
 	code, r := do(t, s, http.MethodPost, "/v1/otp/send",
-		`{"phone_number": "+998901234567", "purpose": "update_user", "ip_address": "203.0.113.7"}`, nil)
+		`{"phone_number": "+998901234567", "purpose": "update_user", "ip_address": "203.0.113.7"}`,
+		map[string]string{"User-Agent": "Birga/1.0 (Android 14)"})
 	if code != http.StatusOK {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
-	want := domain.OTPSendRequest{PhoneNumber: "+998901234567", Purpose: domain.OTPPurposeUpdateUser, IPAddress: "203.0.113.7"}
+	want := domain.OTPSendRequest{PhoneNumber: "+998901234567", Purpose: domain.OTPPurposeUpdateUser, UserAgent: "Birga/1.0 (Android 14)"}
 	if d.otp.got != want {
 		t.Fatalf("request = %+v, want %+v", d.otp.got, want)
 	}
