@@ -168,6 +168,29 @@ func TestListActivities(t *testing.T) {
 	}
 }
 
+func TestListActivities_SearchAndStatus(t *testing.T) {
+	s, d := newTestServer("")
+
+	// The public list takes q but ignores status: it only ever shows published activities.
+	if code, r := do(t, s, http.MethodGet, "/v1/activities?q=tosh&status=draft", "", nil); code != http.StatusOK {
+		t.Fatalf("public: %d %+v", code, r)
+	}
+
+	if d.lister.got.Search != "tosh" || d.lister.got.Status != "" || !d.lister.got.PublishedOnly {
+		t.Fatalf("public filter = %+v", d.lister.got)
+	}
+
+	admin, d := newTestServer("k")
+
+	if code, r := do(t, admin, http.MethodGet, "/v1/admin/activities?q=tosh&status=draft", "", map[string]string{"X-Admin-Key": "k"}); code != http.StatusOK {
+		t.Fatalf("admin: %d %+v", code, r)
+	}
+
+	if d.lister.got.Search != "tosh" || d.lister.got.Status != "draft" || d.lister.got.PublishedOnly {
+		t.Fatalf("admin filter = %+v", d.lister.got)
+	}
+}
+
 func TestListActivities_BadQuery(t *testing.T) {
 	s, _ := newTestServer("")
 

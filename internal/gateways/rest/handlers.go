@@ -117,6 +117,7 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 // @Produce json
 // @Param age query int false "child age in years (2..6)"
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
+// @Param q query string false "text the Uzbek or Russian title contains, ignoring case (at most 100 characters)"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.activityListView}
@@ -135,6 +136,8 @@ func (s *Server) ListActivities() gin.HandlerFunc {
 // @Produce json
 // @Param age query int false "child age in years (2..6)"
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
+// @Param q query string false "text the Uzbek or Russian title contains, ignoring case (at most 100 characters)"
+// @Param status query string false "published or draft; omitted lists both" Enums(published, draft)
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.activityListView}
@@ -163,13 +166,19 @@ func (s *Server) listActivities(publishedOnly bool) gin.HandlerFunc {
 			return
 		}
 
-		items, total, err := s.activityLister.Execute(c.Request.Context(), domain.ActivityFilter{
+		f := domain.ActivityFilter{
 			Age:           age,
 			GoalID:        c.Query("goal_id"),
+			Search:        c.Query("q"),
 			PublishedOnly: publishedOnly,
 			Limit:         limit,
 			Offset:        offset,
-		})
+		}
+		if !publishedOnly {
+			f.Status = c.Query("status")
+		}
+
+		items, total, err := s.activityLister.Execute(c.Request.Context(), f)
 		if err != nil {
 			Return(c, nil, err)
 

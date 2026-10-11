@@ -3,6 +3,7 @@ package activitylister
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
@@ -40,11 +41,25 @@ func TestExecute_Success(t *testing.T) {
 	}
 }
 
+func TestExecute_NormalizesSearchAndStatus(t *testing.T) {
+	repo := &mockRepo{}
+
+	if _, _, err := New(nil, repo).Execute(context.Background(), domain.ActivityFilter{Search: "  Tosh ", Status: " Draft "}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if repo.got.Search != "Tosh" || repo.got.Status != domain.ActivityStatusDraft {
+		t.Fatalf("filter not normalized: %+v", repo.got)
+	}
+}
+
 func TestExecute_Validation(t *testing.T) {
 	for name, f := range map[string]domain.ActivityFilter{
 		"bad goal id":  {GoalID: "motor"},
 		"age too low":  {Age: 1},
 		"age too high": {Age: 9},
+		"bad status":   {Status: "archived"},
+		"long search":  {Search: strings.Repeat("я", domain.MaxActivitySearchLength+1)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, _, err := New(nil, &mockRepo{}).Execute(context.Background(), f); !errors.Is(err, errs.ErrValidation) {

@@ -24,10 +24,23 @@ type Activity struct {
 	UpdatedAt       time.Time
 }
 
+// Activity publication states an admin listing can filter on.
+const (
+	ActivityStatusPublished = "published"
+	ActivityStatusDraft     = "draft"
+)
+
+// MaxActivitySearchLength caps the title search text, counted in characters.
+const MaxActivitySearchLength = 100
+
 // ActivityFilter narrows an activity listing. Zero values mean "no filter".
 type ActivityFilter struct {
-	Age           int
-	GoalID        string
+	Age    int
+	GoalID string
+	// Search matches activities whose Uzbek or Russian title contains it, ignoring case.
+	Search string
+	// Status is ActivityStatusPublished or ActivityStatusDraft; empty lists both.
+	Status        string
 	PublishedOnly bool
 	Limit         int
 	Offset        int

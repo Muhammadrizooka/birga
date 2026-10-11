@@ -118,10 +118,11 @@ Query parameters for the list:
 |---|---|---|
 | `age` | int | child age in years, 2 to 6; matches activities where `min_age <= age <= max_age` |
 | `goal_id` | UUID string | a goal id from [`GET /v1/goals`](#goals); matches activities whose `goal_ids` contain it |
+| `q` | string | title search: matches activities whose `title_uz` or `title_ru` contains the text, ignoring case; trimmed, at most 100 characters; `%` and `_` match literally |
 | `limit`, `offset` | int | see [Pagination](#pagination) |
 
-An `age` outside 2..6 or a `goal_id` that is not a UUID returns 422; a non-integer `age` returns
-400. A UUID that is not a goal simply matches nothing.
+An `age` outside 2..6, a `goal_id` that is not a UUID or a `q` over 100 characters returns 422;
+a non-integer `age` returns 400. A UUID that is not a goal simply matches nothing.
 
 Example:
 
@@ -134,10 +135,19 @@ curl 'localhost:8080/v1/activities?age=4&goal_id='$GOAL'&limit=10'
 | Method | Path | Description |
 |---|---|---|
 | POST | `/v1/admin/activities` | create an activity |
-| GET | `/v1/admin/activities` | list all activities, including unpublished (same filters) |
+| GET | `/v1/admin/activities` | list all activities, including unpublished (same filters, plus `status`) |
 | GET | `/v1/admin/activities/{id}` | one activity, including unpublished |
 | PATCH | `/v1/admin/activities/{id}` | change some fields, including publishing or unpublishing |
 | DELETE | `/v1/admin/activities/{id}` | soft-delete an activity |
+
+The admin list takes the public list's `age`, `goal_id`, `q`, `limit` and `offset`, and also
+`status`: `published` (only published activities), `draft` (only unpublished ones) or omitted
+for both. Any other value is 422 `status must be published or draft`. The public list ignores
+`status`.
+
+```bash
+curl 'localhost:8080/v1/admin/activities?q=tosh&status=draft' -H "Authorization: Bearer $ADMIN_TOKEN"
+```
 
 Create body:
 
