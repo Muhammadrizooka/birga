@@ -76,6 +76,12 @@
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "text the Uzbek or Russian title contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "page size (default 20, max 100)",
                         "name": "limit",
@@ -211,6 +217,22 @@
                         "type": "string",
                         "description": "goal id (UUID) from GET /v1/goals",
                         "name": "goal_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "text the Uzbek or Russian title contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "draft"
+                        ],
+                        "type": "string",
+                        "description": "published or draft; omitted lists both",
+                        "name": "status",
                         "in": "query"
                     },
                     {
@@ -1650,6 +1672,92 @@
                         }
                     }
                 }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- only the child's parents can edit it; any other id, or a deleted child, is 404\n- omitted or null fields are kept; the add-child rules apply to the given ones:\nname 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media\n(\"\" clears it, an unknown id is 422)\n- an empty body is 422 (nothing to update)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "edits one of the signed-in user's children",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.UpdateChildRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.childView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/v1/children/{id}/completions": {
@@ -1808,6 +1916,144 @@
                         "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/children/{id}/plan": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- only the child's parents can ask (404 otherwise)\n- the first call makes the plan: one activity per day theme, fitting the child's age\n(clamped to 2..6), preferring the theme's goal, then the parent's goals, then activities\nthe child has not done; the plan then stays the same until POST starts a new one\n- days are done in order, one per calendar day (Uzbekistan time): status is done, today\n(the next day to do, open now) or locked\n- completing a day is POST /v1/children/{id}/completions with the day's activity id\n- 404 when no published activity fits the child's age",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "a child's 7-day plan (the Reja tab)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.planView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- replaces the current plan with a new one starting today, whatever its progress;\ncompletions stay in the history. Use it when the plan is completed",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "starts a new 7-day plan for a child",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.planView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "500": {
@@ -2464,7 +2710,7 @@
         },
         "/v1/otp/send": {
             "post": {
-                "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or\nreset_password (the number must belong to a user, 404 otherwise; used by forgot password and\nPUT /v1/me/password)\n- ip_address: the end user's IPv4 or IPv6 address, used for rate limits\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new\ncode replaces the previous one for the same phone and purpose\n- rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour\nat most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP",
+                "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or\nreset_password (the number must belong to a user, 404 otherwise; used by forgot password and\nPUT /v1/me/password)\n- the User-Agent header is required (422 if empty) and identifies the client for rate limits;\nan old client's ip_address field is ignored\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new\ncode replaces the previous one for the same phone and purpose\n- rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour\nat most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_USER_AGENT_HOUR per User-Agent",
                 "consumes": [
                     "application/json"
                 ],
@@ -2946,10 +3192,6 @@
         "rest.SendOTPRequest": {
             "type": "object",
             "properties": {
-                "ip_address": {
-                    "type": "string",
-                    "example": "203.0.113.7"
-                },
                 "phone_number": {
                     "type": "string",
                     "example": "+998901234567"
@@ -2994,6 +3236,11 @@
         "rest.SignUpRequest": {
             "type": "object",
             "properties": {
+                "agreed_on_conditions": {
+                    "description": "AgreedOnConditions is the consent tick on the sign-up screen; omitted means false.",
+                    "type": "boolean",
+                    "example": true
+                },
                 "goals": {
                     "description": "goal ids from GET /v1/goals, optional",
                     "type": "array",
@@ -3163,6 +3410,31 @@
                 }
             }
         },
+        "rest.UpdateChildRequest": {
+            "type": "object",
+            "properties": {
+                "age": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "gender": {
+                    "type": "string",
+                    "enum": [
+                        "male",
+                        "female"
+                    ],
+                    "example": "male"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Amir"
+                },
+                "photo_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                }
+            }
+        },
         "rest.UpdateGoalRequest": {
             "type": "object",
             "properties": {
@@ -3183,6 +3455,11 @@
         "rest.UpdateProfileRequest": {
             "type": "object",
             "properties": {
+                "agreed_on_conditions": {
+                    "description": "AgreedOnConditions records consent for users who signed up without it; only true is accepted.",
+                    "type": "boolean",
+                    "example": true
+                },
                 "name": {
                     "type": "string",
                     "example": "Dilnoza"
@@ -3194,6 +3471,15 @@
                 "photo_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "reminder_enabled": {
+                    "description": "ReminderEnabled and ReminderTime are the daily reminder setting (HH:MM, Uzbekistan time).",
+                    "type": "boolean",
+                    "example": true
+                },
+                "reminder_time": {
+                    "type": "string",
+                    "example": "18:00"
                 },
                 "username": {
                     "type": "string",
@@ -3559,9 +3845,87 @@
                 }
             }
         },
+        "rest.planDayView": {
+            "type": "object",
+            "properties": {
+                "activity": {
+                    "$ref": "#/definitions/rest.activityView"
+                },
+                "completed_on": {
+                    "type": "string",
+                    "example": "2026-10-11"
+                },
+                "day": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "icon": {
+                    "type": "string",
+                    "enum": [
+                        "heart",
+                        "chat",
+                        "blocks",
+                        "gift",
+                        "sparkle",
+                        "bulb",
+                        "star"
+                    ],
+                    "example": "heart"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "done",
+                        "today",
+                        "locked"
+                    ],
+                    "example": "today"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Угадай эмоцию"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Hisni top"
+                }
+            }
+        },
+        "rest.planView": {
+            "type": "object",
+            "properties": {
+                "child_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "completed": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.planDayView"
+                    }
+                },
+                "started_on": {
+                    "type": "string",
+                    "example": "2026-10-11"
+                }
+            }
+        },
         "rest.profileView": {
             "type": "object",
             "properties": {
+                "agreed_on_conditions": {
+                    "description": "AgreedOnConditions is the consent to the terms given at sign-up.",
+                    "type": "boolean",
+                    "example": true
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -3600,6 +3964,15 @@
                         "nanny"
                     ],
                     "example": "mother"
+                },
+                "reminder_enabled": {
+                    "description": "ReminderEnabled and ReminderTime are the daily reminder setting (HH:MM, Uzbekistan time).",
+                    "type": "boolean",
+                    "example": true
+                },
+                "reminder_time": {
+                    "type": "string",
+                    "example": "18:00"
                 },
                 "role": {
                     "enum": [
@@ -3745,6 +4118,11 @@
         "rest.userView": {
             "type": "object",
             "properties": {
+                "agreed_on_conditions": {
+                    "description": "AgreedOnConditions is the consent to the terms given at sign-up.",
+                    "type": "boolean",
+                    "example": true
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -3783,6 +4161,15 @@
                         "nanny"
                     ],
                     "example": "mother"
+                },
+                "reminder_enabled": {
+                    "description": "ReminderEnabled and ReminderTime are the daily reminder setting (HH:MM, Uzbekistan time).",
+                    "type": "boolean",
+                    "example": true
+                },
+                "reminder_time": {
+                    "type": "string",
+                    "example": "18:00"
                 },
                 "updated_at": {
                     "type": "string"

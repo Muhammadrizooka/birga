@@ -67,8 +67,8 @@ Repository (`store.Activity()`): `Create`, `Get`, `List` (filters and paging), `
 (partial; a failed CHECK becomes `ErrValidation`), `Delete` (soft) and `Recommend` (see
 [api.md](api.md#recommendation)).
 
-A starter set of the five goals above and 12 published activities (two or three per goal, Uzbek
-and Russian) is in `seeds/activities.sql`; load it with `make seed`
+A starter set of the five goals above and 20 published activities (Uzbek and Russian, at least
+seven for every age 2 to 6) is in `seeds/activities.sql`; load it with `make seed`
 ([setup.md](setup.md#starter-activities)). It is data, not a migration, and skips goals whose
 English name and activities whose title already exist.
 
@@ -304,6 +304,46 @@ first, plus the total count). The streak itself is computed in Go by `domain.Com
 
 `childRepo.GetForParent(id, userID)` returns a child only when it is active and linked to that
 user; every per-child use case calls it first.
+
+### `plan_themes`
+
+The seven day themes of the 7-day plan, the same for every child. Created by
+`000013_create_plans`, which also inserts the seven themes of Figma section 7 (reference data the
+API needs, like the goals created by `000011`). There is no admin API for them yet.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `day` | `SMALLINT` | no | | primary key, 1 to 7 (`plan_themes_day_chk`) |
+| `title_uz`, `title_ru` | `TEXT` | no | | theme name, e.g. `Hisni top` / `Угадай эмоцию` |
+| `icon` | `TEXT` | no | | icon key for the app: `heart`, `chat`, `blocks`, `gift`, `sparkle`, `bulb`, `star` |
+| `goal_id` | `UUID` | yes | | goal the day's activity should serve; NULL for any. No foreign key, like `users.goal_ids` |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+
+The migration looks the goals up by English name (Emotions, Language, Motor skills, Social
+skills, Thinking, Emotions for days 1, 2, 3, 4, 6, 7; day 5 has none). On a database without goals
+yet they stay NULL; `seeds/activities.sql` fills them in after creating the starter goals.
+Deleting a goal does not clear `goal_id`; the theme then simply matches no activity first.
+
+### `child_plan_days`
+
+The activity picked for each day of a child's current plan. Created by `000013_create_plans`.
+Starting a new plan deletes the child's rows and inserts seven new ones.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `child_id` | `UUID` | no | | references `children(id)` `ON DELETE CASCADE` |
+| `day` | `SMALLINT` | no | | references `plan_themes(day)` |
+| `activity_id` | `UUID` | no | | references `activities(id)` `ON DELETE CASCADE` (only manual hard deletes) |
+| `started_on` | `DATE` | no | | local day (Uzbekistan) the plan was made; the same on all of a child's rows |
+| `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+
+Primary key `(child_id, day)`. Progress is not stored here: the API derives each day's status
+from `activity_completions` (see [api.md](api.md#children-7-day-plan-signed-in) and
+`domain.BuildPlanDays`).
+
+Repository (`store.Plan()`): `Themes`, `LockChild` (`SELECT ... FOR UPDATE` on the child, so
+a plan is made once), `Items` (the plan with each day's activity and whether it is still
+published), `Pick`, `Replace`, `SetActivity` and `CompletionDays`.
 
 ## Conventions
 

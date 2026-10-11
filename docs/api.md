@@ -353,8 +353,32 @@ curl -X POST localhost:8080/v1/children \
 ```
 
 `GET /v1/me/children` lists the caller's children and `GET /v1/children/{id}` returns one
-(404 when the caller is not its parent). There is no endpoint yet to edit or delete a child or
-to add a second parent.
+(404 when the caller is not its parent). There is no endpoint yet to delete a child or to add a
+second parent.
+
+### Children: edit a child (signed in)
+
+| Method | Path | Description |
+|---|---|---|
+| PATCH | `/v1/children/{id}` | change some fields of one of the caller's children |
+
+Needs [user authentication](#user-authentication); any role. Body: any of `name`, `age`,
+`gender`, `photo_id`. Omitted or `null` fields are kept; `""` clears `photo_id`. The given fields
+follow the [add-child rules](#children-add-a-child-signed-in) (`usecases/child_updater`): `name`
+1 to 100 characters after trimming, `age` 0 to 18, `gender` `male` or `female`
+(case-insensitive), `photo_id` an id from `POST /v1/media` (unknown: 422). An empty body is 422
+`nothing to update`. A child the caller is not a parent of, or a deleted one, is 404. Any of the
+child's parents may edit it. `updated_at` is set on every edit.
+
+Response `data`: the child, as for add.
+
+```bash
+curl -X PATCH localhost:8080/v1/children/$CHILD \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Amirjon","age":5}'
+```
+
+A changed age applies to the next recommendation; a plan already made keeps its activities.
 
 ### Children: recommendation, completions, streak (signed in)
 
@@ -432,6 +456,77 @@ Response:
 | `last_completed_on` | date of the latest completion, `null` before the first |
 
 Pausing or repairing a streak is not built yet.
+
+### Children: 7-day plan (signed in)
+
+The app's "Reja" tab (Figma section 7): seven day themes, one activity for each, done one day
+at a time. Needs [user authentication](#user-authentication) and a child linked to the caller.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/children/{id}/plan` | the child's current plan; the first call makes it |
+| POST | `/v1/children/{id}/plan` | start a new plan from today, replacing the current one (no body) |
+
+**Making a plan** (`usecases/plan_getter`, `planRepo.Pick`). The seven themes are the rows of
+[`plan_themes`](data-model.md#plan_themes), the same for every child. For each theme in day order
+the plan takes one published activity whose age range contains the child's age (clamped to
+2..6), not yet used in this plan, ordered by:
+
+1. serving the theme's goal (`goal_id`, when set);
+2. serving one of the goals the caller picked at sign-up;
+3. never done by the child, then done longest ago;
+4. a tie-break by `md5(activity id || child id || day)`.
+
+When the catalogue for the age has fewer than seven activities, later days repeat earlier
+activities. No published activity for the age at all: 404 `no published activity matches this
+child's age and the filters`. The plan is stored (`child_plan_days`) and stays the same on later
+calls; `started_on` is the day it was made. Two parents asking at once get the same plan (the
+child row is locked while it is made). If a day that is not done yet points at an activity
+unpublished or deleted since, that day gets a new activity on the next read.
+
+**Progress** is read from the child's [completions](#complete); there is no separate "done"
+call. Complete a day with `POST /v1/children/{id}/completions` and the day's `activity.id`.
+Days are done in order, one per calendar day (Uzbekistan time): day N counts as done by the
+first completion of its activity on a day after day N-1 was done (day 1: on or after
+`started_on`). So:
+
+| `status` | Meaning |
+|---|---|
+| `done` | done; `completed_on` is the day |
+| `today` | the next day to do, open now |
+| `locked` | a later day, or the next day while the previous one was done today (it opens tomorrow) |
+
+Completing a later day's activity early, or two days' activities on one day, does not skip
+ahead. `completed` is `true` once all seven days are done; then `POST` starts the next plan.
+Completions stay in the history and the streak whatever happens to the plan.
+
+Response `data`:
+
+```json
+{
+  "child_id": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
+  "started_on": "2026-10-11",
+  "completed": false,
+  "days": [
+    {"day": 1, "title_uz": "Hisni top", "title_ru": "Угадай эмоцию", "icon": "heart",
+     "goal_id": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00", "status": "done", "completed_on": "2026-10-11",
+     "activity": {"id": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11", "title_uz": "Sharni puflaymiz", "...": "..."}},
+    {"day": 2, "title_uz": "Meni tingla", "title_ru": "Послушай меня", "icon": "chat",
+     "goal_id": null, "status": "today", "completed_on": null, "activity": {"...": "..."}}
+  ]
+}
+```
+
+`days` always has seven entries in day order. `title_uz`/`title_ru` are the theme names without
+the "1-kun:" / "День 1:" prefix. `icon` is one of `heart`, `chat`, `blocks`, `gift`, `sparkle`,
+`bulb`, `star`. `activity` is an [activity object](#activity-object).
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
+curl -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
+```
+
+The themes have no admin endpoint yet; change them in the database.
 
 ### OTP (public)
 

@@ -224,9 +224,6 @@ definitions:
     type: object
   rest.SendOTPRequest:
     properties:
-      ip_address:
-        example: 203.0.113.7
-        type: string
       phone_number:
         example: "+998901234567"
         type: string
@@ -255,6 +252,11 @@ definitions:
     type: object
   rest.SignUpRequest:
     properties:
+      agreed_on_conditions:
+        description: AgreedOnConditions is the consent tick on the sign-up screen;
+          omitted means false.
+        example: true
+        type: boolean
       goals:
         description: goal ids from GET /v1/goals, optional
         example:
@@ -368,6 +370,24 @@ definitions:
         example: Rangli toshlar
         type: string
     type: object
+  rest.UpdateChildRequest:
+    properties:
+      age:
+        example: 5
+        type: integer
+      gender:
+        enum:
+        - male
+        - female
+        example: male
+        type: string
+      name:
+        example: Amir
+        type: string
+      photo_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+    type: object
   rest.UpdateGoalRequest:
     properties:
       name_en:
@@ -382,6 +402,11 @@ definitions:
     type: object
   rest.UpdateProfileRequest:
     properties:
+      agreed_on_conditions:
+        description: AgreedOnConditions records consent for users who signed up without
+          it; only true is accepted.
+        example: true
+        type: boolean
       name:
         example: Dilnoza
         type: string
@@ -390,6 +415,14 @@ definitions:
         type: string
       photo_id:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      reminder_enabled:
+        description: ReminderEnabled and ReminderTime are the daily reminder setting
+          (HH:MM, Uzbekistan time).
+        example: true
+        type: boolean
+      reminder_time:
+        example: "18:00"
         type: string
       username:
         example: dilnoza_95
@@ -658,8 +691,66 @@ definitions:
         example: https://birga-media.s3.eu-central-1.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg
         type: string
     type: object
+  rest.planDayView:
+    properties:
+      activity:
+        $ref: '#/definitions/rest.activityView'
+      completed_on:
+        example: "2026-10-11"
+        type: string
+      day:
+        example: 1
+        type: integer
+      goal_id:
+        example: 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        type: string
+      icon:
+        enum:
+        - heart
+        - chat
+        - blocks
+        - gift
+        - sparkle
+        - bulb
+        - star
+        example: heart
+        type: string
+      status:
+        enum:
+        - done
+        - today
+        - locked
+        example: today
+        type: string
+      title_ru:
+        example: Угадай эмоцию
+        type: string
+      title_uz:
+        example: Hisni top
+        type: string
+    type: object
+  rest.planView:
+    properties:
+      child_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      completed:
+        example: false
+        type: boolean
+      days:
+        items:
+          $ref: '#/definitions/rest.planDayView'
+        type: array
+      started_on:
+        example: "2026-10-11"
+        type: string
+    type: object
   rest.profileView:
     properties:
+      agreed_on_conditions:
+        description: AgreedOnConditions is the consent to the terms given at sign-up.
+        example: true
+        type: boolean
       created_at:
         type: string
       goal_ids:
@@ -689,6 +780,14 @@ definitions:
         - educator
         - nanny
         example: mother
+        type: string
+      reminder_enabled:
+        description: ReminderEnabled and ReminderTime are the daily reminder setting
+          (HH:MM, Uzbekistan time).
+        example: true
+        type: boolean
+      reminder_time:
+        example: "18:00"
         type: string
       role:
         allOf:
@@ -792,6 +891,10 @@ definitions:
     type: object
   rest.userView:
     properties:
+      agreed_on_conditions:
+        description: AgreedOnConditions is the consent to the terms given at sign-up.
+        example: true
+        type: boolean
       created_at:
         type: string
       goal_ids:
@@ -821,6 +924,14 @@ definitions:
         - educator
         - nanny
         example: mother
+        type: string
+      reminder_enabled:
+        description: ReminderEnabled and ReminderTime are the daily reminder setting
+          (HH:MM, Uzbekistan time).
+        example: true
+        type: boolean
+      reminder_time:
+        example: "18:00"
         type: string
       updated_at:
         type: string
@@ -873,6 +984,11 @@ paths:
       - description: goal id (UUID) from GET /v1/goals
         in: query
         name: goal_id
+        type: string
+      - description: text the Uzbek or Russian title contains, ignoring case (at most
+          100 characters)
+        in: query
+        name: q
         type: string
       - description: page size (default 20, max 100)
         in: query
@@ -954,6 +1070,18 @@ paths:
       - description: goal id (UUID) from GET /v1/goals
         in: query
         name: goal_id
+        type: string
+      - description: text the Uzbek or Russian title contains, ignoring case (at most
+          100 characters)
+        in: query
+        name: q
+        type: string
+      - description: published or draft; omitted lists both
+        enum:
+        - published
+        - draft
+        in: query
+        name: status
         type: string
       - description: page size (default 20, max 100)
         in: query
@@ -1898,6 +2026,64 @@ paths:
       summary: one of the signed-in user's children
       tags:
       - children
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        - only the child's parents can edit it; any other id, or a deleted child, is 404
+        - omitted or null fields are kept; the add-child rules apply to the given ones:
+        name 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media
+        ("" clears it, an unknown id is 422)
+        - an empty body is 422 (nothing to update)
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: fields to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.UpdateChildRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.childView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: edits one of the signed-in user's children
+      tags:
+      - children
   /v1/children/{id}/completions:
     get:
       parameters:
@@ -2002,6 +2188,99 @@ paths:
       security:
       - BearerAuth: []
       summary: marks an activity done for a child today
+      tags:
+      - children
+  /v1/children/{id}/plan:
+    get:
+      description: |-
+        - only the child's parents can ask (404 otherwise)
+        - the first call makes the plan: one activity per day theme, fitting the child's age
+        (clamped to 2..6), preferring the theme's goal, then the parent's goals, then activities
+        the child has not done; the plan then stays the same until POST starts a new one
+        - days are done in order, one per calendar day (Uzbekistan time): status is done, today
+        (the next day to do, open now) or locked
+        - completing a day is POST /v1/children/{id}/completions with the day's activity id
+        - 404 when no published activity fits the child's age
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.planView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: a child's 7-day plan (the Reja tab)
+      tags:
+      - children
+    post:
+      description: |-
+        - replaces the current plan with a new one starting today, whatever its progress;
+        completions stay in the history. Use it when the plan is completed
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.planView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: starts a new 7-day plan for a child
       tags:
       - children
   /v1/children/{id}/recommendation:
@@ -2437,12 +2716,13 @@ paths:
         - purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or
         reset_password (the number must belong to a user, 404 otherwise; used by forgot password and
         PUT /v1/me/password)
-        - ip_address: the end user's IPv4 or IPv6 address, used for rate limits
+        - the User-Agent header is required (422 if empty) and identifies the client for rate limits;
+        an old client's ip_address field is ignored
         - the code has 6 digits and is sent through Play Mobile; only its hash is stored
         - the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new
         code replaces the previous one for the same phone and purpose
         - rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour
-        at most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP
+        at most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_USER_AGENT_HOUR per User-Agent
       parameters:
       - description: where and why to send the code
         in: body

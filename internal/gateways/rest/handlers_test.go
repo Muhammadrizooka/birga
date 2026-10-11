@@ -94,6 +94,8 @@ func newTestServer(adminKey string) (*Server, *deps) {
 		ChildActivityUseCases{
 			Creator:     childCreatorFunc(d.kids.create),
 			Getter:      childGetterFunc(d.me.getChild),
+			Updater:     childUpdaterFunc(d.kids.update),
+			Plan:        planGetterFunc(d.kids.plan),
 			Recommender: d.kids,
 			Recorder:    recorderFunc(d.kids.record),
 			Lister:      completionListerFunc(d.kids.list),

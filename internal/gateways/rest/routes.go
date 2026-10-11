@@ -53,6 +53,9 @@ func (s *Server) endpoints() {
 	child := v1.Group("/children/:id", s.userAuth())
 	{
 		child.GET("", s.GetChild())
+		child.PATCH("", s.UpdateChild())
+		child.GET("/plan", s.GetPlan())
+		child.POST("/plan", s.RestartPlan())
 		child.GET("/recommendation", s.RecommendActivity())
 		child.POST("/completions", s.CompleteActivity())
 		child.GET("/completions", s.ListCompletions())

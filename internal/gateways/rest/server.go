@@ -110,10 +110,20 @@ type childGetter interface {
 	Execute(ctx context.Context, userID, childID string) (domain.Child, error)
 }
 
+type childUpdater interface {
+	Execute(ctx context.Context, userID, childID string, upd domain.ChildUpdate) (domain.Child, error)
+}
+
+type planGetter interface {
+	Execute(ctx context.Context, userID, childID string, restart bool) (domain.Plan, error)
+}
+
 // ChildActivityUseCases groups the use cases behind the signed-in /v1/children endpoints.
 type ChildActivityUseCases struct {
 	Creator     childCreator
 	Getter      childGetter
+	Updater     childUpdater
+	Plan        planGetter
 	Recommender activityRecommender
 	Recorder    completionRecorder
 	Lister      completionLister
@@ -245,6 +255,8 @@ type Server struct {
 
 	childCreator        childCreator
 	childGetter         childGetter
+	childUpdater        childUpdater
+	planGetter          planGetter
 	activityRecommender activityRecommender
 	completionRecorder  completionRecorder
 	completionLister    completionLister
@@ -321,6 +333,8 @@ func New(cfg config.Application,
 
 		childCreator:        childActivities.Creator,
 		childGetter:         childActivities.Getter,
+		childUpdater:        childActivities.Updater,
+		planGetter:          childActivities.Plan,
 		activityRecommender: childActivities.Recommender,
 		completionRecorder:  childActivities.Recorder,
 		completionLister:    childActivities.Lister,

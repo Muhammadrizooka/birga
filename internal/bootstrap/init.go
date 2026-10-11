@@ -27,6 +27,7 @@ import (
 	childcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/child_creator"
 	childgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/child_getter"
 	childlister "gitlab.com/loyihalar/birga/backend/internal/usecases/child_lister"
+	childupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/child_updater"
 	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	goalcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_creator"
@@ -38,6 +39,7 @@ import (
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
 	passwordresetter "gitlab.com/loyihalar/birga/backend/internal/usecases/password_resetter"
+	plangetter "gitlab.com/loyihalar/birga/backend/internal/usecases/plan_getter"
 	profileupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/profile_updater"
 	streakgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/streak_getter"
 	tokenchecker "gitlab.com/loyihalar/birga/backend/internal/usecases/token_checker"
@@ -234,6 +236,8 @@ type useCases struct {
 
 	childCreator        *childcreator.UseCase
 	childGetter         *childgetter.UseCase
+	childUpdater        *childupdater.UseCase
+	planGetter          *plangetter.UseCase
 	childLister         *childlister.UseCase
 	activityRecommender *activityrecommender.UseCase
 	completionRecorder  *completionrecorder.UseCase
@@ -293,6 +297,8 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 
 		childCreator:        childcreator.New(l.Named("usecase.child_creator"), store, store.Child()),
 		childGetter:         childgetter.New(l.Named("usecase.child_getter"), store.Child()),
+		childUpdater:        childupdater.New(l.Named("usecase.child_updater"), store.Child()),
+		planGetter:          plangetter.New(l.Named("usecase.plan_getter"), store, store.Child(), store.User(), store.Plan()),
 		childLister:         childlister.New(l.Named("usecase.child_lister"), store.Child()),
 		activityRecommender: activityrecommender.New(l.Named("usecase.activity_recommender"), store.Child(), store.User(), store.Activity()),
 		completionRecorder: completionrecorder.New(l.Named("usecase.completion_recorder"),
@@ -354,6 +360,8 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 		rest.ChildActivityUseCases{
 			Creator:     ucs.childCreator,
 			Getter:      ucs.childGetter,
+			Updater:     ucs.childUpdater,
+			Plan:        ucs.planGetter,
 			Recommender: ucs.activityRecommender,
 			Recorder:    ucs.completionRecorder,
 			Lister:      ucs.completionLister,

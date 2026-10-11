@@ -182,15 +182,17 @@ The Makefile's `POSTGRES_URL` defaults to `localhost:5432`; pass
 
 ### Starter activities
 
-A fresh database has no goals or activities. Load the five starter goals and 12 starter
-activities (published, Uzbek and Russian, two or three per goal) into the Docker Compose database:
+A fresh database has no goals or activities. Load the five starter goals and 20 starter
+activities (published, Uzbek and Russian, at least seven for every age from 2 to 6 so a 7-day plan
+has no repeats) into the Docker Compose database:
 
 ```bash
 make seed
 ```
 
 It runs `seeds/activities.sql` through `psql` inside the `postgres` container and skips goals
-and titles that already exist, so it is safe to repeat. For another database, run the same file
+and titles that already exist, so it is safe to repeat. It also points the 7-day plan themes at
+the starter goals when the migrations ran before any goal existed. For another database, run the same file
 with `psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f seeds/activities.sql`. The texts are drafts
 for development; the content team should review them before they reach real users.
 
