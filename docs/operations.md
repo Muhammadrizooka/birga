@@ -77,7 +77,10 @@ database or Redis is unreachable).
 service there (no persistence or backups needed) before deploying this version.
 
 **S3.** Profile photos go to the bucket in `S3_BUCKET` (see
-[setup.md](setup.md#media-s3-locally) for the IAM permissions and public read access). Without
+[setup.md](setup.md#media-s3-locally) for the IAM permissions, and
+[The Birga AWS setup](setup.md#the-birga-aws-setup) for the bucket `birga-staging` in
+`ap-southeast-2` and the backend's IAM user). Set the same `S3_*` values in the server's
+environment before deploying. Without
 it, uploads answer 503 and the rest of the API works. S3 calls show up in
 `birga_http_client_request_duration_seconds{service="s3"}`. Turn on bucket versioning or
 a lifecycle rule if old photos should be kept or expired; the API never deletes a photo

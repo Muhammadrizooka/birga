@@ -122,7 +122,7 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `JWT_ACCESS_TTL` | `24h` | access token lifetime |
 | `JWT_REFRESH_TTL` | `0` | refresh token lifetime; `0` issues refresh tokens without an expiry (they work until the user is deleted or `JWT_SECRET` changes) |
 | `S3_BUCKET` | empty | S3 bucket for uploaded media (profile photos). Empty disables `POST /v1/media` (it answers 503) |
-| `S3_REGION` | `eu-central-1` | AWS region of the bucket |
+| `S3_REGION` | `ap-southeast-2` | AWS region of the bucket. The Birga AWS organization only allows S3 in `ap-southeast-2` (Sydney); other regions are refused |
 | `S3_ACCESS_KEY_ID` | empty | IAM access key; set it together with `S3_SECRET_ACCESS_KEY`. Both empty means the AWS default credential chain (`AWS_*` variables, `~/.aws`, an instance or task role) |
 | `S3_SECRET_ACCESS_KEY` | empty | IAM secret key. Keep it in the server's secret store, never in git |
 | `S3_ENDPOINT` | empty | S3-compatible endpoint (MinIO, LocalStack), e.g. `http://localhost:9000`; also switches to path-style URLs. Empty means AWS |
@@ -165,6 +165,26 @@ For AWS, the IAM user or role needs `s3:PutObject` and `s3:DeleteObject` on
 `arn:aws:s3:::<bucket>/<S3_KEY_PREFIX>media/*`. The returned `url` only opens if clients can
 read the objects: either a bucket policy allowing public `s3:GetObject` on that prefix, or a
 CloudFront distribution in front of the bucket (set `S3_PUBLIC_BASE_URL` to its domain).
+
+#### The Birga AWS setup
+
+Set up on 2026-10-12 in AWS account `041915167169`:
+
+| What | Value |
+|---|---|
+| Bucket | `birga-staging`, region `ap-southeast-2`; Block Public Access fully on, object ownership enforced, SSE-S3 encryption, no bucket policy |
+| IAM user | `birga-backend-media`, used only by the backend |
+| Its policy | inline `birga-media-objects`: `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` on `arn:aws:s3:::birga-staging/*`; nothing else (it cannot list the bucket) |
+| Env | `S3_BUCKET=birga-staging`, `S3_REGION=ap-southeast-2`, `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` of that user; `S3_ENDPOINT` and `S3_PUBLIC_BASE_URL` empty |
+
+The key lives only in the developer's local `.env` (git-ignored) and must be copied into the
+server's secret store before deploying; never commit it or paste it into chats. Rotate it in
+IAM (create a new key, update the environments, delete the old one) if it may have leaked.
+
+The bucket is private on purpose: it holds children's photos. The `url` that
+`POST /v1/media` returns therefore does not open in a browser yet; clients will get
+time-limited signed links when photo URLs are added to the API. The bucket also holds an older
+`avatar/` folder that the API does not use; the API writes under `media/`.
 
 ## Database migrations
 
