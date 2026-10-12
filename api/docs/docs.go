@@ -3848,7 +3848,7 @@ const docTemplate = `{
                 },
                 "url": {
                     "type": "string",
-                    "example": "https://birga-media.s3.eu-central-1.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg"
+                    "example": "https://birga-staging.s3.ap-southeast-2.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg"
                 }
             }
         },

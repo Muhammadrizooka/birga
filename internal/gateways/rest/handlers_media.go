@@ -21,7 +21,7 @@ const (
 
 type mediaView struct {
 	ID          string `json:"id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
-	URL         string `json:"url" example:"https://birga-media.s3.eu-central-1.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg"`
+	URL         string `json:"url" example:"https://birga-staging.s3.ap-southeast-2.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg"`
 	ContentType string `json:"content_type" example:"image/jpeg"`
 	Size        int64  `json:"size" example:"183244"` // bytes
 }

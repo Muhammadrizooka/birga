@@ -97,7 +97,7 @@ type RedisConfig struct {
 // shared config, an IAM role).
 type S3Config struct {
 	Bucket          string `env:"BUCKET"`
-	Region          string `env:"REGION, default=eu-central-1"`
+	Region          string `env:"REGION, default=ap-southeast-2"`
 	AccessKeyID     string `env:"ACCESS_KEY_ID"`
 	SecretAccessKey string `env:"SECRET_ACCESS_KEY"`
 	// Endpoint overrides the AWS endpoint for S3-compatible storage (MinIO, LocalStack); it also
