@@ -14,6 +14,8 @@ var (
 	usernameRegex = regexp.MustCompile(`^[a-z0-9_.]{3,32}$`)
 	// phoneRegex: E.164 with a leading '+', at most 15 characters to fit users.phone_number VARCHAR(15).
 	phoneRegex = regexp.MustCompile(`^\+[1-9][0-9]{6,13}$`)
+	// reminderTimeRegex: a 24-hour local time, HH:MM.
+	reminderTimeRegex = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 )
 
 // Relationships a user can have to the children, the users.relationship enum.
@@ -33,9 +35,15 @@ type User struct {
 	PhotoID      *string
 	Relationship *string
 	// GoalIDs are the ids of the goals the user picked; never nil when read from the database.
-	GoalIDs   []string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	GoalIDs []string
+	// AgreedOnConditions is the consent to the terms given at sign-up.
+	AgreedOnConditions bool
+	// ReminderEnabled and ReminderTime are the daily reminder setting; ReminderTime is HH:MM in
+	// Uzbekistan time.
+	ReminderEnabled bool
+	ReminderTime    string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // UserUpdate is a partial update. A nil field is left unchanged; a non-nil
@@ -45,11 +53,17 @@ type UserUpdate struct {
 	Username    *string
 	PhoneNumber *string
 	PhotoID     *string
+	// The fields below are the user's own settings, changed only through PATCH /v1/me.
+	// AgreedOnConditions may only be set to true.
+	AgreedOnConditions *bool
+	ReminderEnabled    *bool
+	ReminderTime       *string
 }
 
 // IsEmpty reports whether the update changes nothing.
 func (u UserUpdate) IsEmpty() bool {
-	return u.Name == nil && u.Username == nil && u.PhoneNumber == nil && u.PhotoID == nil
+	return u.Name == nil && u.Username == nil && u.PhoneNumber == nil && u.PhotoID == nil &&
+		u.AgreedOnConditions == nil && u.ReminderEnabled == nil && u.ReminderTime == nil
 }
 
 // UserFilter narrows a user listing.
@@ -76,6 +90,11 @@ func IsKnownRelationship(relationship string) bool {
 	default:
 		return false
 	}
+}
+
+// IsValidReminderTime reports whether t is a 24-hour HH:MM time.
+func IsValidReminderTime(t string) bool {
+	return reminderTimeRegex.MatchString(t)
 }
 
 // IsValidUserName reports whether name fits the length limit.

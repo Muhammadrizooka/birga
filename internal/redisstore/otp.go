@@ -18,7 +18,7 @@ import (
 //	birga:otp:code:<purpose>:<phone>      hash {hash, attempts}, TTL = OTP_TTL
 //	birga:otp:cooldown:<purpose>:<phone>  "1", TTL = OTP_RESEND_COOLDOWN
 //	birga:otp:limit:phone:<phone>         counter, TTL = limit window from the first send
-//	birga:otp:limit:ip:<ip>               counter, TTL = limit window from the first send
+//	birga:otp:limit:client:<client>       counter per User-Agent hash, TTL = limit window from the first send
 //	birga:otp:verified:<purpose>:<phone>  "1", TTL = OTP_VERIFIED_TTL, set when a code matches
 type otpRepo struct {
 	rdb redis.UniversalClient
@@ -38,14 +38,14 @@ func verifiedKey(phone string, purpose domain.OTPPurpose) string {
 
 func phoneLimitKey(phone string) string { return keyPrefix + "otp:limit:phone:" + phone }
 
-func ipLimitKey(ip string) string { return keyPrefix + "otp:limit:ip:" + ip }
+func clientLimitKey(client string) string { return keyPrefix + "otp:limit:client:" + client }
 
 // Script results: {status, wait in ms}.
 const (
 	acquireOK = iota
 	acquireCooldown
 	acquirePhoneLimit
-	acquireIPLimit
+	acquireClientLimit
 )
 
 // acquireScript checks the cooldown and both counters and, only if all pass, starts the cooldown
@@ -91,12 +91,12 @@ return {1, left}
 
 // AcquireSend is the send-OTP rate limiter. It returns an errs.ErrRateLimited error telling
 // how long to wait, or nil after counting this send.
-func (r *otpRepo) AcquireSend(ctx context.Context, phone string, purpose domain.OTPPurpose, ip string, lim domain.OTPLimits) error {
+func (r *otpRepo) AcquireSend(ctx context.Context, phone string, purpose domain.OTPPurpose, client string, lim domain.OTPLimits) error {
 	l := logger.FromCtx(ctx, "otpRepo.AcquireSend")
 
 	res, err := acquireScript.Run(ctx, r.rdb,
-		[]string{cooldownKey(phone, purpose), phoneLimitKey(phone), ipLimitKey(ip)},
-		lim.ResendCooldown.Milliseconds(), lim.Window.Milliseconds(), lim.MaxPerPhone, lim.MaxPerIP,
+		[]string{cooldownKey(phone, purpose), phoneLimitKey(phone), clientLimitKey(client)},
+		lim.ResendCooldown.Milliseconds(), lim.Window.Milliseconds(), lim.MaxPerPhone, lim.MaxPerClient,
 	).Int64Slice()
 	if err != nil {
 		l.Error("acquireScript.Run", zap.Error(err))
@@ -113,18 +113,18 @@ func (r *otpRepo) AcquireSend(ctx context.Context, phone string, purpose domain.
 		return errs.Errf(errs.ErrRateLimited, "a code was sent recently, request a new one in %d seconds", wait)
 	case acquirePhoneLimit:
 		return errs.Errf(errs.ErrRateLimited, "too many codes requested for this phone number, try again in %d seconds", wait)
-	case acquireIPLimit:
-		return errs.Errf(errs.ErrRateLimited, "too many codes requested from this IP address, try again in %d seconds", wait)
+	case acquireClientLimit:
+		return errs.Errf(errs.ErrRateLimited, "too many codes requested from this device, try again in %d seconds", wait)
 	default:
 		return errs.Errf(errs.ErrInternal, "unexpected rate limiter result %d", res[0])
 	}
 }
 
 // ReleaseSend gives back what AcquireSend counted and deletes the code; used when the SMS failed.
-func (r *otpRepo) ReleaseSend(ctx context.Context, phone string, purpose domain.OTPPurpose, ip string) error {
+func (r *otpRepo) ReleaseSend(ctx context.Context, phone string, purpose domain.OTPPurpose, client string) error {
 	l := logger.FromCtx(ctx, "otpRepo.ReleaseSend")
 
-	keys := []string{cooldownKey(phone, purpose), phoneLimitKey(phone), ipLimitKey(ip), codeKey(phone, purpose)}
+	keys := []string{cooldownKey(phone, purpose), phoneLimitKey(phone), clientLimitKey(client), codeKey(phone, purpose)}
 	if err := releaseScript.Run(ctx, r.rdb, keys).Err(); err != nil {
 		l.Error("releaseScript.Run", zap.Error(err))
 

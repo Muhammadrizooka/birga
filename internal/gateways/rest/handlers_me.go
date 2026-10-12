@@ -14,6 +14,11 @@ type UpdateProfileRequest struct {
 	Username    *string `json:"username" example:"dilnoza_95"`
 	PhoneNumber *string `json:"phone_number" example:"+998901234567"`
 	PhotoID     *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	// AgreedOnConditions records consent for users who signed up without it; only true is accepted.
+	AgreedOnConditions *bool `json:"agreed_on_conditions" example:"true"`
+	// ReminderEnabled and ReminderTime are the daily reminder setting (HH:MM, Uzbekistan time).
+	ReminderEnabled *bool   `json:"reminder_enabled" example:"true"`
+	ReminderTime    *string `json:"reminder_time" example:"18:00"`
 }
 
 // ResetPasswordRequest is the body of PUT /v1/me/password.
@@ -86,6 +91,10 @@ func (s *Server) UpdateProfile() gin.HandlerFunc {
 			Username:    req.Username,
 			PhoneNumber: req.PhoneNumber,
 			PhotoID:     req.PhotoID,
+
+			AgreedOnConditions: req.AgreedOnConditions,
+			ReminderEnabled:    req.ReminderEnabled,
+			ReminderTime:       req.ReminderTime,
 		})
 		if err != nil {
 			Return(c, nil, err)

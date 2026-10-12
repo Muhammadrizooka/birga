@@ -31,7 +31,7 @@ Every response, success or failure, has the same shape:
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
 | -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
-| -70 | 429 | rate limited | OTP requested again too soon, too many OTPs for a phone or IP, too many wrong OTP codes |
+| -70 | 429 | rate limited | OTP requested again too soon, too many OTPs for a phone or a User-Agent, too many wrong OTP codes |
 
 For 500s the client only sees `"internal error"`. Find the real message in the logs by the
 request id.
@@ -44,6 +44,7 @@ request id.
 | `X-Admin-Key` | request | admin key for `/v1/admin/*` (when no `Authorization` header is sent) |
 | `Authorization: Bearer <access_token>` | request | signed-in user for `/v1/children` and `/v1/children/*`; an admin user for `/v1/admin/*` |
 | `Content-Type: application/json` | request | for bodies |
+| `User-Agent` | request | sent by the apps on every request; required by `POST /v1/otp/send`, whose rate limit counts per value (see [Send](#send)) |
 
 CORS allows any origin.
 
@@ -117,10 +118,11 @@ Query parameters for the list:
 |---|---|---|
 | `age` | int | child age in years, 2 to 6; matches activities where `min_age <= age <= max_age` |
 | `goal_id` | UUID string | a goal id from [`GET /v1/goals`](#goals); matches activities whose `goal_ids` contain it |
+| `q` | string | title search: matches activities whose `title_uz` or `title_ru` contains the text, ignoring case; trimmed, at most 100 characters; `%` and `_` match literally |
 | `limit`, `offset` | int | see [Pagination](#pagination) |
 
-An `age` outside 2..6 or a `goal_id` that is not a UUID returns 422; a non-integer `age` returns
-400. A UUID that is not a goal simply matches nothing.
+An `age` outside 2..6, a `goal_id` that is not a UUID or a `q` over 100 characters returns 422;
+a non-integer `age` returns 400. A UUID that is not a goal simply matches nothing.
 
 Example:
 
@@ -133,10 +135,19 @@ curl 'localhost:8080/v1/activities?age=4&goal_id='$GOAL'&limit=10'
 | Method | Path | Description |
 |---|---|---|
 | POST | `/v1/admin/activities` | create an activity |
-| GET | `/v1/admin/activities` | list all activities, including unpublished (same filters) |
+| GET | `/v1/admin/activities` | list all activities, including unpublished (same filters, plus `status`) |
 | GET | `/v1/admin/activities/{id}` | one activity, including unpublished |
 | PATCH | `/v1/admin/activities/{id}` | change some fields, including publishing or unpublishing |
 | DELETE | `/v1/admin/activities/{id}` | soft-delete an activity |
+
+The admin list takes the public list's `age`, `goal_id`, `q`, `limit` and `offset`, and also
+`status`: `published` (only published activities), `draft` (only unpublished ones) or omitted
+for both. Any other value is 422 `status must be published or draft`. The public list ignores
+`status`.
+
+```bash
+curl 'localhost:8080/v1/admin/activities?q=tosh&status=draft' -H "Authorization: Bearer $ADMIN_TOKEN"
+```
 
 Create body:
 
@@ -253,8 +264,19 @@ the current `user_auth.role`).
 
 #### Edit profile
 
-Body: any of `name`, `username`, `phone_number`, `photo_id`. Omitted or `null` fields are kept;
-`""` clears `name`, `username` or `photo_id`. The rules are the admin update's
+Body: any of `name`, `username`, `phone_number`, `photo_id`, `agreed_on_conditions`,
+`reminder_enabled`, `reminder_time`. Omitted or `null` fields are kept;
+`""` clears `name`, `username` or `photo_id`.
+
+The last three are the user's own settings and exist only here, not in the admin update:
+
+| Field | Rules |
+|---|---|
+| `reminder_enabled` | boolean, the "Kunlik eslatma" switch |
+| `reminder_time` | `HH:MM`, 24-hour, Uzbekistan time, e.g. `"18:00"` (422 otherwise); kept while the reminder is off |
+| `agreed_on_conditions` | only `true` (422 for `false`): records consent for a user who signed up without it. Withdrawing consent means deleting the account |
+
+The server only stores the reminder setting; the app schedules the notification on the phone. The rules are the admin update's
 (`usecases/user_updater`): `name` at most 100 characters, `username` 3 to 32 of `a-z`, `0-9`,
 `_`, `.` (lowercased), `photo_id` an id from `POST /v1/media` (422 if unknown), 409 when the
 username or phone number belongs to someone else. Response `data` is the same as Get profile.
@@ -331,8 +353,32 @@ curl -X POST localhost:8080/v1/children \
 ```
 
 `GET /v1/me/children` lists the caller's children and `GET /v1/children/{id}` returns one
-(404 when the caller is not its parent). There is no endpoint yet to edit or delete a child or
-to add a second parent.
+(404 when the caller is not its parent). There is no endpoint yet to delete a child or to add a
+second parent.
+
+### Children: edit a child (signed in)
+
+| Method | Path | Description |
+|---|---|---|
+| PATCH | `/v1/children/{id}` | change some fields of one of the caller's children |
+
+Needs [user authentication](#user-authentication); any role. Body: any of `name`, `age`,
+`gender`, `photo_id`. Omitted or `null` fields are kept; `""` clears `photo_id`. The given fields
+follow the [add-child rules](#children-add-a-child-signed-in) (`usecases/child_updater`): `name`
+1 to 100 characters after trimming, `age` 0 to 18, `gender` `male` or `female`
+(case-insensitive), `photo_id` an id from `POST /v1/media` (unknown: 422). An empty body is 422
+`nothing to update`. A child the caller is not a parent of, or a deleted one, is 404. Any of the
+child's parents may edit it. `updated_at` is set on every edit.
+
+Response `data`: the child, as for add.
+
+```bash
+curl -X PATCH localhost:8080/v1/children/$CHILD \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Amirjon","age":5}'
+```
+
+A changed age applies to the next recommendation; a plan already made keeps its activities.
 
 ### Children: recommendation, completions, streak (signed in)
 
@@ -411,6 +457,77 @@ Response:
 
 Pausing or repairing a streak is not built yet.
 
+### Children: 7-day plan (signed in)
+
+The app's "Reja" tab (Figma section 7): seven day themes, one activity for each, done one day
+at a time. Needs [user authentication](#user-authentication) and a child linked to the caller.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/children/{id}/plan` | the child's current plan; the first call makes it |
+| POST | `/v1/children/{id}/plan` | start a new plan from today, replacing the current one (no body) |
+
+**Making a plan** (`usecases/plan_getter`, `planRepo.Pick`). The seven themes are the rows of
+[`plan_themes`](data-model.md#plan_themes), the same for every child. For each theme in day order
+the plan takes one published activity whose age range contains the child's age (clamped to
+2..6), not yet used in this plan, ordered by:
+
+1. serving the theme's goal (`goal_id`, when set);
+2. serving one of the goals the caller picked at sign-up;
+3. never done by the child, then done longest ago;
+4. a tie-break by `md5(activity id || child id || day)`.
+
+When the catalogue for the age has fewer than seven activities, later days repeat earlier
+activities. No published activity for the age at all: 404 `no published activity matches this
+child's age and the filters`. The plan is stored (`child_plan_days`) and stays the same on later
+calls; `started_on` is the day it was made. Two parents asking at once get the same plan (the
+child row is locked while it is made). If a day that is not done yet points at an activity
+unpublished or deleted since, that day gets a new activity on the next read.
+
+**Progress** is read from the child's [completions](#complete); there is no separate "done"
+call. Complete a day with `POST /v1/children/{id}/completions` and the day's `activity.id`.
+Days are done in order, one per calendar day (Uzbekistan time): day N counts as done by the
+first completion of its activity on a day after day N-1 was done (day 1: on or after
+`started_on`). So:
+
+| `status` | Meaning |
+|---|---|
+| `done` | done; `completed_on` is the day |
+| `today` | the next day to do, open now |
+| `locked` | a later day, or the next day while the previous one was done today (it opens tomorrow) |
+
+Completing a later day's activity early, or two days' activities on one day, does not skip
+ahead. `completed` is `true` once all seven days are done; then `POST` starts the next plan.
+Completions stay in the history and the streak whatever happens to the plan.
+
+Response `data`:
+
+```json
+{
+  "child_id": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
+  "started_on": "2026-10-11",
+  "completed": false,
+  "days": [
+    {"day": 1, "title_uz": "Hisni top", "title_ru": "Угадай эмоцию", "icon": "heart",
+     "goal_id": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00", "status": "done", "completed_on": "2026-10-11",
+     "activity": {"id": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11", "title_uz": "Sharni puflaymiz", "...": "..."}},
+    {"day": 2, "title_uz": "Meni tingla", "title_ru": "Послушай меня", "icon": "chat",
+     "goal_id": null, "status": "today", "completed_on": null, "activity": {"...": "..."}}
+  ]
+}
+```
+
+`days` always has seven entries in day order. `title_uz`/`title_ru` are the theme names without
+the "1-kun:" / "День 1:" prefix. `icon` is one of `heart`, `chat`, `blocks`, `gift`, `sparkle`,
+`bulb`, `star`. `activity` is an [activity object](#activity-object).
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
+curl -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
+```
+
+The themes have no admin endpoint yet; change them in the database.
+
 ### OTP (public)
 
 One-time codes sent by SMS through Play Mobile, for registration and for changing account
@@ -428,16 +545,21 @@ Body (all fields required):
 ```json
 {
   "phone_number": "+998901234567",
-  "purpose": "sign_up",
-  "ip_address": "203.0.113.7"
+  "purpose": "sign_up"
 }
 ```
+
+The `User-Agent` header is required too (422 `the User-Agent header is required` when it is
+missing or blank): the rate limiter counts codes per User-Agent value. The apps send a
+User-Agent on every request; the mobile app should make it identify the install (for example
+`Birga/1.0.0 (Android 14; <install id>)`), because every client with the same value shares one
+counter. Browsers send their own User-Agent and cannot change it. The `ip_address` field older
+clients send is ignored.
 
 | Field | Rules |
 |---|---|
 | `phone_number` | Uzbek mobile number in E.164: `+998` and 9 digits (422). Play Mobile only delivers in Uzbekistan |
 | `purpose` | `sign_up` (registration; not required by sign-up for now), `update_user` (a new phone number for `PATCH /v1/me`) or `reset_password` (`POST /v1/auth/forgot-password` and `PUT /v1/me/password`) (422) |
-| `ip_address` | the end user's IPv4 or IPv6 address, as seen by the app or proxy in front of the API (422) |
 
 Response `data`:
 
@@ -459,7 +581,8 @@ Behaviour (`usecases/otp_sender`):
   - one code per phone and purpose every `OTP_RESEND_COOLDOWN` (60 s): `a code was sent
     recently, request a new one in N seconds`;
   - at most `OTP_MAX_PER_PHONE_HOUR` (5) codes per phone per hour, all purposes together;
-  - at most `OTP_MAX_PER_IP_HOUR` (20) codes per `ip_address` per hour.
+  - at most `OTP_MAX_PER_USER_AGENT_HOUR` (20) codes per `User-Agent` value per hour:
+    `too many codes requested from this device, try again in N seconds`.
 
   The hour is a fixed window that starts with the first code. The check and the counting are
   one atomic Redis script, so parallel requests and several API instances cannot slip past it.
@@ -506,7 +629,8 @@ Examples:
 
 ```bash
 curl -X POST localhost:8080/v1/otp/send -H 'Content-Type: application/json' \
-  -d '{"phone_number": "+998901234567", "purpose": "sign_up", "ip_address": "203.0.113.7"}'
+  -H 'User-Agent: Birga/1.0.0 (Android 14; 5b1e0c7a)' \
+  -d '{"phone_number": "+998901234567", "purpose": "sign_up"}'
 
 curl -X POST localhost:8080/v1/otp/verify -H 'Content-Type: application/json' \
   -d '{"phone_number": "+998901234567", "purpose": "sign_up", "code": "480569"}'
@@ -551,7 +675,8 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
   "password": "s3cret-pass",
   "phone_number": "+998901234567",
   "relationship": "mother",
-  "goals": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"]
+  "goals": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"],
+  "agreed_on_conditions": true
 }
 ```
 
@@ -563,6 +688,7 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
 | `phone_number` | Uzbek number, `+998` and 9 digits; not verified |
 | `relationship` | required: `father`, `mother`, `educator` or `nanny` (trimmed, case-insensitive) |
 | `goals` | optional, up to 20 goal ids from [`GET /v1/goals`](#goals); repeats are stored once; every id must be an active goal |
+| `agreed_on_conditions` | optional boolean, the consent tick on the sign-up screen; stored in `users.agreed_on_conditions`, omitted means `false`. Sign-up does not refuse `false` yet; the app should only let the user continue once it is ticked |
 
 Any other field (for example an old client's `user_role` or `photo_id`) is ignored.
 
@@ -810,6 +936,9 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `photo_id` | UUID string or `null` | profile photo, a media id from `POST /v1/media` |
 | `relationship` | string or `null` | `father`, `mother`, `educator` or `nanny`; `null` for users created before sign-up asked for it, or by an admin |
 | `goal_ids` | array of UUID strings | goals picked at sign-up, always an array (may be empty); see [Goals](#goals) |
+| `agreed_on_conditions` | bool | consent given at sign-up (or later through `PATCH /v1/me`); `false` for older users and users created by an admin |
+| `reminder_enabled` | bool | daily reminder on or off, `false` by default |
+| `reminder_time` | string | daily reminder time, `HH:MM` in Uzbekistan time, `"18:00"` by default |
 | `created_at`, `updated_at` | RFC 3339 timestamp | `updated_at` changes on every update and on delete |
 
 `deleted_at` is never returned: deleted users are not returned at all.

@@ -94,6 +94,8 @@ func newTestServer(adminKey string) (*Server, *deps) {
 		ChildActivityUseCases{
 			Creator:     childCreatorFunc(d.kids.create),
 			Getter:      childGetterFunc(d.me.getChild),
+			Updater:     childUpdaterFunc(d.kids.update),
+			Plan:        planGetterFunc(d.kids.plan),
 			Recommender: d.kids,
 			Recorder:    recorderFunc(d.kids.record),
 			Lister:      completionListerFunc(d.kids.list),
@@ -165,6 +167,29 @@ func TestListActivities(t *testing.T) {
 	want := domain.ActivityFilter{Age: 4, GoalID: testID, PublishedOnly: true, Limit: maxPageLimit, Offset: 10}
 	if d.lister.got != want {
 		t.Fatalf("filter = %+v, want %+v", d.lister.got, want)
+	}
+}
+
+func TestListActivities_SearchAndStatus(t *testing.T) {
+	s, d := newTestServer("")
+
+	// The public list takes q but ignores status: it only ever shows published activities.
+	if code, r := do(t, s, http.MethodGet, "/v1/activities?q=tosh&status=draft", "", nil); code != http.StatusOK {
+		t.Fatalf("public: %d %+v", code, r)
+	}
+
+	if d.lister.got.Search != "tosh" || d.lister.got.Status != "" || !d.lister.got.PublishedOnly {
+		t.Fatalf("public filter = %+v", d.lister.got)
+	}
+
+	admin, d := newTestServer("k")
+
+	if code, r := do(t, admin, http.MethodGet, "/v1/admin/activities?q=tosh&status=draft", "", map[string]string{"X-Admin-Key": "k"}); code != http.StatusOK {
+		t.Fatalf("admin: %d %+v", code, r)
+	}
+
+	if d.lister.got.Search != "tosh" || d.lister.got.Status != "draft" || d.lister.got.PublishedOnly {
+		t.Fatalf("admin filter = %+v", d.lister.got)
 	}
 }
 

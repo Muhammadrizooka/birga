@@ -23,6 +23,8 @@ var bearer = map[string]string{authorizationHeader: "Bearer good"}
 
 type fakeChildActivities struct {
 	gotCreate    domain.Child
+	gotUpdate    domain.ChildUpdate
+	gotRestart   bool
 	gotRecommend activityrecommender.Request
 	gotRecord    completionrecorder.Request
 	gotList      domain.CompletionFilter
@@ -61,6 +63,40 @@ func (f *fakeChildActivities) create(userID string, c domain.Child) (domain.Chil
 	c.ID = testChildID
 
 	return c, f.err
+}
+
+func (f *fakeChildActivities) update(userID, childID string, upd domain.ChildUpdate) (domain.Child, error) {
+	f.gotUserID, f.gotUpdate = userID, upd
+
+	return domain.Child{ID: childID, Name: "Amir", Age: 5, Gender: "male"}, f.err
+}
+
+func (f *fakeChildActivities) plan(userID, childID string, restart bool) (domain.Plan, error) {
+	f.gotUserID, f.gotRestart = userID, restart
+	done := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+
+	return domain.Plan{
+		ChildID:   childID,
+		StartedOn: done,
+		Days: []domain.PlanDay{
+			{PlanItem: domain.PlanItem{Theme: domain.PlanTheme{Day: 1, TitleUz: "Hisni top", Icon: "heart"}, Activity: domain.Activity{ID: testID}},
+				Status: domain.PlanDayDone, CompletedOn: &done},
+			{PlanItem: domain.PlanItem{Theme: domain.PlanTheme{Day: 2, TitleUz: "Meni tingla", Icon: "chat"}, Activity: domain.Activity{ID: testID}},
+				Status: domain.PlanDayToday},
+		},
+	}, f.err
+}
+
+type childUpdaterFunc func(string, string, domain.ChildUpdate) (domain.Child, error)
+
+func (fn childUpdaterFunc) Execute(_ context.Context, userID, childID string, upd domain.ChildUpdate) (domain.Child, error) {
+	return fn(userID, childID, upd)
+}
+
+type planGetterFunc func(string, string, bool) (domain.Plan, error)
+
+func (fn planGetterFunc) Execute(_ context.Context, userID, childID string, restart bool) (domain.Plan, error) {
+	return fn(userID, childID, restart)
 }
 
 type childCreatorFunc func(string, domain.Child) (domain.Child, error)
@@ -246,5 +282,70 @@ func TestAdminAuth_BearerToken(t *testing.T) {
 
 	if code, _ := do(t, s, http.MethodGet, "/v1/admin/users", "", map[string]string{adminKeyHeader: testAdminKey}); code != http.StatusOK {
 		t.Fatalf("admin key: %d", code)
+	}
+}
+
+func TestUpdateChild(t *testing.T) {
+	s, d := newTestServer("")
+
+	code, r := do(t, s, http.MethodPatch, "/v1/children/"+testChildID, `{"age": 5, "photo_id": ""}`, bearer)
+	if code != http.StatusOK || d.kids.gotUserID != testUserID {
+		t.Fatalf("got %d %+v", code, r)
+	}
+
+	if u := d.kids.gotUpdate; u.Age == nil || *u.Age != 5 || u.PhotoID == nil || *u.PhotoID != "" || u.Name != nil || u.Gender != nil {
+		t.Fatalf("unexpected update: %+v", u)
+	}
+
+	if code, _ := do(t, s, http.MethodPatch, "/v1/children/"+testChildID, `{`, bearer); code != http.StatusBadRequest {
+		t.Fatalf("bad json: %d", code)
+	}
+
+	if code, _ := do(t, s, http.MethodPatch, "/v1/children/nope", `{}`, bearer); code != http.StatusBadRequest {
+		t.Fatalf("bad id: %d", code)
+	}
+
+	if code, _ := do(t, s, http.MethodPatch, "/v1/children/"+testChildID, `{"age": 5}`, nil); code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", code)
+	}
+
+	d.kids.err = errs.ErrChildNotFound
+
+	if code, _ := do(t, s, http.MethodPatch, "/v1/children/"+testChildID, `{"age": 5}`, bearer); code != http.StatusNotFound {
+		t.Fatalf("not found: %d", code)
+	}
+}
+
+func TestPlan(t *testing.T) {
+	s, d := newTestServer("")
+
+	code, r := do(t, s, http.MethodGet, "/v1/children/"+testChildID+"/plan", "", bearer)
+	if code != http.StatusOK || d.kids.gotRestart {
+		t.Fatalf("get: %d %+v restart=%v", code, r, d.kids.gotRestart)
+	}
+
+	data, _ := r.Data.(map[string]any)
+	days, _ := data["days"].([]any)
+
+	if data["started_on"] != "2026-10-10" || len(days) != 2 {
+		t.Fatalf("unexpected plan: %+v", r.Data)
+	}
+
+	first, _ := days[0].(map[string]any)
+	second, _ := days[1].(map[string]any)
+
+	if first["status"] != "done" || first["completed_on"] != "2026-10-10" || first["icon"] != "heart" ||
+		second["status"] != "today" || second["completed_on"] != nil {
+		t.Fatalf("unexpected days: %+v", days)
+	}
+
+	if code, _ := do(t, s, http.MethodPost, "/v1/children/"+testChildID+"/plan", "", bearer); code != http.StatusOK || !d.kids.gotRestart {
+		t.Fatalf("restart: %d restart=%v", code, d.kids.gotRestart)
+	}
+
+	d.kids.err = errs.ErrNoRecommendation
+
+	if code, _ := do(t, s, http.MethodGet, "/v1/children/"+testChildID+"/plan", "", bearer); code != http.StatusNotFound {
+		t.Fatalf("empty catalogue: %d", code)
 	}
 }

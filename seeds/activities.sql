@@ -1,5 +1,5 @@
 -- Starter goals and activities for local development and demos: five goals, a few activities per
--- goal across ages 2 to 6. Safe to run more than once: a goal is skipped when an active goal already
+-- goal across ages 2 to 6, at least 7 for every age so a child's 7-day plan has no repeats. Safe to run more than once: a goal is skipped when an active goal already
 -- has its English name, an activity when one with the same title_uz exists.
 -- The texts are drafts; have the content team review them before using this outside development.
 INSERT INTO goals (name_uz, name_ru, name_en)
@@ -72,3 +72,55 @@ JOIN (VALUES
 ) AS keys (goal, name_en) ON keys.goal = s.goal
 JOIN goals g ON LOWER(g.name_en) = LOWER(keys.name_en) AND g.deleted_at IS NULL
 WHERE NOT EXISTS (SELECT 1 FROM activities a WHERE a.title_uz = s.title_uz AND a.deleted_at IS NULL);
+
+-- Sample activities for the 7-day plan themes (kindness, trying something new, celebrating,
+-- listening, building together, thinking together), same format and rules as above.
+INSERT INTO activities (title_uz, title_ru, description_uz, description_ru, goal_ids, min_age, max_age, duration_minutes, is_published)
+SELECT s.title_uz, s.title_ru, s.description_uz, s.description_ru, ARRAY[g.id], s.min_age, s.max_age, s.duration_minutes, TRUE
+FROM (VALUES
+    ('Kichik yordamchi', 'Маленький помощник',
+     'Bolaga uyda kichik bir ish topshiring: dasturxonga qoshiq qo''yish, gulga suv quyish yoki o''yinchoqlarni yig''ish. Ishni birga boshlang, tugagach «Yordaming uchun rahmat» deb ayting.',
+     'Дайте ребёнку маленькое домашнее поручение: разложить ложки, полить цветок или собрать игрушки. Начните вместе, а в конце скажите: «Спасибо за помощь».',
+     'social', 2, 6, 5),
+    ('Buvijonga sovg''a', 'Подарок для бабушки',
+     'Bola bilan yaqin odami uchun kichik sovg''a tayyorlang: rasm chizing yoki qog''ozdan gul yasang. Kimga berishini va u qanday xursand bo''lishini birga gaplashing.',
+     'Сделайте с ребёнком маленький подарок для близкого человека: нарисуйте картинку или сложите цветок из бумаги. Обсудите, кому его подарить и как он обрадуется.',
+     'social', 3, 6, 15),
+    ('Yangi ta''m', 'Новый вкус',
+     'Bola hali tatib ko''rmagan meva yoki sabzavotdan kichik bo''lak bering. Avval hidlab, ushlab ko''rsin, keyin tatib ko''rsin va qanday ekanini aytsin: shirinmi, nordonmi, qarsillaydimi.',
+     'Дайте ребёнку кусочек фрукта или овоща, который он ещё не пробовал. Пусть сначала понюхает и потрогает, потом попробует и скажет, какой он: сладкий, кислый, хрустящий.',
+     'cognitive', 2, 6, 5),
+    ('Suvda nima cho''kadi?', 'Что тонет в воде?',
+     'Tog''oraga suv quying va uydagi narsalarni (qoshiq, po''kak, tosh, barg) birma-bir tushiring. Har safar avval taxmin qiling: cho''kadimi yoki suzadimi? Keyin tekshiring.',
+     'Налейте воду в таз и по одному опускайте домашние предметы (ложку, пробку, камешек, лист). Каждый раз сначала угадайте: утонет или поплывёт? Потом проверьте.',
+     'cognitive', 3, 6, 10),
+    ('Kichik bayram', 'Маленький праздник',
+     'Haftada qilgan ishlaringizni eslang va kichik bayram qiling: sevimli qo''shiqqa raqsga tushing, bola o''zi uchun «medal» chizsin. Unga nimasi bilan faxrlanishingizni ayting.',
+     'Вспомните, что вы сделали за неделю, и устройте маленький праздник: потанцуйте под любимую песню, пусть ребёнок нарисует себе «медаль». Скажите, чем вы им гордитесь.',
+     'emotional', 2, 6, 10),
+    ('Ovozni top', 'Угадай звук',
+     'Bola ko''zini yumsin. Siz turli ovozlar chiqaring: qog''oz shitirlashi, qoshiq taqillashi, eshik yopilishi. Bola nima ovoz ekanini topsin, keyin rollarni almashtiring.',
+     'Ребёнок закрывает глаза. Вы издаёте разные звуки: шуршите бумагой, стучите ложкой, закрываете дверь. Ребёнок угадывает звук, потом поменяйтесь ролями.',
+     'language', 2, 5, 5),
+    ('Qutidan uy', 'Дом из коробки',
+     'Karton qutidan birga uy yasang: eshik va deraza kesib bering, bola bo''yasin va bezasin. Kim yashashini o''ylab topinglar.',
+     'Сделайте вместе домик из картонной коробки: вырежьте дверь и окна, а ребёнок раскрашивает и украшает. Придумайте, кто в нём будет жить.',
+     'motor', 3, 6, 15),
+    ('Nima ortiqcha?', 'Что лишнее?',
+     'Stolga to''rtta narsa qo''ying: uchtasi bir guruhdan (masalan, mevalar), bittasi boshqa. Bola ortiqchasini topsin va nega shunday deb o''ylashini aytsin.',
+     'Положите на стол четыре предмета: три из одной группы (например, фрукты) и один другой. Ребёнок находит лишний и объясняет, почему так думает.',
+     'cognitive', 3, 6, 5)
+) AS s (title_uz, title_ru, description_uz, description_ru, goal, min_age, max_age, duration_minutes)
+JOIN (VALUES
+    ('language', 'Language'), ('motor', 'Motor skills'), ('cognitive', 'Thinking'),
+    ('social', 'Social skills'), ('emotional', 'Emotions')
+) AS keys (goal, name_en) ON keys.goal = s.goal
+JOIN goals g ON LOWER(g.name_en) = LOWER(keys.name_en) AND g.deleted_at IS NULL
+WHERE NOT EXISTS (SELECT 1 FROM activities a WHERE a.title_uz = s.title_uz AND a.deleted_at IS NULL);
+
+-- Point the plan themes at the starter goals when migration 000013 ran before the goals existed.
+UPDATE plan_themes t SET goal_id = g.id, updated_at = NOW()
+FROM (VALUES (1, 'Emotions'), (2, 'Language'), (3, 'Motor skills'), (4, 'Social skills'), (6, 'Thinking'), (7, 'Emotions'))
+    AS m (day, name_en)
+JOIN goals g ON LOWER(g.name_en) = LOWER(m.name_en) AND g.deleted_at IS NULL
+WHERE t.day = m.day AND t.goal_id IS NULL;

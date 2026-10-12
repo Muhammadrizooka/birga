@@ -46,12 +46,32 @@ func TestExecute_Validation(t *testing.T) {
 		"bad phone":    {PhoneNumber: ptr("12345")},
 		"bad username": {Username: ptr("a!")},
 		"bad photo":    {PhotoID: ptr("x")},
+		"bad reminder": {ReminderTime: ptr("25:00")},
+		"no seconds":   {ReminderTime: ptr("18:00:00")},
+		"withdraw":     {AgreedOnConditions: new(bool)},
 	}
 
 	for name, upd := range cases {
 		if _, err := New(nil, &mockRepo{}).Execute(context.Background(), "u1", upd); !errors.Is(err, errs.ErrValidation) {
 			t.Fatalf("%s: expected validation error, got %v", name, err)
 		}
+	}
+}
+
+func TestExecute_Settings(t *testing.T) {
+	repo, on := &mockRepo{}, true
+
+	_, err := New(nil, repo).Execute(context.Background(), "u1", domain.UserUpdate{
+		ReminderEnabled:    &on,
+		ReminderTime:       ptr(" 07:30 "),
+		AgreedOnConditions: &on,
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	if !*repo.got.ReminderEnabled || *repo.got.ReminderTime != "07:30" || !*repo.got.AgreedOnConditions {
+		t.Fatalf("unexpected update: %+v", repo.got)
 	}
 }
 

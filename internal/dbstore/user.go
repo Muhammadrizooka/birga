@@ -27,25 +27,29 @@ type userRepo struct {
 }
 
 type dbUser struct {
-	ID           string    `db:"id"`
-	Name         *string   `db:"name"`
-	Username     *string   `db:"username"`
-	PhoneNumber  *string   `db:"phone_number"`
-	PhotoID      *string   `db:"photo_id"`
-	Relationship *string   `db:"relationship"`
-	GoalIDs      []string  `db:"goal_ids"`
-	CreatedAt    time.Time `db:"created_at"`
-	UpdatedAt    time.Time `db:"updated_at"`
+	ID                 string    `db:"id"`
+	Name               *string   `db:"name"`
+	Username           *string   `db:"username"`
+	PhoneNumber        *string   `db:"phone_number"`
+	PhotoID            *string   `db:"photo_id"`
+	Relationship       *string   `db:"relationship"`
+	GoalIDs            []string  `db:"goal_ids"`
+	AgreedOnConditions bool      `db:"agreed_on_conditions"`
+	ReminderEnabled    bool      `db:"reminder_enabled"`
+	ReminderTime       string    `db:"reminder_time"`
+	CreatedAt          time.Time `db:"created_at"`
+	UpdatedAt          time.Time `db:"updated_at"`
 }
 
-const userColumns = `id, name, username, phone_number, photo_id, relationship, goal_ids, created_at, updated_at`
+const userColumns = `id, name, username, phone_number, photo_id, relationship, goal_ids, ` +
+	`agreed_on_conditions, reminder_enabled, reminder_time, created_at, updated_at`
 
 func (r *userRepo) Create(ctx context.Context, u domain.User) (domain.User, error) {
 	l := logger.FromCtx(ctx, "userRepo.Create")
 
 	q := `
-		INSERT INTO users (name, username, phone_number, photo_id, relationship, goal_ids)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO users (name, username, phone_number, photo_id, relationship, goal_ids, agreed_on_conditions)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING ` + userColumns
 
 	goalIDs := u.GoalIDs
@@ -53,7 +57,7 @@ func (r *userRepo) Create(ctx context.Context, u domain.User) (domain.User, erro
 		goalIDs = []string{}
 	}
 
-	return r.one(ctx, l, q, u.Name, u.Username, u.PhoneNumber, u.PhotoID, u.Relationship, goalIDs)
+	return r.one(ctx, l, q, u.Name, u.Username, u.PhoneNumber, u.PhotoID, u.Relationship, goalIDs, u.AgreedOnConditions)
 }
 
 func (r *userRepo) Get(ctx context.Context, id string) (domain.User, error) {
@@ -188,6 +192,23 @@ func userSet(upd domain.UserUpdate) (string, []any) {
 		sets = append(sets, f.column+" = $"+strconv.Itoa(len(args)))
 	}
 
+	for _, f := range []struct {
+		column string
+		value  any
+		set    bool
+	}{
+		{"agreed_on_conditions", upd.AgreedOnConditions, upd.AgreedOnConditions != nil},
+		{"reminder_enabled", upd.ReminderEnabled, upd.ReminderEnabled != nil},
+		{"reminder_time", upd.ReminderTime, upd.ReminderTime != nil},
+	} {
+		if !f.set {
+			continue
+		}
+
+		args = append(args, f.value)
+		sets = append(sets, f.column+" = $"+strconv.Itoa(len(args)))
+	}
+
 	return strings.Join(sets, ", "), args
 }
 
@@ -234,8 +255,12 @@ func (u dbUser) toDomain() domain.User {
 		PhotoID:      u.PhotoID,
 		Relationship: u.Relationship,
 		GoalIDs:      u.GoalIDs,
-		CreatedAt:    u.CreatedAt,
-		UpdatedAt:    u.UpdatedAt,
+
+		AgreedOnConditions: u.AgreedOnConditions,
+		ReminderEnabled:    u.ReminderEnabled,
+		ReminderTime:       u.ReminderTime,
+		CreatedAt:          u.CreatedAt,
+		UpdatedAt:          u.UpdatedAt,
 	}
 }
 

@@ -2,6 +2,8 @@ package activitylister
 
 import (
 	"context"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -30,6 +32,17 @@ func New(l logger.Logger, repo activityRepo) *UseCase {
 
 // Execute returns a page of activities and the total number of matches.
 func (uc *UseCase) Execute(ctx context.Context, f domain.ActivityFilter) ([]domain.Activity, int, error) {
+	f.Search = strings.TrimSpace(f.Search)
+	f.Status = strings.ToLower(strings.TrimSpace(f.Status))
+
+	if utf8.RuneCountInString(f.Search) > domain.MaxActivitySearchLength {
+		return nil, 0, errs.Errf(errs.ErrValidation, "q must be at most %d characters", domain.MaxActivitySearchLength)
+	}
+
+	if f.Status != "" && f.Status != domain.ActivityStatusPublished && f.Status != domain.ActivityStatusDraft {
+		return nil, 0, errs.Errf(errs.ErrValidation, "status must be %s or %s", domain.ActivityStatusPublished, domain.ActivityStatusDraft)
+	}
+
 	if f.GoalID != "" && uuid.Validate(f.GoalID) != nil {
 		return nil, 0, errs.Errf(errs.ErrValidation, "goal_id must be a goal id (UUID), got %q", f.GoalID)
 	}

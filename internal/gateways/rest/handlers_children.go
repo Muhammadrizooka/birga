@@ -377,3 +377,174 @@ func toChildView(c domain.Child) childView {
 		UpdatedAt: c.UpdatedAt,
 	}
 }
+
+// UpdateChildRequest is the body of PATCH /v1/children/{id}. Omitted or null fields are kept;
+// "" clears photo_id.
+type UpdateChildRequest struct {
+	Name    *string `json:"name" example:"Amir"`
+	Age     *int    `json:"age" example:"5"`
+	Gender  *string `json:"gender" example:"male" enums:"male,female"`
+	PhotoID *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+}
+
+// UpdateChild godoc swagger
+// @Summary edits one of the signed-in user's children
+// @Description - only the child's parents can edit it; any other id, or a deleted child, is 404
+// @Description - omitted or null fields are kept; the add-child rules apply to the given ones:
+// @Description   name 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media
+// @Description   ("" clears it, an unknown id is 422)
+// @Description - an empty body is 422 (nothing to update)
+// @Tags children
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "child id (UUID)"
+// @Param body body UpdateChildRequest true "fields to change"
+// @Success 200 {object} rest.R{data=rest.childView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 422 {object} rest.UnprocessableContentResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/children/{id} [PATCH]
+func (s *Server) UpdateChild() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		childID := c.Param("id")
+		if err := ValidateUUID(childID); err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		var req UpdateChildRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			Return(c, nil, errs.Errf(errs.ErrBadRequest, "invalid JSON body: %s", err.Error()))
+
+			return
+		}
+
+		child, err := s.childUpdater.Execute(c.Request.Context(), currentUserID(c), childID, domain.ChildUpdate{
+			Name:    req.Name,
+			Age:     req.Age,
+			Gender:  req.Gender,
+			PhotoID: req.PhotoID,
+		})
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, toChildView(child), nil)
+	}
+}
+
+// GetPlan godoc swagger
+// @Summary a child's 7-day plan (the Reja tab)
+// @Description - only the child's parents can ask (404 otherwise)
+// @Description - the first call makes the plan: one activity per day theme, fitting the child's age
+// @Description   (clamped to 2..6), preferring the theme's goal, then the parent's goals, then activities
+// @Description   the child has not done; the plan then stays the same until POST starts a new one
+// @Description - days are done in order, one per calendar day (Uzbekistan time): status is done, today
+// @Description   (the next day to do, open now) or locked
+// @Description - completing a day is POST /v1/children/{id}/completions with the day's activity id
+// @Description - 404 when no published activity fits the child's age
+// @Tags children
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "child id (UUID)"
+// @Success 200 {object} rest.R{data=rest.planView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/children/{id}/plan [GET]
+func (s *Server) GetPlan() gin.HandlerFunc {
+	return s.plan(false)
+}
+
+// RestartPlan godoc swagger
+// @Summary starts a new 7-day plan for a child
+// @Description - replaces the current plan with a new one starting today, whatever its progress;
+// @Description   completions stay in the history. Use it when the plan is completed
+// @Tags children
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "child id (UUID)"
+// @Success 200 {object} rest.R{data=rest.planView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/children/{id}/plan [POST]
+func (s *Server) RestartPlan() gin.HandlerFunc {
+	return s.plan(true)
+}
+
+func (s *Server) plan(restart bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		childID := c.Param("id")
+		if err := ValidateUUID(childID); err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		p, err := s.planGetter.Execute(c.Request.Context(), currentUserID(c), childID, restart)
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, toPlanView(p), nil)
+	}
+}
+
+type planView struct {
+	ChildID   string        `json:"child_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	StartedOn string        `json:"started_on" example:"2026-10-11"`
+	Completed bool          `json:"completed" example:"false"`
+	Days      []planDayView `json:"days"`
+}
+
+type planDayView struct {
+	Day         int          `json:"day" example:"1"`
+	TitleUz     string       `json:"title_uz" example:"Hisni top"`
+	TitleRu     string       `json:"title_ru" example:"Угадай эмоцию"`
+	Icon        string       `json:"icon" example:"heart" enums:"heart,chat,blocks,gift,sparkle,bulb,star"`
+	GoalID      *string      `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	Status      string       `json:"status" example:"today" enums:"done,today,locked"`
+	CompletedOn *string      `json:"completed_on" example:"2026-10-11"`
+	Activity    activityView `json:"activity"`
+}
+
+func toPlanView(p domain.Plan) planView {
+	v := planView{
+		ChildID:   p.ChildID,
+		StartedOn: p.StartedOn.Format(time.DateOnly),
+		Completed: p.Completed,
+		Days:      make([]planDayView, 0, len(p.Days)),
+	}
+
+	for _, d := range p.Days {
+		dv := planDayView{
+			Day:      d.Theme.Day,
+			TitleUz:  d.Theme.TitleUz,
+			TitleRu:  d.Theme.TitleRu,
+			Icon:     d.Theme.Icon,
+			GoalID:   d.Theme.GoalID,
+			Status:   d.Status,
+			Activity: toActivityView(d.Activity),
+		}
+
+		if d.CompletedOn != nil {
+			on := d.CompletedOn.Format(time.DateOnly)
+			dv.CompletedOn = &on
+		}
+
+		v.Days = append(v.Days, dv)
+	}
+
+	return v
+}

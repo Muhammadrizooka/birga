@@ -237,8 +237,18 @@ func activityWhere(f domain.ActivityFilter) (string, []any) {
 		args  []any
 	)
 
-	if f.PublishedOnly {
+	if f.PublishedOnly || f.Status == domain.ActivityStatusPublished {
 		conds = append(conds, "is_published")
+	}
+
+	if f.Status == domain.ActivityStatusDraft {
+		conds = append(conds, "NOT is_published")
+	}
+
+	if f.Search != "" {
+		args = append(args, "%"+likeEscaper.Replace(f.Search)+"%")
+		n := strconv.Itoa(len(args))
+		conds = append(conds, "(title_uz ILIKE $"+n+" OR title_ru ILIKE $"+n+")")
 	}
 
 	if f.GoalID != "" {
@@ -254,6 +264,9 @@ func activityWhere(f domain.ActivityFilter) (string, []any) {
 
 	return " WHERE " + strings.Join(conds, " AND "), args
 }
+
+// likeEscaper escapes the LIKE wildcards, so a search for "50%" matches the text literally.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // activitySet builds a parameterized SET clause from fixed fragments; values never enter the SQL text.
 func activitySet(upd domain.ActivityUpdate) (string, []any) {

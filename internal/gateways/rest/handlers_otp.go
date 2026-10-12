@@ -11,7 +11,6 @@ import (
 type SendOTPRequest struct {
 	PhoneNumber string `json:"phone_number" example:"+998901234567"`
 	Purpose     string `json:"purpose" enums:"sign_up,update_user,reset_password" example:"sign_up"`
-	IPAddress   string `json:"ip_address" example:"203.0.113.7"`
 }
 
 type sendOTPView struct {
@@ -25,12 +24,13 @@ type sendOTPView struct {
 // @Description - purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or
 // @Description   reset_password (the number must belong to a user, 404 otherwise; used by forgot password and
 // @Description   PUT /v1/me/password)
-// @Description - ip_address: the end user's IPv4 or IPv6 address, used for rate limits
+// @Description - the User-Agent header is required (422 if empty) and identifies the client for rate limits;
+// @Description   an old client's ip_address field is ignored
 // @Description - the code has 6 digits and is sent through Play Mobile; only its hash is stored
 // @Description - the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new
 // @Description   code replaces the previous one for the same phone and purpose
 // @Description - rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour
-// @Description   at most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP
+// @Description   at most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_USER_AGENT_HOUR per User-Agent
 // @Tags otp
 // @Accept json
 // @Produce json
@@ -55,7 +55,7 @@ func (s *Server) SendOTP() gin.HandlerFunc {
 		res, err := s.otpSender.Execute(c.Request.Context(), domain.OTPSendRequest{
 			PhoneNumber: req.PhoneNumber,
 			Purpose:     domain.OTPPurpose(req.Purpose),
-			IPAddress:   req.IPAddress,
+			UserAgent:   c.GetHeader("User-Agent"),
 		})
 		if err != nil {
 			Return(c, nil, err)

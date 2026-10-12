@@ -3,10 +3,11 @@ package otpsender
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"math/big"
-	"net"
 	"strings"
 	"time"
 
@@ -19,13 +20,13 @@ import (
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 )
 
-// limitWindow is the window of the per-phone and per-IP limits.
+// limitWindow is the window of the per-phone and per-client limits.
 const limitWindow = time.Hour
 
 // otpStore keeps codes and the rate limiter state (Redis).
 type otpStore interface {
-	AcquireSend(ctx context.Context, phone string, purpose domain.OTPPurpose, ip string, lim domain.OTPLimits) error
-	ReleaseSend(ctx context.Context, phone string, purpose domain.OTPPurpose, ip string) error
+	AcquireSend(ctx context.Context, phone string, purpose domain.OTPPurpose, client string, lim domain.OTPLimits) error
+	ReleaseSend(ctx context.Context, phone string, purpose domain.OTPPurpose, client string) error
 	SaveCode(ctx context.Context, phone string, purpose domain.OTPPurpose, hash string, ttl time.Duration) error
 }
 
@@ -62,12 +63,13 @@ func New(l logger.Logger, cfg config.OTPConfig, otps otpStore, users userRepo, s
 func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (domain.OTPSendResult, error) {
 	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
 
-	ip, err := validate(req)
-	if err != nil {
+	req.UserAgent = strings.TrimSpace(req.UserAgent)
+
+	if err := validate(req); err != nil {
 		return domain.OTPSendResult{}, err
 	}
 
-	req.IPAddress = ip
+	client := clientKey(req.UserAgent)
 
 	if err := uc.checkOwner(ctx, req); err != nil {
 		return domain.OTPSendResult{}, err
@@ -77,9 +79,9 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (doma
 		ResendCooldown: uc.cfg.ResendCooldown,
 		Window:         limitWindow,
 		MaxPerPhone:    uc.cfg.MaxPerPhoneHour,
-		MaxPerIP:       uc.cfg.MaxPerIPHour,
+		MaxPerClient:   uc.cfg.MaxPerUserAgentHour,
 	}
-	if err := uc.otps.AcquireSend(ctx, req.PhoneNumber, req.Purpose, req.IPAddress, limits); err != nil {
+	if err := uc.otps.AcquireSend(ctx, req.PhoneNumber, req.Purpose, client, limits); err != nil {
 		return domain.OTPSendResult{}, err
 	}
 
@@ -87,7 +89,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (doma
 	l := logger.WithContext(uc.l, ctx).With(zap.String("message_id", messageID), zap.String("purpose", string(req.Purpose)))
 
 	if err := uc.saveAndSend(ctx, req, messageID); err != nil {
-		if relErr := uc.otps.ReleaseSend(context.WithoutCancel(ctx), req.PhoneNumber, req.Purpose, req.IPAddress); relErr != nil {
+		if relErr := uc.otps.ReleaseSend(context.WithoutCancel(ctx), req.PhoneNumber, req.Purpose, client); relErr != nil {
 			l.Error("otps.ReleaseSend after failed send", zap.Error(relErr))
 		}
 
@@ -136,25 +138,28 @@ func (uc *UseCase) saveAndSend(ctx context.Context, req domain.OTPSendRequest, m
 	return uc.sms.Send(ctx, messageID, req.PhoneNumber, smsText(code))
 }
 
-// validate checks the request and returns the IP address in canonical form.
-func validate(req domain.OTPSendRequest) (string, error) {
+// validate checks the request.
+func validate(req domain.OTPSendRequest) error {
 	switch {
 	case req.PhoneNumber == "":
-		return "", errs.Errf(errs.ErrValidation, "phone_number is required")
+		return errs.Errf(errs.ErrValidation, "phone_number is required")
 	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
-		return "", errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
 	case !req.Purpose.IsKnown():
-		return "", errs.Errf(errs.ErrValidation, "purpose must be %s", domain.OTPPurposesHint)
-	case strings.TrimSpace(req.IPAddress) == "":
-		return "", errs.Errf(errs.ErrValidation, "ip_address is required")
+		return errs.Errf(errs.ErrValidation, "purpose must be %s", domain.OTPPurposesHint)
+	case req.UserAgent == "":
+		return errs.Errf(errs.ErrValidation, "the User-Agent header is required")
 	}
 
-	ip := net.ParseIP(strings.TrimSpace(req.IPAddress))
-	if ip == nil {
-		return "", errs.Errf(errs.ErrValidation, "ip_address must be an IPv4 or IPv6 address")
-	}
+	return nil
+}
 
-	return ip.String(), nil
+// clientKey turns the User-Agent into the rate limiter's client key: a SHA-256 hex digest, so any
+// header length makes a short Redis key.
+func clientKey(userAgent string) string {
+	sum := sha256.Sum256([]byte(userAgent))
+
+	return hex.EncodeToString(sum[:])
 }
 
 // generateCode returns a uniformly random numeric code of domain.OTPCodeLength digits.

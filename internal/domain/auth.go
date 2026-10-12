@@ -46,6 +46,8 @@ type SignUpRequest struct {
 	Relationship string
 	// GoalIDs are optional ids of active goals.
 	GoalIDs []string
+	// AgreedOnConditions is the consent tick on the sign-up screen.
+	AgreedOnConditions bool
 }
 
 // TokenPair is what a client keeps after signing up. AccessExpiresIn is the access token lifetime.
