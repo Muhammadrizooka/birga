@@ -18,7 +18,7 @@ One Debian 13 server runs everything, installed from Debian packages rather than
 | Backend API | systemd service `birga-backend`, binary `/opt/birga/backend/birga_backend`, listens on `127.0.0.1:8080` (metrics `127.0.0.1:9090`) |
 | Backend settings | `/etc/birga/backend.env` (root:birga, 640) |
 | Dashboard | static files in `/var/www/birga-dashboard` |
-| nginx | `api.<domain>` proxies to the API; `admin.<domain>` serves the dashboard and proxies `/v1/` to the API (same origin, no CORS); the bare IP serves the API under `/birga/` (Swagger: `http://<ip>/birga/swagger/index.html`) and `/v1/` for Swagger's "Try it out" |
+| nginx | `api.<domain>` proxies to the API; `admin.<domain>` serves the dashboard and proxies `/v1/` to the API (same origin, no CORS); the bare IP serves the dashboard at `/` and the API under `/birga/` (Swagger: `http://<ip>/birga/swagger/index.html`) and `/v1/` for Swagger's "Try it out" |
 | HTTPS | Let's Encrypt via certbot, renewed automatically |
 | Firewall | ufw: SSH, HTTP and HTTPS only |
 | Backups | `pg_dump` nightly at 03:30 into `/var/backups/birga`, kept 14 days |
