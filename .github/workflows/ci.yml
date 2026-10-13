@@ -13,7 +13,7 @@ permissions:
 
 env:
   # ED25519 host key of the Birga server. A deploy stops if the server answers with another key.
-  SERVER_HOST_FINGERPRINT: SHA256:REPLACE_ME
+  SERVER_HOST_FINGERPRINT: SHA256:csj1yo18RrSUarQgIyREK2LFijzjzrN7c5UZt3yPP4M
 
 jobs:
   lint:

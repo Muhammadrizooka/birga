@@ -21,7 +21,7 @@ permissions:
 
 env:
   # Keep in step with ci.yml.
-  SERVER_HOST_FINGERPRINT: SHA256:REPLACE_ME
+  SERVER_HOST_FINGERPRINT: SHA256:csj1yo18RrSUarQgIyREK2LFijzjzrN7c5UZt3yPP4M
 
 concurrency:
   group: deploy-backend
