@@ -1475,6 +1475,12 @@ const docTemplate = `{
                 "summary": "creates a user and returns their tokens",
                 "parameters": [
                     {
+                        "type": "string",
+                        "description": "ADMIN_API_KEY; needed only with role admin",
+                        "name": "X-Admin-Key",
+                        "in": "header"
+                    },
+                    {
                         "description": "new user",
                         "name": "body",
                         "in": "body",
