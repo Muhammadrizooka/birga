@@ -43,7 +43,7 @@ Workflows in `.github/workflows/`:
 
 | Workflow | When | What |
 |---|---|---|
-| `ci.yml` | every pull request and push to `main` | golangci-lint; tests against PostgreSQL 17 after migrations |
+| `ci.yml` | every pull request and push to `main` | golangci-lint (non-blocking: v2.12.2 cannot analyse Go 1.27 yet); tests against PostgreSQL 17 after migrations |
 | `ci.yml`, job `deploy` | push to `main` after tests pass (or run by hand on `main`) | builds the binary for the server's CPU, uploads it with `migrations/` and `seeds/`, then runs `deploy/server/release.sh`: migrate up, load `seeds/activities.sql` if `activities` is empty, swap the binary, restart, check `/health`, roll back to the previous binary if the check fails |
 | `server-setup.yml` | by hand (Actions tab, inputs: API domain, dashboard domain, certificate e-mail) | uploads `deploy/server/` and runs `bootstrap.sh` |
 
