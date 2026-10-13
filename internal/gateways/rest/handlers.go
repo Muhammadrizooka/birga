@@ -55,8 +55,10 @@ func (s *Server) Health() gin.HandlerFunc {
 type CreateActivityRequest struct {
 	TitleUz         string   `json:"title_uz" example:"Rangli toshlar"`
 	TitleRu         string   `json:"title_ru" example:"Цветные камни"`
+	TitleEn         string   `json:"title_en" example:"Colourful stones"`
 	DescriptionUz   string   `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
 	DescriptionRu   string   `json:"description_ru" example:"Сортируйте камни по цвету"`
+	DescriptionEn   string   `json:"description_en" example:"Sort the stones by colour"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int      `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          int      `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -93,8 +95,10 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 		a, err := s.activityCreator.Execute(c.Request.Context(), domain.Activity{
 			TitleUz:         req.TitleUz,
 			TitleRu:         req.TitleRu,
+			TitleEn:         req.TitleEn,
 			DescriptionUz:   req.DescriptionUz,
 			DescriptionRu:   req.DescriptionRu,
+			DescriptionEn:   req.DescriptionEn,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -249,8 +253,10 @@ func (s *Server) getActivity(includeUnpublished bool) gin.HandlerFunc {
 type UpdateActivityRequest struct {
 	TitleUz         *string  `json:"title_uz" example:"Rangli toshlar"`
 	TitleRu         *string  `json:"title_ru" example:"Цветные камни"`
+	TitleEn         *string  `json:"title_en" example:"Colourful stones"`
 	DescriptionUz   *string  `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
 	DescriptionRu   *string  `json:"description_ru" example:"Сортируйте камни по цвету"`
+	DescriptionEn   *string  `json:"description_en" example:"Sort the stones by colour"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          *int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          *int     `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -296,8 +302,10 @@ func (s *Server) UpdateActivity() gin.HandlerFunc {
 		a, err := s.activityUpdater.Execute(c.Request.Context(), id, domain.ActivityUpdate{
 			TitleUz:         req.TitleUz,
 			TitleRu:         req.TitleRu,
+			TitleEn:         req.TitleEn,
 			DescriptionUz:   req.DescriptionUz,
 			DescriptionRu:   req.DescriptionRu,
+			DescriptionEn:   req.DescriptionEn,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -345,8 +353,10 @@ type activityView struct {
 	ID              string    `json:"id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
 	TitleUz         string    `json:"title_uz" example:"Rangli toshlar"`
 	TitleRu         string    `json:"title_ru" example:"Цветные камни"`
+	TitleEn         string    `json:"title_en" example:"Colourful stones"`
 	DescriptionUz   string    `json:"description_uz"`
 	DescriptionRu   string    `json:"description_ru"`
+	DescriptionEn   string    `json:"description_en"`
 	GoalIDs         []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int       `json:"min_age" example:"3"`
 	MaxAge          int       `json:"max_age" example:"5"`
@@ -368,8 +378,10 @@ func toActivityView(a domain.Activity) activityView {
 		ID:              a.ID,
 		TitleUz:         a.TitleUz,
 		TitleRu:         a.TitleRu,
+		TitleEn:         a.TitleEn,
 		DescriptionUz:   a.DescriptionUz,
 		DescriptionRu:   a.DescriptionRu,
+		DescriptionEn:   a.DescriptionEn,
 		GoalIDs:         a.GoalIDs,
 		MinAge:          a.MinAge,
 		MaxAge:          a.MaxAge,

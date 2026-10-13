@@ -54,6 +54,9 @@ definitions:
     type: object
   rest.CreateActivityRequest:
     properties:
+      description_en:
+        example: Sort the stones by colour
+        type: string
       description_ru:
         example: Сортируйте камни по цвету
         type: string
@@ -84,6 +87,9 @@ definitions:
         maximum: 6
         minimum: 2
         type: integer
+      title_en:
+        example: Colourful stones
+        type: string
       title_ru:
         example: Цветные камни
         type: string
@@ -341,6 +347,9 @@ definitions:
     type: object
   rest.UpdateActivityRequest:
     properties:
+      description_en:
+        example: Sort the stones by colour
+        type: string
       description_ru:
         example: Сортируйте камни по цвету
         type: string
@@ -371,6 +380,9 @@ definitions:
         maximum: 6
         minimum: 2
         type: integer
+      title_en:
+        example: Colourful stones
+        type: string
       title_ru:
         example: Цветные камни
         type: string
@@ -505,6 +517,8 @@ definitions:
     properties:
       created_at:
         type: string
+      description_en:
+        type: string
       description_ru:
         type: string
       description_uz:
@@ -530,6 +544,9 @@ definitions:
       min_age:
         example: 3
         type: integer
+      title_en:
+        example: Colourful stones
+        type: string
       title_ru:
         example: Цветные камни
         type: string

@@ -240,7 +240,7 @@ func TestCreateActivity(t *testing.T) {
 	s, d := newTestServer(testAdminKey)
 	auth := adminJSON
 
-	body := `{"title_uz":"T","title_ru":"Т","description_uz":"D","description_ru":"Д","goal_ids":["` + testID + `"],"min_age":2,"max_age":4,"duration_minutes":5}`
+	body := `{"title_uz":"T","title_ru":"Т","title_en":"T","description_uz":"D","description_ru":"Д","description_en":"D","goal_ids":["` + testID + `"],"min_age":2,"max_age":4,"duration_minutes":5}`
 	if code, r := do(t, s, http.MethodPost, "/v1/admin/activities", body, auth); code != http.StatusOK || r.Status != _statusSuccess {
 		t.Fatalf("create: %d %+v", code, r)
 	}

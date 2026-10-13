@@ -3032,6 +3032,10 @@ const docTemplate = `{
         "rest.CreateActivityRequest": {
             "type": "object",
             "properties": {
+                "description_en": {
+                    "type": "string",
+                    "example": "Sort the stones by colour"
+                },
                 "description_ru": {
                     "type": "string",
                     "example": "Сортируйте камни по цвету"
@@ -3070,6 +3074,10 @@ const docTemplate = `{
                     "maximum": 6,
                     "minimum": 2,
                     "example": 3
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Colourful stones"
                 },
                 "title_ru": {
                     "type": "string",
@@ -3462,6 +3470,10 @@ const docTemplate = `{
         "rest.UpdateActivityRequest": {
             "type": "object",
             "properties": {
+                "description_en": {
+                    "type": "string",
+                    "example": "Sort the stones by colour"
+                },
                 "description_ru": {
                     "type": "string",
                     "example": "Сортируйте камни по цвету"
@@ -3500,6 +3512,10 @@ const docTemplate = `{
                     "maximum": 6,
                     "minimum": 2,
                     "example": 3
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Colourful stones"
                 },
                 "title_ru": {
                     "type": "string",
@@ -3684,6 +3700,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "description_en": {
+                    "type": "string"
+                },
                 "description_ru": {
                     "type": "string"
                 },
@@ -3718,6 +3737,10 @@ const docTemplate = `{
                 "min_age": {
                     "type": "integer",
                     "example": 3
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Colourful stones"
                 },
                 "title_ru": {
                     "type": "string",

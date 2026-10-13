@@ -3025,6 +3025,10 @@
         "rest.CreateActivityRequest": {
             "type": "object",
             "properties": {
+                "description_en": {
+                    "type": "string",
+                    "example": "Sort the stones by colour"
+                },
                 "description_ru": {
                     "type": "string",
                     "example": "Сортируйте камни по цвету"
@@ -3063,6 +3067,10 @@
                     "maximum": 6,
                     "minimum": 2,
                     "example": 3
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Colourful stones"
                 },
                 "title_ru": {
                     "type": "string",
@@ -3455,6 +3463,10 @@
         "rest.UpdateActivityRequest": {
             "type": "object",
             "properties": {
+                "description_en": {
+                    "type": "string",
+                    "example": "Sort the stones by colour"
+                },
                 "description_ru": {
                     "type": "string",
                     "example": "Сортируйте камни по цвету"
@@ -3493,6 +3505,10 @@
                     "maximum": 6,
                     "minimum": 2,
                     "example": 3
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Colourful stones"
                 },
                 "title_ru": {
                     "type": "string",
@@ -3677,6 +3693,9 @@
                 "created_at": {
                     "type": "string"
                 },
+                "description_en": {
+                    "type": "string"
+                },
                 "description_ru": {
                     "type": "string"
                 },
@@ -3711,6 +3730,10 @@
                 "min_age": {
                     "type": "integer",
                     "example": 3
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Colourful stones"
                 },
                 "title_ru": {
                     "type": "string",

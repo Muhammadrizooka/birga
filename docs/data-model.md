@@ -18,8 +18,10 @@ Rows are soft-deleted by setting `deleted_at`.
 | `id` | `UUID` | no | `gen_random_uuid()` | primary key |
 | `title_uz` | `TEXT` | no | | Uzbek title |
 | `title_ru` | `TEXT` | no | | Russian title |
+| `title_en` | `TEXT` | no | `''` | English title (added by `000015_add_activity_english`; `''` on older rows until an admin fills it) |
 | `description_uz` | `TEXT` | no | | Uzbek instructions |
 | `description_ru` | `TEXT` | no | | Russian instructions |
+| `description_en` | `TEXT` | no | `''` | English instructions (added by `000015_add_activity_english`) |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) the activity serves; no foreign key, see below |
 | `min_age` | `SMALLINT` | no | | youngest suitable age, years |
 | `max_age` | `SMALLINT` | no | | oldest suitable age, years |

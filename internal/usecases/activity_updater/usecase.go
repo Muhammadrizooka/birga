@@ -44,7 +44,7 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.ActivityUp
 		return domain.Activity{}, errs.Errf(errs.ErrValidation, "nothing to update")
 	}
 
-	for _, s := range []**string{&upd.TitleUz, &upd.TitleRu, &upd.DescriptionUz, &upd.DescriptionRu} {
+	for _, s := range []**string{&upd.TitleUz, &upd.TitleRu, &upd.TitleEn, &upd.DescriptionUz, &upd.DescriptionRu, &upd.DescriptionEn} {
 		if *s != nil {
 			v := strings.TrimSpace(**s)
 			*s = &v
@@ -82,10 +82,10 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.ActivityUp
 
 func validate(upd domain.ActivityUpdate) error {
 	switch {
-	case isBlank(upd.TitleUz) || isBlank(upd.TitleRu):
-		return errs.Errf(errs.ErrValidation, "title_uz and title_ru cannot be empty")
-	case isBlank(upd.DescriptionUz) || isBlank(upd.DescriptionRu):
-		return errs.Errf(errs.ErrValidation, "description_uz and description_ru cannot be empty")
+	case isBlank(upd.TitleUz) || isBlank(upd.TitleRu) || isBlank(upd.TitleEn):
+		return errs.Errf(errs.ErrValidation, "title_uz, title_ru and title_en cannot be empty")
+	case isBlank(upd.DescriptionUz) || isBlank(upd.DescriptionRu) || isBlank(upd.DescriptionEn):
+		return errs.Errf(errs.ErrValidation, "description_uz, description_ru and description_en cannot be empty")
 	case upd.GoalIDs != nil && (len(upd.GoalIDs) == 0 || len(upd.GoalIDs) > domain.MaxActivityGoals):
 		return errs.Errf(errs.ErrValidation, "goal_ids must hold 1 to %d goal ids", domain.MaxActivityGoals)
 	case !validAges(upd.MinAge, upd.MaxAge):
