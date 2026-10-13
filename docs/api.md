@@ -41,7 +41,7 @@ request id.
 | Header | Direction | Meaning |
 |---|---|---|
 | `X-Request-Id` | request (optional) and response | correlates a call with server log lines; generated if absent |
-| `X-Admin-Key` | request | admin key for `/v1/admin/*` (when no `Authorization` header is sent) |
+| `X-Admin-Key` | request | admin key for `/v1/admin/*` (when no `Authorization` header is sent), and for sign-up with `"role": "admin"` |
 | `Authorization: Bearer <access_token>` | request | signed-in user for `/v1/children` and `/v1/children/*`; an admin user for `/v1/admin/*` |
 | `Content-Type: application/json` | request | for bodies |
 | `User-Agent` | request | sent by the apps on every request; required by `POST /v1/otp/send`, whose rate limit counts per value (see [Send](#send)) |
@@ -716,7 +716,7 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
 | `password` | 8 to 72 bytes (bcrypt reads at most 72); stored only as a bcrypt hash |
 | `phone_number` | Uzbek number, `+998` and 9 digits; not verified |
 | `relationship` | required: `father`, `mother`, `educator` or `nanny` (trimmed, case-insensitive) |
-| `role` | optional: `user` (default) or `admin`. `admin` needs the header `X-Admin-Key: <ADMIN_API_KEY>`: wrong or missing key 401 (-20), `ADMIN_API_KEY` not set on the server 403 (-21); any other value 422. The app never sends it; it is for creating dashboard admins |
+| `role` | optional: `user` (default) or `admin`. `admin` needs the header `X-Admin-Key: <ADMIN_API_KEY>`: wrong or missing key 401 (-20), `ADMIN_API_KEY` not set on the server 403 (-21); any other value 422. The app never sends it; it is for creating dashboard admins. In Swagger the header is the optional `X-Admin-Key` field on this endpoint |
 | `agreed_on_conditions` | optional boolean, the consent tick on the sign-up screen; stored in `users.agreed_on_conditions`, omitted means `false`. Sign-up does not refuse `false` yet; the app should only let the user continue once it is ticked |
 
 Goals are not part of sign-up: they belong to each child ([add a child](#children-add-a-child-signed-in)).

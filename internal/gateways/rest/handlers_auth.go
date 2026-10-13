@@ -54,9 +54,12 @@ type tokenPairView struct {
 // @Tags auth
 // @Accept json
 // @Produce json
+// @Param X-Admin-Key header string false "ADMIN_API_KEY; needed only with role admin"
 // @Param body body SignUpRequest true "new user"
 // @Success 200 {object} rest.R{data=rest.signUpView}
 // @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 403 {object} rest.ForbiddenResponse
 // @Failure 409 {object} rest.ConflictResponse
 // @Failure 422 {object} rest.UnprocessableContentResponse
 // @Failure 500 {object} rest.InternalServerErrorResponse
