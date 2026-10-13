@@ -26,6 +26,8 @@ jobs:
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12.2
+          # The released binary is built with an older Go than go.mod targets; build it here.
+          install-mode: goinstall
           args: -c .golangci.yml
 
   test:
