@@ -1,0 +1,20 @@
+[Unit]
+Description=Birga backend API
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+User=birga
+Group=birga
+EnvironmentFile=/etc/birga/backend.env
+Environment=TZ=Asia/Tashkent
+ExecStart=/opt/birga/backend/birga_backend
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

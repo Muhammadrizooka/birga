@@ -1,0 +1,60 @@
+# Sets up (or re-applies the setup of) the Birga server: PostgreSQL, Redis, nginx with HTTPS,
+# the backend service, firewall, swap and backups. Run it by hand from the Actions tab.
+# See docs/operations.md, "Server".
+name: Server setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_domain:
+        description: API host name, e.g. api.example.uz
+        required: true
+      admin_domain:
+        description: Dashboard host name, e.g. admin.example.uz
+        required: true
+      cert_email:
+        description: E-mail for Let's Encrypt expiry notices (empty skips HTTPS)
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  # Keep in step with ci.yml.
+  SERVER_HOST_FINGERPRINT: SHA256:REPLACE_ME
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.SERVER_HOST }}
+      SSH_USER: ${{ secrets.SERVER_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Connect to the server
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: deploy/ci/ssh-setup.sh
+      - name: Upload setup files
+        env:
+          API_DOMAIN: ${{ inputs.api_domain }}
+          ADMIN_DOMAIN: ${{ inputs.admin_domain }}
+          CERT_EMAIL: ${{ inputs.cert_email }}
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          umask 077
+          for k in API_DOMAIN ADMIN_DOMAIN CERT_EMAIL S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+            printf '%s=%q\n' "$k" "${!k}"
+          done >setup.env
+          ssh "$SSH_USER@$SSH_HOST" 'rm -rf /root/birga-setup && install -d -m 700 /root/birga-setup'
+          rsync -a deploy/server/ setup.env "$SSH_USER@$SSH_HOST:/root/birga-setup/"
+          rm -f setup.env
+      - name: Run setup
+        run: |
+          ssh "$SSH_USER@$SSH_HOST" 'set -a; . /root/birga-setup/setup.env; set +a;
+            rm -f /root/birga-setup/setup.env; bash /root/birga-setup/bootstrap.sh'
