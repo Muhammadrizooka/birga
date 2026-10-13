@@ -45,8 +45,10 @@ func validActivity() domain.Activity {
 	return domain.Activity{
 		TitleUz:         " Rangli tosh ",
 		TitleRu:         "Цветные камни",
+		TitleEn:         "Colourful stones",
 		DescriptionUz:   "Toshlarni rangi bo'yicha saralang",
 		DescriptionRu:   "Сортируйте камни по цвету",
+		DescriptionEn:   "Sort the stones by colour",
 		GoalIDs:         []string{goalID},
 		MinAge:          3,
 		MaxAge:          5,
@@ -89,10 +91,12 @@ func TestExecute_UnknownGoal(t *testing.T) {
 
 func TestExecute_Validation(t *testing.T) {
 	cases := map[string]func(a *domain.Activity){
-		"missing title": func(a *domain.Activity) { a.TitleRu = "  " },
-		"missing desc":  func(a *domain.Activity) { a.DescriptionUz = "" },
-		"no goals":      func(a *domain.Activity) { a.GoalIDs = nil },
-		"bad goal id":   func(a *domain.Activity) { a.GoalIDs = []string{"motor"} },
+		"missing title":    func(a *domain.Activity) { a.TitleRu = "  " },
+		"missing desc":     func(a *domain.Activity) { a.DescriptionUz = "" },
+		"missing en title": func(a *domain.Activity) { a.TitleEn = "" },
+		"missing en desc":  func(a *domain.Activity) { a.DescriptionEn = " " },
+		"no goals":         func(a *domain.Activity) { a.GoalIDs = nil },
+		"bad goal id":      func(a *domain.Activity) { a.GoalIDs = []string{"motor"} },
 		"too many goals": func(a *domain.Activity) {
 			a.GoalIDs = []string{goalID, "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222",
 				"33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444", "55555555-5555-5555-5555-555555555555"}

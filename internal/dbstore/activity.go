@@ -25,8 +25,10 @@ type dbActivity struct {
 	ID              string    `db:"id"`
 	TitleUz         string    `db:"title_uz"`
 	TitleRu         string    `db:"title_ru"`
+	TitleEn         string    `db:"title_en"`
 	DescriptionUz   string    `db:"description_uz"`
 	DescriptionRu   string    `db:"description_ru"`
+	DescriptionEn   string    `db:"description_en"`
 	GoalIDs         []string  `db:"goal_ids"`
 	MinAge          int16     `db:"min_age"`
 	MaxAge          int16     `db:"max_age"`
@@ -37,7 +39,7 @@ type dbActivity struct {
 }
 
 const activityColumns = `
-	id, title_uz, title_ru, description_uz, description_ru, goal_ids,
+	id, title_uz, title_ru, title_en, description_uz, description_ru, description_en, goal_ids,
 	min_age, max_age, duration_minutes, is_published, created_at, updated_at`
 
 func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Activity, error) {
@@ -47,14 +49,14 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 		sqlClient = r.store.sqlClientByCtx(ctx)
 		q         = `
 		INSERT INTO activities (
-			title_uz, title_ru, description_uz, description_ru, goal_ids,
+			title_uz, title_ru, title_en, description_uz, description_ru, description_en, goal_ids,
 			min_age, max_age, duration_minutes, is_published
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING ` + activityColumns
 	)
 
 	rows, err := sqlClient.Query(ctx, q,
-		a.TitleUz, a.TitleRu, a.DescriptionUz, a.DescriptionRu, a.GoalIDs,
+		a.TitleUz, a.TitleRu, a.TitleEn, a.DescriptionUz, a.DescriptionRu, a.DescriptionEn, a.GoalIDs,
 		a.MinAge, a.MaxAge, a.DurationMinutes, a.IsPublished,
 	)
 	if err != nil {
@@ -206,7 +208,7 @@ func activityWhere(f domain.ActivityFilter) (string, []any) {
 	if f.Search != "" {
 		args = append(args, "%"+likeEscaper.Replace(f.Search)+"%")
 		n := strconv.Itoa(len(args))
-		conds = append(conds, "(title_uz ILIKE $"+n+" OR title_ru ILIKE $"+n+")")
+		conds = append(conds, "(title_uz ILIKE $"+n+" OR title_ru ILIKE $"+n+" OR title_en ILIKE $"+n+")")
 	}
 
 	if f.GoalID != "" {
@@ -246,12 +248,20 @@ func activitySet(upd domain.ActivityUpdate) (string, []any) {
 		add("title_ru", *upd.TitleRu)
 	}
 
+	if upd.TitleEn != nil {
+		add("title_en", *upd.TitleEn)
+	}
+
 	if upd.DescriptionUz != nil {
 		add("description_uz", *upd.DescriptionUz)
 	}
 
 	if upd.DescriptionRu != nil {
 		add("description_ru", *upd.DescriptionRu)
+	}
+
+	if upd.DescriptionEn != nil {
+		add("description_en", *upd.DescriptionEn)
 	}
 
 	if upd.GoalIDs != nil {
@@ -282,8 +292,10 @@ func (a dbActivity) toDomain() domain.Activity {
 		ID:              a.ID,
 		TitleUz:         a.TitleUz,
 		TitleRu:         a.TitleRu,
+		TitleEn:         a.TitleEn,
 		DescriptionUz:   a.DescriptionUz,
 		DescriptionRu:   a.DescriptionRu,
+		DescriptionEn:   a.DescriptionEn,
 		GoalIDs:         nonNil(a.GoalIDs),
 		MinAge:          int(a.MinAge),
 		MaxAge:          int(a.MaxAge),

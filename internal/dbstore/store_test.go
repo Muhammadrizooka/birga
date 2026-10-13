@@ -52,7 +52,7 @@ func inRollbackTx(t *testing.T, s *DBStore, fn func(ctx context.Context)) {
 
 func activity(goalID string, minAge, maxAge int, published bool) domain.Activity {
 	return domain.Activity{
-		TitleUz: "t", TitleRu: "т", DescriptionUz: "d", DescriptionRu: "д",
+		TitleUz: "t", TitleRu: "т", TitleEn: "t", DescriptionUz: "d", DescriptionRu: "д", DescriptionEn: "d",
 		GoalIDs: []string{goalID}, MinAge: minAge, MaxAge: maxAge, DurationMinutes: 10, IsPublished: published,
 	}
 }

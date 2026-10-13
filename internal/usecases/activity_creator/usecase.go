@@ -43,8 +43,10 @@ func New(l logger.Logger, repo activityRepo, goals goalRepo) *UseCase {
 func (uc *UseCase) Execute(ctx context.Context, a domain.Activity) (domain.Activity, error) {
 	a.TitleUz = strings.TrimSpace(a.TitleUz)
 	a.TitleRu = strings.TrimSpace(a.TitleRu)
+	a.TitleEn = strings.TrimSpace(a.TitleEn)
 	a.DescriptionUz = strings.TrimSpace(a.DescriptionUz)
 	a.DescriptionRu = strings.TrimSpace(a.DescriptionRu)
+	a.DescriptionEn = strings.TrimSpace(a.DescriptionEn)
 	a.GoalIDs = domain.NormalizeIDs(a.GoalIDs)
 
 	if err := validate(a); err != nil {
@@ -72,10 +74,10 @@ func (uc *UseCase) Execute(ctx context.Context, a domain.Activity) (domain.Activ
 
 func validate(a domain.Activity) error {
 	switch {
-	case a.TitleUz == "" || a.TitleRu == "":
-		return errs.Errf(errs.ErrValidation, "title_uz and title_ru are required")
-	case a.DescriptionUz == "" || a.DescriptionRu == "":
-		return errs.Errf(errs.ErrValidation, "description_uz and description_ru are required")
+	case a.TitleUz == "" || a.TitleRu == "" || a.TitleEn == "":
+		return errs.Errf(errs.ErrValidation, "title_uz, title_ru and title_en are required")
+	case a.DescriptionUz == "" || a.DescriptionRu == "" || a.DescriptionEn == "":
+		return errs.Errf(errs.ErrValidation, "description_uz, description_ru and description_en are required")
 	case len(a.GoalIDs) == 0 || len(a.GoalIDs) > domain.MaxActivityGoals:
 		return errs.Errf(errs.ErrValidation, "goal_ids must hold 1 to %d goal ids", domain.MaxActivityGoals)
 	case a.MinAge < domain.MinChildAge || a.MaxAge > domain.MaxChildAge || a.MinAge > a.MaxAge:

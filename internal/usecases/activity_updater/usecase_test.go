@@ -51,16 +51,18 @@ func TestExecute_Success(t *testing.T) {
 
 func TestExecute_Validation(t *testing.T) {
 	cases := map[string]domain.ActivityUpdate{
-		"empty":         {},
-		"blank title":   {TitleRu: ptr("  ")},
-		"blank desc":    {DescriptionUz: ptr("")},
-		"no goals":      {GoalIDs: []string{}},
-		"bad goal id":   {GoalIDs: []string{"motor"}},
-		"age too low":   {MinAge: ptr(1)},
-		"age too high":  {MaxAge: ptr(7)},
-		"min above max": {MinAge: ptr(5), MaxAge: ptr(3)},
-		"zero duration": {DurationMinutes: ptr(0)},
-		"long duration": {DurationMinutes: ptr(61)},
+		"empty":          {},
+		"blank title":    {TitleRu: ptr("  ")},
+		"blank desc":     {DescriptionUz: ptr("")},
+		"blank en title": {TitleEn: ptr(" ")},
+		"blank en desc":  {DescriptionEn: ptr("")},
+		"no goals":       {GoalIDs: []string{}},
+		"bad goal id":    {GoalIDs: []string{"motor"}},
+		"age too low":    {MinAge: ptr(1)},
+		"age too high":   {MaxAge: ptr(7)},
+		"min above max":  {MinAge: ptr(5), MaxAge: ptr(3)},
+		"zero duration":  {DurationMinutes: ptr(0)},
+		"long duration":  {DurationMinutes: ptr(61)},
 	}
 
 	for name, upd := range cases {

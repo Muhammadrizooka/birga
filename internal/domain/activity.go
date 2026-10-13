@@ -13,8 +13,10 @@ type Activity struct {
 	ID              string
 	TitleUz         string
 	TitleRu         string
+	TitleEn         string
 	DescriptionUz   string
 	DescriptionRu   string
+	DescriptionEn   string
 	GoalIDs         []string // ids of the goals table rows the activity serves, at least one
 	MinAge          int
 	MaxAge          int
@@ -56,8 +58,10 @@ const MaxActivityDurationMinutes = 60
 type ActivityUpdate struct {
 	TitleUz         *string
 	TitleRu         *string
+	TitleEn         *string
 	DescriptionUz   *string
 	DescriptionRu   *string
+	DescriptionEn   *string
 	GoalIDs         []string // nil keeps the goals; a non-nil list replaces them
 	MinAge          *int
 	MaxAge          *int
@@ -67,6 +71,7 @@ type ActivityUpdate struct {
 
 // IsEmpty reports whether the update changes nothing.
 func (u ActivityUpdate) IsEmpty() bool {
-	return u.TitleUz == nil && u.TitleRu == nil && u.DescriptionUz == nil && u.DescriptionRu == nil &&
+	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.DescriptionUz == nil && u.DescriptionRu == nil &&
+		u.DescriptionEn == nil &&
 		u.GoalIDs == nil && u.MinAge == nil && u.MaxAge == nil && u.DurationMinutes == nil && u.IsPublished == nil
 }
