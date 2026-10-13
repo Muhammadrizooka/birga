@@ -57,7 +57,7 @@ Repository secrets (Settings, Secrets and variables, Actions):
 | `SERVER_HOST` | server IP address |
 | `SERVER_USER` | SSH user (`root`) |
 | `SERVER_SSH_KEY` | private half of the deploy key; its public half is in the server's `authorized_keys` |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | the `birga-backend-media` IAM key, written to `S3_*` in the backend env file |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | the `birga-backend-media` IAM key, the same values as in a local `.env`; written to the backend env file |
 
 `deploy/ci/ssh-setup.sh` only connects when the server's ED25519 host key matches
 `SERVER_HOST_FINGERPRINT` at the top of each workflow; update it there if the server is
