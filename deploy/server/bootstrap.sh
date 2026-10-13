@@ -159,6 +159,8 @@ sed "s/{{API_DOMAIN}}/$API_DOMAIN/g" "$HERE/nginx-api.conf" >/etc/nginx/sites-av
 sed "s/{{ADMIN_DOMAIN}}/$ADMIN_DOMAIN/g" "$HERE/nginx-admin.conf" >/etc/nginx/sites-available/birga-admin.conf
 ln -sf /etc/nginx/sites-available/birga-api.conf /etc/nginx/sites-enabled/birga-api.conf
 ln -sf /etc/nginx/sites-available/birga-admin.conf /etc/nginx/sites-enabled/birga-admin.conf
+install -m 644 "$HERE/nginx-ip.conf" /etc/nginx/sites-available/birga-ip.conf
+ln -sf /etc/nginx/sites-available/birga-ip.conf /etc/nginx/sites-enabled/birga-ip.conf
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
