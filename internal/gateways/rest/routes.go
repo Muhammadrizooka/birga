@@ -60,6 +60,7 @@ func (s *Server) endpoints() {
 		child.POST("/completions", s.CompleteActivity())
 		child.GET("/completions", s.ListCompletions())
 		child.GET("/streak", s.GetStreak())
+		child.GET("/streak/days", s.GetStreakDays())
 	}
 
 	admin := v1.Group("/admin", s.adminAuth())

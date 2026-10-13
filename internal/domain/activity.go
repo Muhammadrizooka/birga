@@ -70,15 +70,3 @@ func (u ActivityUpdate) IsEmpty() bool {
 	return u.TitleUz == nil && u.TitleRu == nil && u.DescriptionUz == nil && u.DescriptionRu == nil &&
 		u.GoalIDs == nil && u.MinAge == nil && u.MaxAge == nil && u.DurationMinutes == nil && u.IsPublished == nil
 }
-
-// RecommendationQuery describes what a caregiver is looking for today. Zero GoalID or MaxMinutes means
-// "any". Activities serving one of PreferGoalIDs come first. Day seeds the tie-break so the suggestion
-// stays the same for the whole day.
-type RecommendationQuery struct {
-	ChildID       string
-	Age           int
-	GoalID        string
-	PreferGoalIDs []string
-	MaxMinutes    int
-	Day           time.Time
-}

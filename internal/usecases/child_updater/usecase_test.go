@@ -25,12 +25,24 @@ func (f *fakeChildren) Update(_ context.Context, id string, upd domain.ChildUpda
 	return domain.Child{ID: id}, nil
 }
 
+type fakeGoals struct{ active int }
+
+func (f fakeGoals) CountActive(_ context.Context, ids []string) (int, error) {
+	if f.active < 0 {
+		return len(ids), nil
+	}
+
+	return f.active, nil
+}
+
+const goalID = "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+
 func ptr[T any](v T) *T { return &v }
 
 func TestExecute_Normalizes(t *testing.T) {
 	repo := &fakeChildren{}
 
-	_, err := New(nil, repo).Execute(context.Background(), "u1", "c1", domain.ChildUpdate{
+	_, err := New(nil, repo, fakeGoals{active: -1}).Execute(context.Background(), "u1", "c1", domain.ChildUpdate{
 		Name: ptr(" Amir "), Age: ptr(5), Gender: ptr(" Male "), PhotoID: ptr(" "),
 	})
 	if err != nil {
@@ -50,9 +62,11 @@ func TestExecute_Validation(t *testing.T) {
 		"negative":   {Age: ptr(-1)},
 		"gender":     {Gender: ptr("other")},
 		"photo":      {PhotoID: ptr("x")},
+		"no goals":   {GoalIDs: ptr([]string{})},
+		"bad goal":   {GoalIDs: ptr([]string{"speech"})},
 	} {
 		repo := &fakeChildren{}
-		if _, err := New(nil, repo).Execute(context.Background(), "u1", "c1", upd); !errors.Is(err, errs.ErrValidation) || repo.updated {
+		if _, err := New(nil, repo, fakeGoals{active: -1}).Execute(context.Background(), "u1", "c1", upd); !errors.Is(err, errs.ErrValidation) || repo.updated {
 			t.Fatalf("%s: expected validation error before any write, got %v", name, err)
 		}
 	}
@@ -61,7 +75,23 @@ func TestExecute_Validation(t *testing.T) {
 func TestExecute_NotParent(t *testing.T) {
 	repo := &fakeChildren{getErr: errs.ErrChildNotFound}
 
-	if _, err := New(nil, repo).Execute(context.Background(), "u1", "c1", domain.ChildUpdate{Age: ptr(4)}); !errors.Is(err, errs.ErrNotFound) || repo.updated {
+	if _, err := New(nil, repo, fakeGoals{active: -1}).Execute(context.Background(), "u1", "c1", domain.ChildUpdate{Age: ptr(4)}); !errors.Is(err, errs.ErrNotFound) || repo.updated {
 		t.Fatalf("expected not found without update, got %v", err)
+	}
+}
+
+func TestExecute_Goals(t *testing.T) {
+	repo := &fakeChildren{}
+
+	_, err := New(nil, repo, fakeGoals{active: -1}).Execute(context.Background(), "u1", "c1",
+		domain.ChildUpdate{GoalIDs: ptr([]string{goalID, " " + goalID})})
+	if err != nil || len(*repo.got.GoalIDs) != 1 || (*repo.got.GoalIDs)[0] != goalID {
+		t.Fatalf("got %v, stored %+v", err, repo.got.GoalIDs)
+	}
+
+	repo = &fakeChildren{}
+	if _, err := New(nil, repo, fakeGoals{active: 0}).Execute(context.Background(), "u1", "c1",
+		domain.ChildUpdate{GoalIDs: ptr([]string{goalID})}); !errors.Is(err, errs.ErrUnknownGoals) || repo.updated {
+		t.Fatalf("unknown goal: %v", err)
 	}
 }

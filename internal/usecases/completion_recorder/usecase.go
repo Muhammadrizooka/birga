@@ -25,6 +25,15 @@ type completionRepo interface {
 	Create(ctx context.Context, c domain.Completion) (domain.Completion, bool, error)
 }
 
+type planRepo interface {
+	LockChild(ctx context.Context, childID string) error
+	MarkDone(ctx context.Context, childID, activityID string, on time.Time) (int, error)
+}
+
+type txRunner interface {
+	InTx(ctx context.Context, h func(context.Context) error) error
+}
+
 // Request is one "we did it" tap from a caregiver.
 type Request struct {
 	UserID     string
@@ -36,20 +45,24 @@ type Request struct {
 // UseCase records that a child completed an activity today.
 type UseCase struct {
 	l           logger.Logger
+	tx          txRunner
 	children    childRepo
 	activities  activityRepo
 	completions completionRepo
+	plans       planRepo
 	now         func() time.Time
 }
 
 // New creates a new completion recorder use case.
-func New(l logger.Logger, children childRepo, activities activityRepo, completions completionRepo) *UseCase {
-	return &UseCase{l: l, children: children, activities: activities, completions: completions, now: time.Now}
+func New(l logger.Logger, tx txRunner, children childRepo, activities activityRepo, completions completionRepo, plans planRepo) *UseCase {
+	return &UseCase{l: l, tx: tx, children: children, activities: activities, completions: completions, plans: plans, now: time.Now}
 }
 
 // Execute checks that the child is the caller's and the activity is published, then records the
 // completion for today (Uzbekistan time). Repeating it the same day returns the same completion and
-// replaces the note when a new one is given. A blank note is stored as no note.
+// replaces the note when a new one is given. A blank note is stored as no note. When the activity
+// is the open day of the child's plan and no plan day was done today yet, the day is marked done
+// and counts toward the child's streak; Completion.PlanDay then names it.
 func (uc *UseCase) Execute(ctx context.Context, req Request) (domain.Completion, error) {
 	if req.Note != nil {
 		v := strings.TrimSpace(*req.Note)
@@ -76,12 +89,38 @@ func (uc *UseCase) Execute(ctx context.Context, req Request) (domain.Completion,
 		return domain.Completion{}, errs.ErrActivityNotFound
 	}
 
-	c, created, err := uc.completions.Create(ctx, domain.Completion{
-		ChildID:     req.ChildID,
-		ActivityID:  req.ActivityID,
-		UserID:      &req.UserID,
-		CompletedOn: domain.LocalDay(uc.now()),
-		Note:        req.Note,
+	var (
+		c       domain.Completion
+		created bool
+		today   = domain.LocalDay(uc.now())
+	)
+
+	err = uc.tx.InTx(ctx, func(ctx context.Context) error {
+		if err := uc.plans.LockChild(ctx, req.ChildID); err != nil {
+			return err
+		}
+
+		c, created, err = uc.completions.Create(ctx, domain.Completion{
+			ChildID:     req.ChildID,
+			ActivityID:  req.ActivityID,
+			UserID:      &req.UserID,
+			CompletedOn: today,
+			Note:        req.Note,
+		})
+		if err != nil {
+			return err
+		}
+
+		day, err := uc.plans.MarkDone(ctx, req.ChildID, req.ActivityID, today)
+		if err != nil {
+			return err
+		}
+
+		if day > 0 {
+			c.PlanDay = &day
+		}
+
+		return nil
 	})
 	if err != nil {
 		return domain.Completion{}, err

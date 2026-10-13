@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 
@@ -16,10 +15,6 @@ import (
 
 type userRepo interface {
 	Create(ctx context.Context, u domain.User) (domain.User, error)
-}
-
-type goalRepo interface {
-	CountActive(ctx context.Context, ids []string) (int, error)
 }
 
 type authRepo interface {
@@ -41,19 +36,17 @@ type UseCase struct {
 	l      logger.Logger
 	tx     txRunner
 	users  userRepo
-	goals  goalRepo
 	auth   authRepo
 	tokens tokenIssuer
 	cost   int
 }
 
 // New creates a new sign-up use case.
-func New(l logger.Logger, tx txRunner, users userRepo, goals goalRepo, auth authRepo, tokens tokenIssuer) *UseCase {
+func New(l logger.Logger, tx txRunner, users userRepo, auth authRepo, tokens tokenIssuer) *UseCase {
 	return &UseCase{
 		l:      l,
 		tx:     tx,
 		users:  users,
-		goals:  goals,
 		auth:   auth,
 		tokens: tokens,
 		cost:   bcrypt.DefaultCost,
@@ -61,32 +54,25 @@ func New(l logger.Logger, tx txRunner, users userRepo, goals goalRepo, auth auth
 }
 
 // Execute checks the request, then stores the user and their user_auth row (bcrypt password,
-// role unverified_user, token hashes) in one transaction and returns the tokens. Repeated goal ids
-// are stored once; every goal id must be an active goal.
+// role unverified_user, or admin with req.Admin, token hashes) in one transaction and returns the tokens. Goals are not
+// part of sign-up: they belong to each child.
 func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domain.TokenPair, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
 	req.Relationship = strings.ToLower(strings.TrimSpace(req.Relationship))
-	req.GoalIDs = domain.NormalizeIDs(req.GoalIDs)
 	if err := validate(req); err != nil {
 		return domain.TokenPair{}, err
-	}
-
-	if len(req.GoalIDs) > 0 {
-		n, err := uc.goals.CountActive(ctx, req.GoalIDs)
-		if err != nil {
-			return domain.TokenPair{}, err
-		}
-
-		if n != len(req.GoalIDs) {
-			return domain.TokenPair{}, errs.ErrUnknownGoals
-		}
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), uc.cost)
 	if err != nil {
 		return domain.TokenPair{}, errs.Errf(errs.ErrInternal, "bcrypt: %s", err.Error())
+	}
+
+	role := domain.UserRoleUnverifiedUser
+	if req.Admin {
+		role = domain.UserRoleAdmin
 	}
 
 	var pair domain.TokenPair
@@ -97,7 +83,6 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			Username:     &req.Username,
 			PhoneNumber:  &req.PhoneNumber,
 			Relationship: &req.Relationship,
-			GoalIDs:      req.GoalIDs,
 
 			AgreedOnConditions: req.AgreedOnConditions,
 		})
@@ -105,7 +90,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			return err
 		}
 
-		if pair, err = uc.issue(user.ID, domain.UserRoleUnverifiedUser); err != nil {
+		if pair, err = uc.issue(user.ID, role); err != nil {
 			return err
 		}
 
@@ -115,7 +100,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			UserID:           user.ID,
 			Username:         req.Username,
 			PasswordHash:     string(hash),
-			Role:             domain.UserRoleUnverifiedUser,
+			Role:             role,
 			AccessTokenHash:  domain.HashToken(pair.AccessToken),
 			RefreshTokenHash: domain.HashToken(pair.RefreshToken),
 		})
@@ -124,7 +109,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 		return domain.TokenPair{}, err
 	}
 
-	logger.WithContext(uc.l, ctx).Info("user signed up", zap.String("role", string(domain.UserRoleUnverifiedUser)))
+	logger.WithContext(uc.l, ctx).Info("user signed up", zap.String("role", string(role)))
 
 	return pair, nil
 }
@@ -157,14 +142,6 @@ func validate(req domain.SignUpRequest) error {
 		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
 	case !domain.IsKnownRelationship(req.Relationship):
 		return errs.Errf(errs.ErrValidation, "relationship must be one of: father, mother, educator, nanny")
-	case len(req.GoalIDs) > domain.MaxUserGoals:
-		return errs.Errf(errs.ErrValidation, "goals can hold at most %d ids", domain.MaxUserGoals)
-	}
-
-	for _, id := range req.GoalIDs {
-		if uuid.Validate(id) != nil {
-			return errs.Errf(errs.ErrValidation, "goals must be goal ids (UUIDs), got %q", id)
-		}
 	}
 
 	return nil

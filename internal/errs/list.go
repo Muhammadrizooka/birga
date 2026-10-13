@@ -19,7 +19,9 @@ var (
 	ErrPhoneNumberTaken = Errf(ErrConflict, "phone number is already taken")
 	ErrPhotoNotFound    = Errf(ErrValidation, "photo_id is not an uploaded media id, upload the photo to /v1/media first")
 
-	ErrChildNotFound = Errf(ErrNotFound, "child not found")
+	ErrChildNotFound  = Errf(ErrNotFound, "child not found")
+	ErrNoPlanDayToday = Errf(ErrNotFound, "no plan day is open today: today's plan day is done, or the plan is done")
+	ErrPlanNotDone    = Errf(ErrConflict, "the current plan is not done yet, the next plan starts after its last day")
 
 	ErrGoalNotFound  = Errf(ErrNotFound, "goal not found")
 	ErrGoalNameTaken = Errf(ErrConflict, "a goal with this name already exists")

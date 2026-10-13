@@ -7,10 +7,16 @@ import (
 
 func oct(d int) time.Time { return time.Date(2026, 10, d, 0, 0, 0, 0, time.UTC) }
 
-func items(ids ...string) []PlanItem {
-	out := make([]PlanItem, 0, len(ids))
-	for i, id := range ids {
-		out = append(out, PlanItem{Theme: PlanTheme{Day: i + 1}, Activity: Activity{ID: id}})
+func items(done ...int) []PlanItem {
+	out := make([]PlanItem, 0, 3)
+	for i := range 3 {
+		it := PlanItem{Day: i + 1, Activity: Activity{ID: string(rune('a' + i))}}
+		if i < len(done) {
+			on := oct(done[i])
+			it.CompletedOn = &on
+		}
+
+		out = append(out, it)
 	}
 
 	return out
@@ -26,45 +32,86 @@ func statuses(days []PlanDay) []string {
 }
 
 func TestBuildPlanDays(t *testing.T) {
-	plan := items("a", "b", "c")
-
 	cases := []struct {
-		name        string
-		today       time.Time
-		completions map[string][]time.Time
-		want        []string
-		completed   bool
+		name      string
+		items     []PlanItem
+		doneToday bool
+		want      []string
+		completed bool
 	}{
-		{"fresh", oct(10), nil, []string{"today", "locked", "locked"}, false},
-		{"first done today", oct(10), map[string][]time.Time{"a": {oct(10)}}, []string{"done", "locked", "locked"}, false},
-		{"first done yesterday", oct(11), map[string][]time.Time{"a": {oct(10)}}, []string{"done", "today", "locked"}, false},
-		// b was done on the same day as a, so it does not count for day 2 until it is done again later.
-		{"two on one day", oct(11), map[string][]time.Time{"a": {oct(10)}, "b": {oct(10)}}, []string{"done", "today", "locked"}, false},
-		{"out of order", oct(12), map[string][]time.Time{"c": {oct(10)}}, []string{"today", "locked", "locked"}, false},
-		{"all done", oct(13), map[string][]time.Time{"a": {oct(10)}, "b": {oct(11)}, "c": {oct(13)}}, []string{"done", "done", "done"}, true},
-		// Completions before the plan started do not count.
-		{"before start", oct(10), map[string][]time.Time{"a": {oct(9)}}, []string{"today", "locked", "locked"}, false},
+		{"fresh", items(), false, []string{"today", "locked", "locked"}, false},
+		{"first done today", items(10), true, []string{"done", "locked", "locked"}, false},
+		// However long ago day 1 was done, day 2 waits: a missed day pauses the plan.
+		{"paused", items(10), false, []string{"done", "today", "locked"}, false},
+		// A plan day of an earlier plan done today keeps day 1 of a new plan locked until tomorrow.
+		{"new plan, done today", items(), true, []string{"locked", "locked", "locked"}, false},
+		{"all done", items(10, 11, 13), false, []string{"done", "done", "done"}, true},
 	}
 
 	for _, tc := range cases {
-		got, completed := BuildPlanDays(plan, oct(10), tc.today, tc.completions)
+		got, completed := BuildPlanDays(tc.items, tc.doneToday)
 
-		if s := statuses(got); completed != tc.completed || len(s) != len(tc.want) {
+		s := statuses(got)
+		if completed != tc.completed || len(s) != len(tc.want) {
 			t.Fatalf("%s: got %v completed=%v", tc.name, s, completed)
 		}
 
-		for i, s := range statuses(got) {
-			if s != tc.want[i] {
-				t.Fatalf("%s: got %v, want %v", tc.name, statuses(got), tc.want)
+		for i := range s {
+			if s[i] != tc.want[i] {
+				t.Fatalf("%s: got %v, want %v", tc.name, s, tc.want)
 			}
 		}
 	}
 }
 
-func TestBuildPlanDays_CompletedOn(t *testing.T) {
-	got, _ := BuildPlanDays(items("a", "b"), oct(10), oct(12), map[string][]time.Time{"a": {oct(11), oct(10)}, "b": {oct(10), oct(12)}})
+func TestPlanGoals(t *testing.T) {
+	str := func(ps []*string) string {
+		out := ""
+		for _, p := range ps {
+			if p == nil {
+				out += "-"
+			} else {
+				out += *p
+			}
+		}
 
-	if !got[0].CompletedOn.Equal(oct(10)) || !got[1].CompletedOn.Equal(oct(12)) {
-		t.Fatalf("completed on: %v %v", got[0].CompletedOn, got[1].CompletedOn)
+		return out
+	}
+
+	cases := []struct {
+		goals []string
+		n     int
+		want  string
+	}{
+		{[]string{"A", "B", "C"}, 1, "ABCABCA"},
+		{[]string{"A", "B", "C"}, 2, "BCABCAB"},
+		{[]string{"A", "B", "C"}, 4, "ABCABCA"},
+		{[]string{"A"}, 3, "AAAAAAA"},
+		{nil, 1, "-------"},
+	}
+
+	for _, tc := range cases {
+		if got := str(PlanGoals(tc.goals, tc.n)); got != tc.want {
+			t.Fatalf("PlanGoals(%v, %d) = %s, want %s", tc.goals, tc.n, got, tc.want)
+		}
+	}
+}
+
+func TestStreakDays(t *testing.T) {
+	got := StreakDays([]time.Time{oct(12), oct(10)}, oct(9), oct(8), oct(13), oct(13))
+
+	want := []string{"missed", "done", "missed", "done", "today"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v", got)
+	}
+
+	for i, d := range got {
+		if d.Status != want[i] || !d.Day.Equal(oct(9+i)) {
+			t.Fatalf("day %d: got %v %s, want %v %s", i, d.Day, d.Status, oct(9+i), want[i])
+		}
+	}
+
+	if got := StreakDays(nil, time.Time{}, oct(1), oct(13), oct(13)); len(got) != 0 {
+		t.Fatalf("no plan yet: got %v", got)
 	}
 }

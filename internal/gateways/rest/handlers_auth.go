@@ -1,6 +1,9 @@
 package rest
 
 import (
+	"crypto/subtle"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
@@ -14,10 +17,11 @@ type SignUpRequest struct {
 	Password    string `json:"password" example:"s3cret-pass"`
 	PhoneNumber string `json:"phone_number" example:"+998901234567"`
 	// Relationship is who the user is to the children.
-	Relationship string   `json:"relationship" example:"mother" enums:"father,mother,educator,nanny"`
-	Goals        []string `json:"goals" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"` // goal ids from GET /v1/goals, optional
+	Relationship string `json:"relationship" example:"mother" enums:"father,mother,educator,nanny"`
 	// AgreedOnConditions is the consent tick on the sign-up screen; omitted means false.
 	AgreedOnConditions bool `json:"agreed_on_conditions" example:"true"`
+	// Role is user (the default) or admin; admin needs the X-Admin-Key header.
+	Role string `json:"role" example:"user" enums:"user,admin"`
 }
 
 // signUpView is the sign-up response: the new user's id and their tokens.
@@ -39,8 +43,9 @@ type tokenPairView struct {
 // @Description - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
 // @Description   password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
 // @Description - relationship is required: father, mother, educator or nanny (422)
-// @Description - goals is optional: up to 20 goal ids from GET /v1/goals; repeats are stored once;
-// @Description   an id that is not an active goal: 422
+// @Description - no goals here: goals belong to each child (POST /v1/children)
+// @Description - role is user (default, the account gets unverified_user) or admin; admin needs the
+// @Description   X-Admin-Key header with ADMIN_API_KEY (401 wrong or missing key, 403 admin API disabled)
 // @Description - no profile photo here: set photo_id later with PATCH /v1/me
 // @Description - username or phone number already used: 409
 // @Description - returns the new user's user_id with the tokens
@@ -65,15 +70,22 @@ func (s *Server) SignUp() gin.HandlerFunc {
 			return
 		}
 
+		admin, err := s.signUpAsAdmin(c, req.Role)
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
 		pair, err := s.signUp.Execute(c.Request.Context(), domain.SignUpRequest{
 			Name:         req.Name,
 			Username:     req.Username,
 			Password:     req.Password,
 			PhoneNumber:  req.PhoneNumber,
 			Relationship: req.Relationship,
-			GoalIDs:      req.Goals,
 
 			AgreedOnConditions: req.AgreedOnConditions,
+			Admin:              admin,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -83,6 +95,28 @@ func (s *Server) SignUp() gin.HandlerFunc {
 
 		Return(c, signUpView{UserID: pair.UserID, tokenPairView: toTokenPairView(pair)}, nil)
 	}
+}
+
+// signUpAsAdmin reads the requested sign-up role. Only a caller holding the admin API key may
+// create an admin, so the public app cannot.
+func (s *Server) signUpAsAdmin(c *gin.Context, role string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "", "user":
+		return false, nil
+	case "admin":
+	default:
+		return false, errs.Errf(errs.ErrValidation, "role must be user or admin")
+	}
+
+	if s.adminKey == "" {
+		return false, errs.Errf(errs.ErrForbidden, "admin API is disabled")
+	}
+
+	if subtle.ConstantTimeCompare([]byte(c.GetHeader(adminKeyHeader)), []byte(s.adminKey)) != 1 {
+		return false, errs.Errf(errs.ErrUnauthorized, "creating an admin needs a valid %s header", adminKeyHeader)
+	}
+
+	return true, nil
 }
 
 func toTokenPairView(pair domain.TokenPair) tokenPairView {

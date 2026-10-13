@@ -33,12 +33,43 @@ func (f *fakeRepo) AddParent(_ context.Context, childID, userID string) error {
 	return f.linkErr
 }
 
+type fakeGoals struct{ active int }
+
+func (f fakeGoals) CountActive(_ context.Context, ids []string) (int, error) {
+	if f.active < 0 {
+		return len(ids), nil
+	}
+
+	return f.active, nil
+}
+
+type fakePlans struct {
+	started string
+	err     error
+}
+
+func (f *fakePlans) Start(_ context.Context, c domain.Child) error {
+	f.started = c.ID
+
+	return f.err
+}
+
+const goalID = "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+
+var goals = []string{goalID}
+
+func newUseCase(repo *fakeRepo, plans *fakePlans, active int) *UseCase {
+	return New(nil, fakeTx{}, repo, fakeGoals{active: active}, plans)
+}
+
 func TestExecute(t *testing.T) {
 	repo := &fakeRepo{}
 	blank := "  "
 
-	got, err := New(nil, fakeTx{}, repo).Execute(context.Background(), "u1",
-		domain.Child{Name: " Amir ", Age: 3, Gender: " Male", PhotoID: &blank})
+	plans := &fakePlans{}
+
+	got, err := newUseCase(repo, plans, -1).Execute(context.Background(), "u1",
+		domain.Child{Name: " Amir ", Age: 3, Gender: " Male", PhotoID: &blank, GoalIDs: []string{goalID, goalID}})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -47,8 +78,8 @@ func TestExecute(t *testing.T) {
 		t.Fatalf("stored %+v, returned %+v", repo.got, got)
 	}
 
-	if repo.linked != [2]string{"c1", "u1"} {
-		t.Fatalf("linked %v", repo.linked)
+	if repo.linked != [2]string{"c1", "u1"} || plans.started != "c1" || len(repo.got.GoalIDs) != 1 {
+		t.Fatalf("linked %v, plan for %q, goals %v", repo.linked, plans.started, repo.got.GoalIDs)
 	}
 }
 
@@ -56,14 +87,16 @@ func TestExecute_Invalid(t *testing.T) {
 	bad := "x"
 
 	for name, c := range map[string]domain.Child{
-		"no name":  {Age: 3, Gender: domain.GenderMale},
-		"old":      {Name: "A", Age: 19, Gender: domain.GenderMale},
-		"negative": {Name: "A", Age: -1, Gender: domain.GenderMale},
-		"gender":   {Name: "A", Age: 3, Gender: "other"},
-		"photo id": {Name: "A", Age: 3, Gender: domain.GenderFemale, PhotoID: &bad},
+		"no name":  {Age: 3, Gender: domain.GenderMale, GoalIDs: goals},
+		"old":      {Name: "A", Age: 19, Gender: domain.GenderMale, GoalIDs: goals},
+		"negative": {Name: "A", Age: -1, Gender: domain.GenderMale, GoalIDs: goals},
+		"gender":   {Name: "A", Age: 3, Gender: "other", GoalIDs: goals},
+		"photo id": {Name: "A", Age: 3, Gender: domain.GenderFemale, PhotoID: &bad, GoalIDs: goals},
+		"no goals": {Name: "A", Age: 3, Gender: domain.GenderFemale},
+		"bad goal": {Name: "A", Age: 3, Gender: domain.GenderFemale, GoalIDs: []string{"speech"}},
 	} {
 		repo := &fakeRepo{}
-		if _, err := New(nil, fakeTx{}, repo).Execute(context.Background(), "u1", c); !errors.Is(err, errs.ErrValidation) {
+		if _, err := newUseCase(repo, &fakePlans{}, -1).Execute(context.Background(), "u1", c); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("%s: expected validation error, got %v", name, err)
 		}
 
@@ -76,8 +109,17 @@ func TestExecute_Invalid(t *testing.T) {
 func TestExecute_LinkFails(t *testing.T) {
 	repo := &fakeRepo{linkErr: errs.ErrUserNotFound}
 
-	if _, err := New(nil, fakeTx{}, repo).Execute(context.Background(), "u1",
-		domain.Child{Name: "A", Age: 3, Gender: domain.GenderMale}); !errors.Is(err, errs.ErrUserNotFound) {
+	if _, err := newUseCase(repo, &fakePlans{}, -1).Execute(context.Background(), "u1",
+		domain.Child{Name: "A", Age: 3, Gender: domain.GenderMale, GoalIDs: goals}); !errors.Is(err, errs.ErrUserNotFound) {
 		t.Fatalf("expected user not found, got %v", err)
+	}
+}
+
+func TestExecute_UnknownGoal(t *testing.T) {
+	repo := &fakeRepo{}
+
+	if _, err := newUseCase(repo, &fakePlans{}, 0).Execute(context.Background(), "u1",
+		domain.Child{Name: "A", Age: 3, Gender: domain.GenderMale, GoalIDs: goals}); !errors.Is(err, errs.ErrUnknownGoals) || repo.got.Name != "" {
+		t.Fatalf("got %v", err)
 	}
 }

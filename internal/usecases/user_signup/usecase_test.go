@@ -3,7 +3,6 @@ package usersignup
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -16,25 +15,11 @@ import (
 
 const userID = "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
 
-const goalID = "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
-
 type fakes struct {
 	user    domain.User
 	auth    domain.UserAuth
 	userErr error
 	inTx    bool
-	// activeGoals is how many of the asked ids CountActive reports as active; -1 means all of them.
-	activeGoals int
-	gotGoals    []string
-}
-
-func (f *fakes) CountActive(_ context.Context, ids []string) (int, error) {
-	f.gotGoals = ids
-	if f.activeGoals < 0 {
-		return len(ids), nil
-	}
-
-	return f.activeGoals, nil
 }
 
 func (f *fakes) InTx(ctx context.Context, h func(context.Context) error) error {
@@ -72,7 +57,6 @@ func newUseCase(f *fakes) *UseCase {
 
 			return u, f.userErr
 		}),
-		f,
 		authRepoFunc(func(a domain.UserAuth) error {
 			if !f.inTx {
 				panic("auth.Create outside the transaction")
@@ -91,11 +75,11 @@ func newUseCase(f *fakes) *UseCase {
 
 func req() domain.SignUpRequest {
 	return domain.SignUpRequest{Name: " Dilnoza ", Username: " Dilnoza_K ", Password: "s3cret-pass", PhoneNumber: "+998901234567",
-		Relationship: " Mother ", GoalIDs: []string{goalID, strings.ToUpper(goalID)}, AgreedOnConditions: true}
+		Relationship: " Mother ", AgreedOnConditions: true}
 }
 
 func TestExecute(t *testing.T) {
-	f := &fakes{activeGoals: -1}
+	f := &fakes{}
 
 	pair, err := newUseCase(f).Execute(context.Background(), req())
 	if err != nil {
@@ -123,7 +107,7 @@ func TestExecute(t *testing.T) {
 }
 
 func TestExecute_CreateFails(t *testing.T) {
-	f := &fakes{userErr: errs.ErrUsernameTaken, activeGoals: -1}
+	f := &fakes{userErr: errs.ErrUsernameTaken}
 
 	if _, err := newUseCase(f).Execute(context.Background(), req()); !errors.Is(err, errs.ErrUsernameTaken) {
 		t.Fatalf("got %v", err)
@@ -140,44 +124,19 @@ func TestExecute_Validation(t *testing.T) {
 		"foreign phone":  func(r *domain.SignUpRequest) { r.PhoneNumber = "+77011234567" },
 		"no relation":    func(r *domain.SignUpRequest) { r.Relationship = "" },
 		"bad relation":   func(r *domain.SignUpRequest) { r.Relationship = "uncle" },
-		"bad goal id":    func(r *domain.SignUpRequest) { r.GoalIDs = []string{"speech"} },
-		"too many goals": func(r *domain.SignUpRequest) {
-			r.GoalIDs = nil
-			for i := range domain.MaxUserGoals + 1 {
-				r.GoalIDs = append(r.GoalIDs, fmt.Sprintf("00000000-0000-0000-0000-%012d", i))
-			}
-		},
 	}
 
 	for name, mutate := range cases {
 		r := req()
 		mutate(&r)
 
-		if _, err := newUseCase(&fakes{activeGoals: -1}).Execute(context.Background(), r); !errors.Is(err, errs.ErrValidation) {
+		if _, err := newUseCase(&fakes{}).Execute(context.Background(), r); !errors.Is(err, errs.ErrValidation) {
 			t.Fatalf("%s: got %v", name, err)
 		}
 	}
 }
 
-func TestExecute_UnknownGoal(t *testing.T) {
-	f := &fakes{activeGoals: 0}
-
-	if _, err := newUseCase(f).Execute(context.Background(), req()); !errors.Is(err, errs.ErrUnknownGoals) || f.user.ID != "" {
-		t.Fatalf("got %v", err)
-	}
-}
-
-func TestExecute_NoGoals(t *testing.T) {
-	f := &fakes{activeGoals: -1}
-	r := req()
-	r.GoalIDs = nil
-
-	if _, err := newUseCase(f).Execute(context.Background(), r); err != nil || f.gotGoals != nil || len(f.user.GoalIDs) != 0 {
-		t.Fatalf("got %v, asked %v", err, f.gotGoals)
-	}
-}
-
-// checkUser checks the user sign-up stored for req(): trimmed, lowercased, goal ids deduplicated.
+// checkUser checks the user sign-up stored for req(): trimmed, lowercased, lowercased relationship.
 func checkUser(t *testing.T, u domain.User) {
 	t.Helper()
 
@@ -185,7 +144,18 @@ func checkUser(t *testing.T, u domain.User) {
 		t.Fatalf("unexpected user: %+v", u)
 	}
 
-	if *u.Relationship != domain.RelationshipMother || len(u.GoalIDs) != 1 || u.GoalIDs[0] != goalID {
-		t.Fatalf("unexpected relationship or goals: %v %v", *u.Relationship, u.GoalIDs)
+	if *u.Relationship != domain.RelationshipMother {
+		t.Fatalf("unexpected relationship: %v", *u.Relationship)
+	}
+}
+
+func TestExecute_Admin(t *testing.T) {
+	f := &fakes{}
+	r := req()
+	r.Admin = true
+
+	pair, err := newUseCase(f).Execute(context.Background(), r)
+	if err != nil || f.auth.Role != domain.UserRoleAdmin || pair.AccessToken != "access."+userID+".admin" {
+		t.Fatalf("got %v, role %s, token %s", err, f.auth.Role, pair.AccessToken)
 	}
 }

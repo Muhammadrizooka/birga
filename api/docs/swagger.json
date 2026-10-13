@@ -678,7 +678,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- sets deleted_at: the goal disappears from /v1/goals, sign-up refuses its id, and its\nid is removed from every user's goal_ids; its names can be used again",
+                "description": "- sets deleted_at: the goal disappears from /v1/goals, children can no longer pick it,\nand its id is removed from every child's and activity's goal_ids; its names can be used again",
                 "produces": [
                     "application/json"
                 ],
@@ -1455,7 +1455,7 @@
         },
         "/v1/auth/signup": {
             "post": {
-                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- relationship is required: father, mother, educator or nanny (422)\n- goals is optional: up to 20 goal ids from GET /v1/goals; repeats are stored once;\nan id that is not an active goal: 422\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- returns the new user's user_id with the tokens\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
+                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- relationship is required: father, mother, educator or nanny (422)\n- no goals here: goals belong to each child (POST /v1/children)\n- role is user (default, the account gets unverified_user) or admin; admin needs the\nX-Admin-Key header with ADMIN_API_KEY (401 wrong or missing key, 403 admin API disabled)\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- returns the new user's user_id with the tokens\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
                 "consumes": [
                     "application/json"
                 ],
@@ -1530,7 +1530,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- creates the child profile and links it to the caller in the same transaction;\nthe caller is the child's first parent\n- any signed-in role (user, paid_user, admin) may add children\n- name is required, at most 100 characters; age is required, 0..18; gender is male or female\n- photo_id is an optional id from POST /v1/media (422 if unknown)",
+                "description": "- creates the child profile and links it to the caller in the same transaction;\nthe caller is the child's first parent\n- any signed-in role (user, paid_user, admin) may add children\n- name is required, at most 100 characters; age is required, 0..18; gender is male or female\n- photo_id is an optional id from POST /v1/media (422 if unknown)\n- goal_ids is required: 1 to 20 goal ids from GET /v1/goals, repeats stored once;\nan id that is not an active goal: 422\n- the child's first 7-day plan is made at once from its goals (GET /v1/children/{id}/plan)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1679,7 +1679,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- only the child's parents can edit it; any other id, or a deleted child, is 404\n- omitted or null fields are kept; the add-child rules apply to the given ones:\nname 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media\n(\"\" clears it, an unknown id is 422)\n- an empty body is 422 (nothing to update)",
+                "description": "- only the child's parents can edit it; any other id, or a deleted child, is 404\n- omitted or null fields are kept; the add-child rules apply to the given ones:\nname 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media\n(\"\" clears it, an unknown id is 422)\n- goal_ids replaces the child's goals (1 to 20 active goal ids, 422 otherwise); the\ncurrent plan keeps its days, the next plan uses the new goals\n- an empty body is 422 (nothing to update)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1846,7 +1846,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- only the child's parents can record (404 otherwise); the activity must be published (404)\n- the day is the current date in Uzbekistan (UTC+5); repeating the same activity on the same\nday returns the existing completion, replacing its note if a new one is sent\n- note is the caregiver's optional reflection, at most 1000 characters (422)",
+                "description": "- only the child's parents can record (404 otherwise); the activity must be published (404)\n- the day is the current date in Uzbekistan (UTC+5); repeating the same activity on the same\nday returns the existing completion, replacing its note if a new one is sent\n- note is the caregiver's optional reflection, at most 1000 characters (422)\n- when the activity is the plan day open today, that day is marked done and counts\ntoward the child's streak; plan_day then names it. Any other activity only goes into\nthe history (plan_day null)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1934,14 +1934,14 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- only the child's parents can ask (404 otherwise)\n- the first call makes the plan: one activity per day theme, fitting the child's age\n(clamped to 2..6), preferring the theme's goal, then the parent's goals, then activities\nthe child has not done; the plan then stays the same until POST starts a new one\n- days are done in order, one per calendar day (Uzbekistan time): status is done, today\n(the next day to do, open now) or locked\n- completing a day is POST /v1/children/{id}/completions with the day's activity id\n- 404 when no published activity fits the child's age",
+                "description": "- only the child's parents can ask (404 otherwise)\n- the plan is made when the child is added (or on the first call for older children):\nseven days, each serving one of the child's goals in turn (goals A, B, C: A B C A B C A,\nthe next plan starting one goal further), with an activity fitting the child's age\n(clamped to 2..6) that serves the day's goal, preferring activities serving more of the\nchild's goals and ones the child has not done\n- days are done in order, at most one per calendar day (Uzbekistan time): status is done,\ntoday (the next day to do, open now) or locked. A missed day pauses the plan: the open\nday stays open until it is done\n- completing a day is POST /v1/children/{id}/completions with the day's activity id\n- completed is true after the last day; then POST starts the next plan\n- 404 when no published activity fits the child's age",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "children"
                 ],
-                "summary": "a child's 7-day plan (the Reja tab)",
+                "summary": "a child's current 7-day plan (the Reja tab)",
                 "parameters": [
                     {
                         "type": "string",
@@ -2002,14 +2002,14 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- replaces the current plan with a new one starting today, whatever its progress;\ncompletions stay in the history. Use it when the plan is completed",
+                "description": "- only after the current plan is done (completed true): 409 otherwise\n- the new plan starts today from the child's goals as they are now; change them first\nwith PATCH /v1/children/{id} if wanted. When the last day of the previous plan was done\ntoday, day 1 opens tomorrow",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "children"
                 ],
-                "summary": "starts a new 7-day plan for a child",
+                "summary": "starts a child's next 7-day plan",
                 "parameters": [
                     {
                         "type": "string",
@@ -2056,6 +2056,12 @@
                             "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -2072,14 +2078,14 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6\n- goal_id and minutes narrow the choice; minutes keeps activities with duration_minutes \u003c= minutes\n- without goal_id, activities serving one of the goals the caller picked at sign-up come first\n- then activities the child has never done, then the one done longest ago;\nties are broken per child and per day, so the pick stays the same all day until it is done\n- 404 when no published activity matches",
+                "description": "- the activity of the plan day that is open today (status today in GET\n/v1/children/{id}/plan); the first call makes the child's first plan if it has none\n- only the child's parents can ask (404 otherwise)\n- 404 no plan day open today: today's plan day is already done, or the plan is done\n(start the next one with POST /v1/children/{id}/plan); 404 also when no published\nactivity fits the child's age",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "children"
                 ],
-                "summary": "today's recommended activity for a child",
+                "summary": "today's plan activity for a child",
                 "parameters": [
                     {
                         "type": "string",
@@ -2087,18 +2093,6 @@
                         "name": "id",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "goal id (UUID) from GET /v1/goals",
-                        "name": "goal_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "time available, in minutes",
-                        "name": "minutes",
-                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -2138,12 +2132,6 @@
                             "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
-                    "422": {
-                        "description": "Unprocessable Entity",
-                        "schema": {
-                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
-                        }
-                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -2160,7 +2148,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- current: consecutive days with a completion up to today, or up to yesterday while\ntoday has none yet (the streak is not lost until a whole day is missed)\n- longest: the longest such run; this_week: days with a completion since Monday\n- days are counted in Uzbekistan time (UTC+5)",
+                "description": "- only days of the child's plan count: a day counts when a plan day was done on it;\nother activities stay in the history but do not keep the streak\n- current: consecutive such days up to today, or up to yesterday while today has none\nyet (the streak is not lost until a whole day is missed)\n- longest: the longest such run; this_week: such days since Monday; total: plan days done\n- days are counted in Uzbekistan time (UTC+5)",
                 "produces": [
                     "application/json"
                 ],
@@ -2223,6 +2211,97 @@
                 }
             }
         },
+        "/v1/children/{id}/streak/days": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- one entry per day from from to to (both inclusive, YYYY-MM-DD), oldest first, skipping\ndays before the child's first plan started and days after today\n- status: done (a plan day was done), missed (no plan day done that day), today (today,\nnothing done yet: not missed until the day is over); days are Uzbekistan time (UTC+5)\n- from and to are optional: without them, the last 28 days up to today; at most 366\ndays, and from must not be after to (422)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "a child's streak calendar: done and missed days",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "first day, YYYY-MM-DD",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "last day, YYYY-MM-DD (default today)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/rest.streakDayView"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/goals": {
             "get": {
                 "description": "- open without a token; every active goal, oldest first, not paginated",
@@ -2232,7 +2311,7 @@
                 "tags": [
                     "goals"
                 ],
-                "summary": "lists the goals a user can pick at sign-up",
+                "summary": "lists the goals a parent can pick for a child",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -3004,6 +3083,16 @@
                     ],
                     "example": "male"
                 },
+                "goal_ids": {
+                    "description": "GoalIDs are the goals picked for this child, ids from GET /v1/goals.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
+                },
                 "name": {
                     "type": "string",
                     "example": "Amir"
@@ -3241,16 +3330,6 @@
                     "type": "boolean",
                     "example": true
                 },
-                "goals": {
-                    "description": "goal ids from GET /v1/goals, optional",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
-                    ]
-                },
                 "name": {
                     "type": "string",
                     "example": "Dilnoza"
@@ -3273,6 +3352,15 @@
                         "nanny"
                     ],
                     "example": "mother"
+                },
+                "role": {
+                    "description": "Role is user (the default) or admin; admin needs the X-Admin-Key header.",
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "admin"
+                    ],
+                    "example": "user"
                 },
                 "username": {
                     "type": "string",
@@ -3424,6 +3512,16 @@
                         "female"
                     ],
                     "example": "male"
+                },
+                "goal_ids": {
+                    "description": "GoalIDs, when sent, replaces the child's goals: 1 to 20 ids from GET /v1/goals.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
                 },
                 "name": {
                     "type": "string",
@@ -3658,6 +3756,15 @@
                     "type": "string",
                     "example": "male"
                 },
+                "goal_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
+                },
                 "id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
@@ -3723,6 +3830,11 @@
                 "note": {
                     "type": "string",
                     "example": "Qizil rangni birinchi topdi"
+                },
+                "plan_day": {
+                    "description": "PlanDay is the plan day (1..7) this completion did; null when it did not count for the plan.\nOnly set on the response of POST /v1/children/{id}/completions.",
+                    "type": "integer",
+                    "example": 3
                 },
                 "user_id": {
                     "type": "string",
@@ -3860,21 +3972,9 @@
                     "example": 1
                 },
                 "goal_id": {
+                    "description": "null when the child had no goals",
                     "type": "string",
                     "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
-                },
-                "icon": {
-                    "type": "string",
-                    "enum": [
-                        "heart",
-                        "chat",
-                        "blocks",
-                        "gift",
-                        "sparkle",
-                        "bulb",
-                        "star"
-                    ],
-                    "example": "heart"
                 },
                 "status": {
                     "type": "string",
@@ -3884,14 +3984,6 @@
                         "locked"
                     ],
                     "example": "today"
-                },
-                "title_ru": {
-                    "type": "string",
-                    "example": "Угадай эмоцию"
-                },
-                "title_uz": {
-                    "type": "string",
-                    "example": "Hisni top"
                 }
             }
         },
@@ -3912,6 +4004,15 @@
                         "$ref": "#/definitions/rest.planDayView"
                     }
                 },
+                "id": {
+                    "type": "string",
+                    "example": "8c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"
+                },
+                "number": {
+                    "description": "the child's plans counted from 1",
+                    "type": "integer",
+                    "example": 1
+                },
                 "started_on": {
                     "type": "string",
                     "example": "2026-10-11"
@@ -3928,15 +4029,6 @@
                 },
                 "created_at": {
                     "type": "string"
-                },
-                "goal_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
-                    ]
                 },
                 "id": {
                     "type": "string",
@@ -4045,6 +4137,24 @@
                 "_statusFailure"
             ]
         },
+        "rest.streakDayView": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "type": "string",
+                    "example": "2026-10-12"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "done",
+                        "missed",
+                        "today"
+                    ],
+                    "example": "done"
+                }
+            }
+        },
         "rest.streakView": {
             "type": "object",
             "properties": {
@@ -4125,15 +4235,6 @@
                 },
                 "created_at": {
                     "type": "string"
-                },
-                "goal_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
-                    ]
                 },
                 "id": {
                     "type": "string",

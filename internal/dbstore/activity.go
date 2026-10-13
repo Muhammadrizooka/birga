@@ -113,48 +113,6 @@ func (r *activityRepo) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// Recommend picks one published activity for the child: within its age, matching the optional goal
-// and time limit. Activities serving one of the preferred goals come first; within that, never done
-// before if possible, otherwise the one done longest ago. Ties are broken by a hash of the activity
-// id, the child id and the day, so the pick is stable for the whole day and differs between children.
-func (r *activityRepo) Recommend(ctx context.Context, q domain.RecommendationQuery) (domain.Activity, error) {
-	l := logger.FromCtx(ctx, "activityRepo.Recommend").With(zap.String("child_id", q.ChildID))
-
-	var (
-		args  = []any{q.ChildID, q.Age, q.Day.Format(time.DateOnly), nonNil(q.PreferGoalIDs)}
-		conds = []string{"a.is_published", "a.deleted_at IS NULL", "a.min_age <= $2", "a.max_age >= $2"}
-	)
-
-	if q.GoalID != "" {
-		args = append(args, q.GoalID)
-		conds = append(conds, "$"+strconv.Itoa(len(args))+"::uuid = ANY(a.goal_ids)")
-	}
-
-	if q.MaxMinutes > 0 {
-		args = append(args, q.MaxMinutes)
-		conds = append(conds, "a.duration_minutes <= $"+strconv.Itoa(len(args)))
-	}
-
-	sql := `
-		SELECT ` + prefixColumns("a", activityColumns) + `
-		FROM activities a
-		LEFT JOIN (
-			SELECT activity_id, MAX(completed_on) AS last_on
-			FROM activity_completions WHERE child_id = $1
-			GROUP BY activity_id
-		) done ON done.activity_id = a.id
-		WHERE ` + strings.Join(conds, " AND ") + `
-		ORDER BY a.goal_ids && $4::uuid[] DESC, done.last_on NULLS FIRST, md5(a.id::text || $1::text || $3::text)
-		LIMIT 1`
-
-	a, err := r.one(ctx, l, sql, args...)
-	if errors.Is(err, errs.ErrActivityNotFound) {
-		return domain.Activity{}, errs.ErrNoRecommendation
-	}
-
-	return a, err
-}
-
 // one runs q, which returns at most one activity row (SELECT, or a write with RETURNING). No row means
 // ErrActivityNotFound; a failed CHECK means ErrValidation.
 func (r *activityRepo) one(ctx context.Context, l *zap.Logger, q string, args ...any) (domain.Activity, error) {

@@ -117,10 +117,3 @@ JOIN (VALUES
 ) AS keys (goal, name_en) ON keys.goal = s.goal
 JOIN goals g ON LOWER(g.name_en) = LOWER(keys.name_en) AND g.deleted_at IS NULL
 WHERE NOT EXISTS (SELECT 1 FROM activities a WHERE a.title_uz = s.title_uz AND a.deleted_at IS NULL);
-
--- Point the plan themes at the starter goals when migration 000013 ran before the goals existed.
-UPDATE plan_themes t SET goal_id = g.id, updated_at = NOW()
-FROM (VALUES (1, 'Emotions'), (2, 'Language'), (3, 'Motor skills'), (4, 'Social skills'), (6, 'Thinking'), (7, 'Emotions'))
-    AS m (day, name_en)
-JOIN goals g ON LOWER(g.name_en) = LOWER(m.name_en) AND g.deleted_at IS NULL
-WHERE t.day = m.day AND t.goal_id IS NULL;

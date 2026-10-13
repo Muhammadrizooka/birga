@@ -7,29 +7,25 @@ import (
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
-	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 )
 
 // RecommendActivity godoc swagger
-// @Summary today's recommended activity for a child
-// @Description - only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6
-// @Description - goal_id and minutes narrow the choice; minutes keeps activities with duration_minutes <= minutes
-// @Description - without goal_id, activities serving one of the goals the caller picked at sign-up come first
-// @Description - then activities the child has never done, then the one done longest ago;
-// @Description   ties are broken per child and per day, so the pick stays the same all day until it is done
-// @Description - 404 when no published activity matches
+// @Summary today's plan activity for a child
+// @Description - the activity of the plan day that is open today (status today in GET
+// @Description   /v1/children/{id}/plan); the first call makes the child's first plan if it has none
+// @Description - only the child's parents can ask (404 otherwise)
+// @Description - 404 no plan day open today: today's plan day is already done, or the plan is done
+// @Description   (start the next one with POST /v1/children/{id}/plan); 404 also when no published
+// @Description   activity fits the child's age
 // @Tags children
 // @Security BearerAuth
 // @Produce json
 // @Param id path string true "child id (UUID)"
-// @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
-// @Param minutes query int false "time available, in minutes"
 // @Success 200 {object} rest.R{data=rest.activityView}
 // @Failure 400 {object} rest.BadRequestResponse
 // @Failure 401 {object} rest.UnauthorizedResponse
 // @Failure 404 {object} rest.NotFoundResponse
-// @Failure 422 {object} rest.UnprocessableContentResponse
 // @Failure 500 {object} rest.InternalServerErrorResponse
 // @Router /v1/children/{id}/recommendation [GET]
 func (s *Server) RecommendActivity() gin.HandlerFunc {
@@ -41,26 +37,22 @@ func (s *Server) RecommendActivity() gin.HandlerFunc {
 			return
 		}
 
-		minutes, err := parseOptionalInt(c, "minutes")
+		p, err := s.planGetter.Execute(c.Request.Context(), currentUserID(c), childID)
 		if err != nil {
 			Return(c, nil, err)
 
 			return
 		}
 
-		a, err := s.activityRecommender.Execute(c.Request.Context(), activityrecommender.Request{
-			UserID:     currentUserID(c),
-			ChildID:    childID,
-			GoalID:     c.Query("goal_id"),
-			MaxMinutes: minutes,
-		})
-		if err != nil {
-			Return(c, nil, err)
+		for _, d := range p.Days {
+			if d.Status == domain.PlanDayToday {
+				Return(c, toActivityView(d.Activity), nil)
 
-			return
+				return
+			}
 		}
 
-		Return(c, toActivityView(a), nil)
+		Return(c, nil, errs.ErrNoPlanDayToday)
 	}
 }
 
@@ -76,6 +68,9 @@ type CompleteActivityRequest struct {
 // @Description - the day is the current date in Uzbekistan (UTC+5); repeating the same activity on the same
 // @Description   day returns the existing completion, replacing its note if a new one is sent
 // @Description - note is the caregiver's optional reflection, at most 1000 characters (422)
+// @Description - when the activity is the plan day open today, that day is marked done and counts
+// @Description   toward the child's streak; plan_day then names it. Any other activity only goes into
+// @Description   the history (plan_day null)
 // @Tags children
 // @Security BearerAuth
 // @Accept json
@@ -176,9 +171,11 @@ func (s *Server) ListCompletions() gin.HandlerFunc {
 
 // GetStreak godoc swagger
 // @Summary a child's streak and progress
-// @Description - current: consecutive days with a completion up to today, or up to yesterday while
-// @Description   today has none yet (the streak is not lost until a whole day is missed)
-// @Description - longest: the longest such run; this_week: days with a completion since Monday
+// @Description - only days of the child's plan count: a day counts when a plan day was done on it;
+// @Description   other activities stay in the history but do not keep the streak
+// @Description - current: consecutive such days up to today, or up to yesterday while today has none
+// @Description   yet (the streak is not lost until a whole day is missed)
+// @Description - longest: the longest such run; this_week: such days since Monday; total: plan days done
 // @Description - days are counted in Uzbekistan time (UTC+5)
 // @Tags children
 // @Security BearerAuth
@@ -210,6 +207,75 @@ func (s *Server) GetStreak() gin.HandlerFunc {
 	}
 }
 
+// GetStreakDays godoc swagger
+// @Summary a child's streak calendar: done and missed days
+// @Description - one entry per day from from to to (both inclusive, YYYY-MM-DD), oldest first, skipping
+// @Description   days before the child's first plan started and days after today
+// @Description - status: done (a plan day was done), missed (no plan day done that day), today (today,
+// @Description   nothing done yet: not missed until the day is over); days are Uzbekistan time (UTC+5)
+// @Description - from and to are optional: without them, the last 28 days up to today; at most 366
+// @Description   days, and from must not be after to (422)
+// @Tags children
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "child id (UUID)"
+// @Param from query string false "first day, YYYY-MM-DD"
+// @Param to query string false "last day, YYYY-MM-DD (default today)"
+// @Success 200 {object} rest.R{data=[]rest.streakDayView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 422 {object} rest.UnprocessableContentResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/children/{id}/streak/days [GET]
+func (s *Server) GetStreakDays() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		childID := c.Param("id")
+		if err := ValidateUUID(childID); err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		var dates [2]time.Time
+
+		for i, name := range []string{"from", "to"} {
+			v := c.Query(name)
+			if v == "" {
+				continue
+			}
+
+			d, err := time.Parse(time.DateOnly, v)
+			if err != nil {
+				Return(c, nil, errs.Errf(errs.ErrValidation, "%s must be a date, YYYY-MM-DD", name))
+
+				return
+			}
+
+			dates[i] = d
+		}
+
+		days, err := s.streakGetter.Days(c.Request.Context(), currentUserID(c), childID, dates[0], dates[1])
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		views := make([]streakDayView, 0, len(days))
+		for _, d := range days {
+			views = append(views, streakDayView{Day: d.Day.Format(time.DateOnly), Status: d.Status})
+		}
+
+		Return(c, views, nil)
+	}
+}
+
+type streakDayView struct {
+	Day    string `json:"day" example:"2026-10-12"`
+	Status string `json:"status" example:"done" enums:"done,missed,today"`
+}
+
 type completionView struct {
 	ID          string    `json:"id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	ChildID     string    `json:"child_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
@@ -218,6 +284,9 @@ type completionView struct {
 	CompletedOn string    `json:"completed_on" example:"2026-10-03"`
 	Note        *string   `json:"note" example:"Qizil rangni birinchi topdi"`
 	CreatedAt   time.Time `json:"created_at"`
+	// PlanDay is the plan day (1..7) this completion did; null when it did not count for the plan.
+	// Only set on the response of POST /v1/children/{id}/completions.
+	PlanDay *int `json:"plan_day" example:"3"`
 }
 
 type completionListView struct {
@@ -245,6 +314,7 @@ func toCompletionView(c domain.Completion) completionView {
 		CompletedOn: c.CompletedOn.Format(time.DateOnly),
 		Note:        c.Note,
 		CreatedAt:   c.CreatedAt,
+		PlanDay:     c.PlanDay,
 	}
 }
 
@@ -271,6 +341,8 @@ type CreateChildRequest struct {
 	Age     *int    `json:"age" example:"4"`
 	Gender  string  `json:"gender" example:"male" enums:"male,female"`
 	PhotoID *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	// GoalIDs are the goals picked for this child, ids from GET /v1/goals.
+	GoalIDs []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 }
 
 // CreateChild godoc swagger
@@ -280,6 +352,9 @@ type CreateChildRequest struct {
 // @Description - any signed-in role (user, paid_user, admin) may add children
 // @Description - name is required, at most 100 characters; age is required, 0..18; gender is male or female
 // @Description - photo_id is an optional id from POST /v1/media (422 if unknown)
+// @Description - goal_ids is required: 1 to 20 goal ids from GET /v1/goals, repeats stored once;
+// @Description   an id that is not an active goal: 422
+// @Description - the child's first 7-day plan is made at once from its goals (GET /v1/children/{id}/plan)
 // @Tags children
 // @Security BearerAuth
 // @Accept json
@@ -312,6 +387,7 @@ func (s *Server) CreateChild() gin.HandlerFunc {
 			Age:     *req.Age,
 			Gender:  req.Gender,
 			PhotoID: req.PhotoID,
+			GoalIDs: req.GoalIDs,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -362,6 +438,7 @@ type childView struct {
 	Age       int       `json:"age" example:"4"`
 	Gender    string    `json:"gender" example:"male"`
 	PhotoID   *string   `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	GoalIDs   []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -373,6 +450,7 @@ func toChildView(c domain.Child) childView {
 		Age:       c.Age,
 		Gender:    c.Gender,
 		PhotoID:   c.PhotoID,
+		GoalIDs:   c.GoalIDs,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}
@@ -385,6 +463,8 @@ type UpdateChildRequest struct {
 	Age     *int    `json:"age" example:"5"`
 	Gender  *string `json:"gender" example:"male" enums:"male,female"`
 	PhotoID *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	// GoalIDs, when sent, replaces the child's goals: 1 to 20 ids from GET /v1/goals.
+	GoalIDs *[]string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 }
 
 // UpdateChild godoc swagger
@@ -393,6 +473,8 @@ type UpdateChildRequest struct {
 // @Description - omitted or null fields are kept; the add-child rules apply to the given ones:
 // @Description   name 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media
 // @Description   ("" clears it, an unknown id is 422)
+// @Description - goal_ids replaces the child's goals (1 to 20 active goal ids, 422 otherwise); the
+// @Description   current plan keeps its days, the next plan uses the new goals
 // @Description - an empty body is 422 (nothing to update)
 // @Tags children
 // @Security BearerAuth
@@ -428,6 +510,7 @@ func (s *Server) UpdateChild() gin.HandlerFunc {
 			Age:     req.Age,
 			Gender:  req.Gender,
 			PhotoID: req.PhotoID,
+			GoalIDs: req.GoalIDs,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -440,14 +523,18 @@ func (s *Server) UpdateChild() gin.HandlerFunc {
 }
 
 // GetPlan godoc swagger
-// @Summary a child's 7-day plan (the Reja tab)
+// @Summary a child's current 7-day plan (the Reja tab)
 // @Description - only the child's parents can ask (404 otherwise)
-// @Description - the first call makes the plan: one activity per day theme, fitting the child's age
-// @Description   (clamped to 2..6), preferring the theme's goal, then the parent's goals, then activities
-// @Description   the child has not done; the plan then stays the same until POST starts a new one
-// @Description - days are done in order, one per calendar day (Uzbekistan time): status is done, today
-// @Description   (the next day to do, open now) or locked
+// @Description - the plan is made when the child is added (or on the first call for older children):
+// @Description   seven days, each serving one of the child's goals in turn (goals A, B, C: A B C A B C A,
+// @Description   the next plan starting one goal further), with an activity fitting the child's age
+// @Description   (clamped to 2..6) that serves the day's goal, preferring activities serving more of the
+// @Description   child's goals and ones the child has not done
+// @Description - days are done in order, at most one per calendar day (Uzbekistan time): status is done,
+// @Description   today (the next day to do, open now) or locked. A missed day pauses the plan: the open
+// @Description   day stays open until it is done
 // @Description - completing a day is POST /v1/children/{id}/completions with the day's activity id
+// @Description - completed is true after the last day; then POST starts the next plan
 // @Description - 404 when no published activity fits the child's age
 // @Tags children
 // @Security BearerAuth
@@ -464,9 +551,11 @@ func (s *Server) GetPlan() gin.HandlerFunc {
 }
 
 // RestartPlan godoc swagger
-// @Summary starts a new 7-day plan for a child
-// @Description - replaces the current plan with a new one starting today, whatever its progress;
-// @Description   completions stay in the history. Use it when the plan is completed
+// @Summary starts a child's next 7-day plan
+// @Description - only after the current plan is done (completed true): 409 otherwise
+// @Description - the new plan starts today from the child's goals as they are now; change them first
+// @Description   with PATCH /v1/children/{id} if wanted. When the last day of the previous plan was done
+// @Description   today, day 1 opens tomorrow
 // @Tags children
 // @Security BearerAuth
 // @Produce json
@@ -475,13 +564,14 @@ func (s *Server) GetPlan() gin.HandlerFunc {
 // @Failure 400 {object} rest.BadRequestResponse
 // @Failure 401 {object} rest.UnauthorizedResponse
 // @Failure 404 {object} rest.NotFoundResponse
+// @Failure 409 {object} rest.ConflictResponse
 // @Failure 500 {object} rest.InternalServerErrorResponse
 // @Router /v1/children/{id}/plan [POST]
 func (s *Server) RestartPlan() gin.HandlerFunc {
 	return s.plan(true)
 }
 
-func (s *Server) plan(restart bool) gin.HandlerFunc {
+func (s *Server) plan(next bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		childID := c.Param("id")
 		if err := ValidateUUID(childID); err != nil {
@@ -490,7 +580,12 @@ func (s *Server) plan(restart bool) gin.HandlerFunc {
 			return
 		}
 
-		p, err := s.planGetter.Execute(c.Request.Context(), currentUserID(c), childID, restart)
+		get := s.planGetter.Execute
+		if next {
+			get = s.planGetter.Next
+		}
+
+		p, err := get(c.Request.Context(), currentUserID(c), childID)
 		if err != nil {
 			Return(c, nil, err)
 
@@ -502,7 +597,9 @@ func (s *Server) plan(restart bool) gin.HandlerFunc {
 }
 
 type planView struct {
+	ID        string        `json:"id" example:"8c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"`
 	ChildID   string        `json:"child_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	Number    int           `json:"number" example:"1"` // the child's plans counted from 1
 	StartedOn string        `json:"started_on" example:"2026-10-11"`
 	Completed bool          `json:"completed" example:"false"`
 	Days      []planDayView `json:"days"`
@@ -510,10 +607,7 @@ type planView struct {
 
 type planDayView struct {
 	Day         int          `json:"day" example:"1"`
-	TitleUz     string       `json:"title_uz" example:"Hisni top"`
-	TitleRu     string       `json:"title_ru" example:"Угадай эмоцию"`
-	Icon        string       `json:"icon" example:"heart" enums:"heart,chat,blocks,gift,sparkle,bulb,star"`
-	GoalID      *string      `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	GoalID      *string      `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"` // null when the child had no goals
 	Status      string       `json:"status" example:"today" enums:"done,today,locked"`
 	CompletedOn *string      `json:"completed_on" example:"2026-10-11"`
 	Activity    activityView `json:"activity"`
@@ -521,7 +615,9 @@ type planDayView struct {
 
 func toPlanView(p domain.Plan) planView {
 	v := planView{
+		ID:        p.ID,
 		ChildID:   p.ChildID,
+		Number:    p.Number,
 		StartedOn: p.StartedOn.Format(time.DateOnly),
 		Completed: p.Completed,
 		Days:      make([]planDayView, 0, len(p.Days)),
@@ -529,11 +625,8 @@ func toPlanView(p domain.Plan) planView {
 
 	for _, d := range p.Days {
 		dv := planDayView{
-			Day:      d.Theme.Day,
-			TitleUz:  d.Theme.TitleUz,
-			TitleRu:  d.Theme.TitleRu,
-			Icon:     d.Theme.Icon,
-			GoalID:   d.Theme.GoalID,
+			Day:      d.Day,
+			GoalID:   d.GoalID,
 			Status:   d.Status,
 			Activity: toActivityView(d.Activity),
 		}

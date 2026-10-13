@@ -22,7 +22,6 @@ import (
 	activitydeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_deleter"
 	activitygetter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_getter"
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
-	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
 	activityupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_updater"
 	childcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/child_creator"
 	childgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/child_getter"
@@ -234,15 +233,14 @@ type useCases struct {
 	goalUpdater *goalupdater.UseCase
 	goalDeleter *goaldeleter.UseCase
 
-	childCreator        *childcreator.UseCase
-	childGetter         *childgetter.UseCase
-	childUpdater        *childupdater.UseCase
-	planGetter          *plangetter.UseCase
-	childLister         *childlister.UseCase
-	activityRecommender *activityrecommender.UseCase
-	completionRecorder  *completionrecorder.UseCase
-	completionLister    *completionlister.UseCase
-	streakGetter        *streakgetter.UseCase
+	childCreator       *childcreator.UseCase
+	childGetter        *childgetter.UseCase
+	childUpdater       *childupdater.UseCase
+	planGetter         *plangetter.UseCase
+	childLister        *childlister.UseCase
+	completionRecorder *completionrecorder.UseCase
+	completionLister   *completionlister.UseCase
+	streakGetter       *streakgetter.UseCase
 
 	userCreator *usercreator.UseCase
 	userLister  *userlister.UseCase
@@ -280,6 +278,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 	var (
 		userGetter  = usergetter.New(l.Named("usecase.user_getter"), store.User())
 		userUpdater = userupdater.New(l.Named("usecase.user_updater"), store.User())
+		planGetter  = plangetter.New(l.Named("usecase.plan_getter"), store, store.Child(), store.Plan())
 	)
 
 	return &useCases{
@@ -295,16 +294,15 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		goalUpdater: goalupdater.New(l.Named("usecase.goal_updater"), store.Goal()),
 		goalDeleter: goaldeleter.New(l.Named("usecase.goal_deleter"), store.Goal()),
 
-		childCreator:        childcreator.New(l.Named("usecase.child_creator"), store, store.Child()),
-		childGetter:         childgetter.New(l.Named("usecase.child_getter"), store.Child()),
-		childUpdater:        childupdater.New(l.Named("usecase.child_updater"), store.Child()),
-		planGetter:          plangetter.New(l.Named("usecase.plan_getter"), store, store.Child(), store.User(), store.Plan()),
-		childLister:         childlister.New(l.Named("usecase.child_lister"), store.Child()),
-		activityRecommender: activityrecommender.New(l.Named("usecase.activity_recommender"), store.Child(), store.User(), store.Activity()),
+		childCreator: childcreator.New(l.Named("usecase.child_creator"), store, store.Child(), store.Goal(), planGetter),
+		childGetter:  childgetter.New(l.Named("usecase.child_getter"), store.Child()),
+		childUpdater: childupdater.New(l.Named("usecase.child_updater"), store.Child(), store.Goal()),
+		planGetter:   planGetter,
+		childLister:  childlister.New(l.Named("usecase.child_lister"), store.Child()),
 		completionRecorder: completionrecorder.New(l.Named("usecase.completion_recorder"),
-			store.Child(), store.Activity(), store.Completion()),
+			store, store.Child(), store.Activity(), store.Completion(), store.Plan()),
 		completionLister: completionlister.New(l.Named("usecase.completion_lister"), store.Child(), store.Completion()),
-		streakGetter:     streakgetter.New(l.Named("usecase.streak_getter"), store.Child(), store.Completion()),
+		streakGetter:     streakgetter.New(l.Named("usecase.streak_getter"), store.Child(), store.Plan()),
 
 		userCreator: usercreator.New(l.Named("usecase.user_creator"), store.User()),
 		userLister:  userlister.New(l.Named("usecase.user_lister"), store.User()),
@@ -317,7 +315,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
 		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), checkOTPDefaultCode(l, cfg), cache.OTP()),
 
-		signUp:         usersignup.New(l.Named("usecase.user_signup"), store, store.User(), store.Goal(), store.Auth(), jwt),
+		signUp:         usersignup.New(l.Named("usecase.user_signup"), store, store.User(), store.Auth(), jwt),
 		tokenRefresher: tokenrefresher.New(l.Named("usecase.token_refresher"), jwt, store.Auth()),
 		tokenChecker:   tokenchecker.New(l.Named("usecase.token_checker"), jwt, store.Auth()),
 		login:          userlogin.New(l.Named("usecase.user_login"), store.Auth(), jwt),
@@ -358,14 +356,13 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Deleter: ucs.goalDeleter,
 		},
 		rest.ChildActivityUseCases{
-			Creator:     ucs.childCreator,
-			Getter:      ucs.childGetter,
-			Updater:     ucs.childUpdater,
-			Plan:        ucs.planGetter,
-			Recommender: ucs.activityRecommender,
-			Recorder:    ucs.completionRecorder,
-			Lister:      ucs.completionLister,
-			Streak:      ucs.streakGetter,
+			Creator:  ucs.childCreator,
+			Getter:   ucs.childGetter,
+			Updater:  ucs.childUpdater,
+			Plan:     ucs.planGetter,
+			Recorder: ucs.completionRecorder,
+			Lister:   ucs.completionLister,
+			Streak:   ucs.streakGetter,
 		},
 		rest.UserUseCases{
 			Creator: ucs.userCreator,

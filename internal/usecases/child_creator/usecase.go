@@ -17,6 +17,14 @@ type childRepo interface {
 	AddParent(ctx context.Context, childID, userID string) error
 }
 
+type goalRepo interface {
+	CountActive(ctx context.Context, ids []string) (int, error)
+}
+
+type planStarter interface {
+	Start(ctx context.Context, child domain.Child) error
+}
+
 type txRunner interface {
 	InTx(ctx context.Context, h func(context.Context) error) error
 }
@@ -26,15 +34,19 @@ type UseCase struct {
 	l        logger.Logger
 	tx       txRunner
 	children childRepo
+	goals    goalRepo
+	plans    planStarter
 }
 
 // New creates a new child creator use case.
-func New(l logger.Logger, tx txRunner, children childRepo) *UseCase {
-	return &UseCase{l: l, tx: tx, children: children}
+func New(l logger.Logger, tx txRunner, children childRepo, goals goalRepo, plans planStarter) *UseCase {
+	return &UseCase{l: l, tx: tx, children: children, goals: goals, plans: plans}
 }
 
-// Execute validates the child, then in one transaction stores it in children and links it to
-// userID in user_children, so a child never exists without a parent.
+// Execute validates the child, then in one transaction stores it in children, links it to userID
+// in user_children, so a child never exists without a parent, and makes its first 7-day plan from
+// its goals. The child needs at least one goal; repeated goal ids are stored once and every one
+// must be an active goal.
 func (uc *UseCase) Execute(ctx context.Context, userID string, c domain.Child) (domain.Child, error) {
 	c.Name = strings.TrimSpace(c.Name)
 	c.Gender = strings.ToLower(strings.TrimSpace(c.Gender))
@@ -47,8 +59,16 @@ func (uc *UseCase) Execute(ctx context.Context, userID string, c domain.Child) (
 		}
 	}
 
+	c.GoalIDs = domain.NormalizeIDs(c.GoalIDs)
+
 	if err := validate(c); err != nil {
 		return domain.Child{}, err
+	}
+
+	if n, err := uc.goals.CountActive(ctx, c.GoalIDs); err != nil {
+		return domain.Child{}, err
+	} else if n != len(c.GoalIDs) {
+		return domain.Child{}, errs.ErrUnknownGoals
 	}
 
 	var created domain.Child
@@ -61,7 +81,11 @@ func (uc *UseCase) Execute(ctx context.Context, userID string, c domain.Child) (
 			return err
 		}
 
-		return uc.children.AddParent(ctx, created.ID, userID)
+		if err := uc.children.AddParent(ctx, created.ID, userID); err != nil {
+			return err
+		}
+
+		return uc.plans.Start(ctx, created)
 	})
 	if err != nil {
 		return domain.Child{}, err
@@ -82,6 +106,21 @@ func validate(c domain.Child) error {
 		return errs.Errf(errs.ErrValidation, "gender must be %s or %s", domain.GenderMale, domain.GenderFemale)
 	case c.PhotoID != nil && uuid.Validate(*c.PhotoID) != nil:
 		return errs.Errf(errs.ErrValidation, "photo_id must be a UUID")
+	}
+
+	return validateGoals(c.GoalIDs)
+}
+
+// validateGoals checks a child's goal ids: 1 to MaxChildGoals UUIDs.
+func validateGoals(ids []string) error {
+	if len(ids) == 0 || len(ids) > domain.MaxChildGoals {
+		return errs.Errf(errs.ErrValidation, "goal_ids must hold 1 to %d goal ids from GET /v1/goals", domain.MaxChildGoals)
+	}
+
+	for _, id := range ids {
+		if uuid.Validate(id) != nil {
+			return errs.Errf(errs.ErrValidation, "goal_ids must be goal ids (UUIDs), got %q", id)
+		}
 	}
 
 	return nil

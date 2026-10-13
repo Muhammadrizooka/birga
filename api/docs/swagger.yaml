@@ -102,6 +102,13 @@ definitions:
         - female
         example: male
         type: string
+      goal_ids:
+        description: GoalIDs are the goals picked for this child, ids from GET /v1/goals.
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       name:
         example: Amir
         type: string
@@ -257,13 +264,6 @@ definitions:
           omitted means false.
         example: true
         type: boolean
-      goals:
-        description: goal ids from GET /v1/goals, optional
-        example:
-        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
-        items:
-          type: string
-        type: array
       name:
         example: Dilnoza
         type: string
@@ -281,6 +281,14 @@ definitions:
         - educator
         - nanny
         example: mother
+        type: string
+      role:
+        description: Role is user (the default) or admin; admin needs the X-Admin-Key
+          header.
+        enum:
+        - user
+        - admin
+        example: user
         type: string
       username:
         example: dilnoza_k
@@ -381,6 +389,14 @@ definitions:
         - female
         example: male
         type: string
+      goal_ids:
+        description: 'GoalIDs, when sent, replaces the child''s goals: 1 to 20 ids
+          from GET /v1/goals.'
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       name:
         example: Amir
         type: string
@@ -549,6 +565,12 @@ definitions:
       gender:
         example: male
         type: string
+      goal_ids:
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       id:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
@@ -596,6 +618,12 @@ definitions:
       note:
         example: Qizil rangni birinchi topdi
         type: string
+      plan_day:
+        description: |-
+          PlanDay is the plan day (1..7) this completion did; null when it did not count for the plan.
+          Only set on the response of POST /v1/children/{id}/completions.
+        example: 3
+        type: integer
       user_id:
         example: 9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d
         type: string
@@ -702,18 +730,8 @@ definitions:
         example: 1
         type: integer
       goal_id:
+        description: null when the child had no goals
         example: 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
-        type: string
-      icon:
-        enum:
-        - heart
-        - chat
-        - blocks
-        - gift
-        - sparkle
-        - bulb
-        - star
-        example: heart
         type: string
       status:
         enum:
@@ -721,12 +739,6 @@ definitions:
         - today
         - locked
         example: today
-        type: string
-      title_ru:
-        example: Угадай эмоцию
-        type: string
-      title_uz:
-        example: Hisni top
         type: string
     type: object
   rest.planView:
@@ -741,6 +753,13 @@ definitions:
         items:
           $ref: '#/definitions/rest.planDayView'
         type: array
+      id:
+        example: 8c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+        type: string
+      number:
+        description: the child's plans counted from 1
+        example: 1
+        type: integer
       started_on:
         example: "2026-10-11"
         type: string
@@ -753,12 +772,6 @@ definitions:
         type: boolean
       created_at:
         type: string
-      goal_ids:
-        example:
-        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
-        items:
-          type: string
-        type: array
       id:
         example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
         type: string
@@ -839,6 +852,19 @@ definitions:
     x-enum-varnames:
     - _statusSuccess
     - _statusFailure
+  rest.streakDayView:
+    properties:
+      day:
+        example: "2026-10-12"
+        type: string
+      status:
+        enum:
+        - done
+        - missed
+        - today
+        example: done
+        type: string
+    type: object
   rest.streakView:
     properties:
       completed_today:
@@ -897,12 +923,6 @@ definitions:
         type: boolean
       created_at:
         type: string
-      goal_ids:
-        example:
-        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
-        items:
-          type: string
-        type: array
       id:
         example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
         type: string
@@ -1368,8 +1388,8 @@ paths:
   /v1/admin/goals/{id}:
     delete:
       description: |-
-        - sets deleted_at: the goal disappears from /v1/goals, sign-up refuses its id, and its
-        id is removed from every user's goal_ids; its names can be used again
+        - sets deleted_at: the goal disappears from /v1/goals, children can no longer pick it,
+        and its id is removed from every child's and activity's goal_ids; its names can be used again
       parameters:
       - description: goal id (UUID)
         in: path
@@ -1884,8 +1904,9 @@ paths:
         - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
         password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
         - relationship is required: father, mother, educator or nanny (422)
-        - goals is optional: up to 20 goal ids from GET /v1/goals; repeats are stored once;
-        an id that is not an active goal: 422
+        - no goals here: goals belong to each child (POST /v1/children)
+        - role is user (default, the account gets unverified_user) or admin; admin needs the
+        X-Admin-Key header with ADMIN_API_KEY (401 wrong or missing key, 403 admin API disabled)
         - no profile photo here: set photo_id later with PATCH /v1/me
         - username or phone number already used: 409
         - returns the new user's user_id with the tokens
@@ -1939,6 +1960,9 @@ paths:
         - any signed-in role (user, paid_user, admin) may add children
         - name is required, at most 100 characters; age is required, 0..18; gender is male or female
         - photo_id is an optional id from POST /v1/media (422 if unknown)
+        - goal_ids is required: 1 to 20 goal ids from GET /v1/goals, repeats stored once;
+        an id that is not an active goal: 422
+        - the child's first 7-day plan is made at once from its goals (GET /v1/children/{id}/plan)
       parameters:
       - description: child
         in: body
@@ -2034,6 +2058,8 @@ paths:
         - omitted or null fields are kept; the add-child rules apply to the given ones:
         name 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media
         ("" clears it, an unknown id is 422)
+        - goal_ids replaces the child's goals (1 to 20 active goal ids, 422 otherwise); the
+        current plan keeps its days, the next plan uses the new goals
         - an empty body is 422 (nothing to update)
       parameters:
       - description: child id (UUID)
@@ -2141,6 +2167,9 @@ paths:
         - the day is the current date in Uzbekistan (UTC+5); repeating the same activity on the same
         day returns the existing completion, replacing its note if a new one is sent
         - note is the caregiver's optional reflection, at most 1000 characters (422)
+        - when the activity is the plan day open today, that day is marked done and counts
+        toward the child's streak; plan_day then names it. Any other activity only goes into
+        the history (plan_day null)
       parameters:
       - description: child id (UUID)
         in: path
@@ -2194,12 +2223,16 @@ paths:
     get:
       description: |-
         - only the child's parents can ask (404 otherwise)
-        - the first call makes the plan: one activity per day theme, fitting the child's age
-        (clamped to 2..6), preferring the theme's goal, then the parent's goals, then activities
-        the child has not done; the plan then stays the same until POST starts a new one
-        - days are done in order, one per calendar day (Uzbekistan time): status is done, today
-        (the next day to do, open now) or locked
+        - the plan is made when the child is added (or on the first call for older children):
+        seven days, each serving one of the child's goals in turn (goals A, B, C: A B C A B C A,
+        the next plan starting one goal further), with an activity fitting the child's age
+        (clamped to 2..6) that serves the day's goal, preferring activities serving more of the
+        child's goals and ones the child has not done
+        - days are done in order, at most one per calendar day (Uzbekistan time): status is done,
+        today (the next day to do, open now) or locked. A missed day pauses the plan: the open
+        day stays open until it is done
         - completing a day is POST /v1/children/{id}/completions with the day's activity id
+        - completed is true after the last day; then POST starts the next plan
         - 404 when no published activity fits the child's age
       parameters:
       - description: child id (UUID)
@@ -2237,13 +2270,15 @@ paths:
             $ref: '#/definitions/rest.InternalServerErrorResponse'
       security:
       - BearerAuth: []
-      summary: a child's 7-day plan (the Reja tab)
+      summary: a child's current 7-day plan (the Reja tab)
       tags:
       - children
     post:
       description: |-
-        - replaces the current plan with a new one starting today, whatever its progress;
-        completions stay in the history. Use it when the plan is completed
+        - only after the current plan is done (completed true): 409 otherwise
+        - the new plan starts today from the child's goals as they are now; change them first
+        with PATCH /v1/children/{id} if wanted. When the last day of the previous plan was done
+        today, day 1 opens tomorrow
       parameters:
       - description: child id (UUID)
         in: path
@@ -2274,38 +2309,34 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/rest.NotFoundResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/rest.ConflictResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/rest.InternalServerErrorResponse'
       security:
       - BearerAuth: []
-      summary: starts a new 7-day plan for a child
+      summary: starts a child's next 7-day plan
       tags:
       - children
   /v1/children/{id}/recommendation:
     get:
       description: |-
-        - only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6
-        - goal_id and minutes narrow the choice; minutes keeps activities with duration_minutes <= minutes
-        - without goal_id, activities serving one of the goals the caller picked at sign-up come first
-        - then activities the child has never done, then the one done longest ago;
-        ties are broken per child and per day, so the pick stays the same all day until it is done
-        - 404 when no published activity matches
+        - the activity of the plan day that is open today (status today in GET
+        /v1/children/{id}/plan); the first call makes the child's first plan if it has none
+        - only the child's parents can ask (404 otherwise)
+        - 404 no plan day open today: today's plan day is already done, or the plan is done
+        (start the next one with POST /v1/children/{id}/plan); 404 also when no published
+        activity fits the child's age
       parameters:
       - description: child id (UUID)
         in: path
         name: id
         required: true
         type: string
-      - description: goal id (UUID) from GET /v1/goals
-        in: query
-        name: goal_id
-        type: string
-      - description: time available, in minutes
-        in: query
-        name: minutes
-        type: integer
       produces:
       - application/json
       responses:
@@ -2330,25 +2361,23 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/rest.NotFoundResponse'
-        "422":
-          description: Unprocessable Entity
-          schema:
-            $ref: '#/definitions/rest.UnprocessableContentResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/rest.InternalServerErrorResponse'
       security:
       - BearerAuth: []
-      summary: today's recommended activity for a child
+      summary: today's plan activity for a child
       tags:
       - children
   /v1/children/{id}/streak:
     get:
       description: |-
-        - current: consecutive days with a completion up to today, or up to yesterday while
-        today has none yet (the streak is not lost until a whole day is missed)
-        - longest: the longest such run; this_week: days with a completion since Monday
+        - only days of the child's plan count: a day counts when a plan day was done on it;
+        other activities stay in the history but do not keep the streak
+        - current: consecutive such days up to today, or up to yesterday while today has none
+        yet (the streak is not lost until a whole day is missed)
+        - longest: the longest such run; this_week: such days since Monday; total: plan days done
         - days are counted in Uzbekistan time (UTC+5)
       parameters:
       - description: child id (UUID)
@@ -2389,6 +2418,68 @@ paths:
       summary: a child's streak and progress
       tags:
       - children
+  /v1/children/{id}/streak/days:
+    get:
+      description: |-
+        - one entry per day from from to to (both inclusive, YYYY-MM-DD), oldest first, skipping
+        days before the child's first plan started and days after today
+        - status: done (a plan day was done), missed (no plan day done that day), today (today,
+        nothing done yet: not missed until the day is over); days are Uzbekistan time (UTC+5)
+        - from and to are optional: without them, the last 28 days up to today; at most 366
+        days, and from must not be after to (422)
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: first day, YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: last day, YYYY-MM-DD (default today)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/rest.streakDayView'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'a child''s streak calendar: done and missed days'
+      tags:
+      - children
   /v1/goals:
     get:
       description: '- open without a token; every active goal, oldest first, not paginated'
@@ -2408,7 +2499,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/rest.InternalServerErrorResponse'
-      summary: lists the goals a user can pick at sign-up
+      summary: lists the goals a parent can pick for a child
       tags:
       - goals
   /v1/goals/{id}:

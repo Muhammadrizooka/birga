@@ -33,7 +33,6 @@ type dbUser struct {
 	PhoneNumber        *string   `db:"phone_number"`
 	PhotoID            *string   `db:"photo_id"`
 	Relationship       *string   `db:"relationship"`
-	GoalIDs            []string  `db:"goal_ids"`
 	AgreedOnConditions bool      `db:"agreed_on_conditions"`
 	ReminderEnabled    bool      `db:"reminder_enabled"`
 	ReminderTime       string    `db:"reminder_time"`
@@ -41,23 +40,18 @@ type dbUser struct {
 	UpdatedAt          time.Time `db:"updated_at"`
 }
 
-const userColumns = `id, name, username, phone_number, photo_id, relationship, goal_ids, ` +
+const userColumns = `id, name, username, phone_number, photo_id, relationship, ` +
 	`agreed_on_conditions, reminder_enabled, reminder_time, created_at, updated_at`
 
 func (r *userRepo) Create(ctx context.Context, u domain.User) (domain.User, error) {
 	l := logger.FromCtx(ctx, "userRepo.Create")
 
 	q := `
-		INSERT INTO users (name, username, phone_number, photo_id, relationship, goal_ids, agreed_on_conditions)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (name, username, phone_number, photo_id, relationship, agreed_on_conditions)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING ` + userColumns
 
-	goalIDs := u.GoalIDs
-	if goalIDs == nil {
-		goalIDs = []string{}
-	}
-
-	return r.one(ctx, l, q, u.Name, u.Username, u.PhoneNumber, u.PhotoID, u.Relationship, goalIDs, u.AgreedOnConditions)
+	return r.one(ctx, l, q, u.Name, u.Username, u.PhoneNumber, u.PhotoID, u.Relationship, u.AgreedOnConditions)
 }
 
 func (r *userRepo) Get(ctx context.Context, id string) (domain.User, error) {
@@ -254,7 +248,6 @@ func (u dbUser) toDomain() domain.User {
 		PhoneNumber:  u.PhoneNumber,
 		PhotoID:      u.PhotoID,
 		Relationship: u.Relationship,
-		GoalIDs:      u.GoalIDs,
 
 		AgreedOnConditions: u.AgreedOnConditions,
 		ReminderEnabled:    u.ReminderEnabled,
