@@ -52,7 +52,8 @@ jobs:
             printf '%s=%q\n' "$k" "${!k}"
           done >setup.env
           ssh "$SSH_USER@$SSH_HOST" 'rm -rf /root/birga-setup && install -d -m 700 /root/birga-setup'
-          rsync -a deploy/server/ setup.env "$SSH_USER@$SSH_HOST:/root/birga-setup/"
+          # tar over ssh: a fresh server has no rsync yet (bootstrap.sh installs it).
+          tar -cf - -C deploy/server . -C "$PWD" setup.env | ssh "$SSH_USER@$SSH_HOST" 'tar -xf - -C /root/birga-setup'
           rm -f setup.env
       - name: Run setup
         run: |
