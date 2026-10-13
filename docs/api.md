@@ -58,8 +58,9 @@ CORS allows any origin.
 - Without one, send `X-Admin-Key: <ADMIN_API_KEY>`, a stop-gap for scripts and seeding. The
   comparison is constant-time. Wrong or missing key: 401, code -20. `ADMIN_API_KEY` not set on
   the server: 403, code -21, so then only admin users get in.
-- Nobody can become an admin through the API (sign-up always gives `unverified_user`); set
-  `user_auth.role = 'admin'` in the database. The new role applies at once, because the role
+- An admin is created by [sign-up](#sign-up) with `"role": "admin"` and the `X-Admin-Key`
+  header; without the key sign-up only gives `unverified_user`. An existing user can also be
+  made an admin by setting `user_auth.role = 'admin'` in the database. The new role applies at once, because the role
   is read from `user_auth` on every request, not from the token.
 
 ## User authentication
@@ -715,6 +716,7 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
 | `password` | 8 to 72 bytes (bcrypt reads at most 72); stored only as a bcrypt hash |
 | `phone_number` | Uzbek number, `+998` and 9 digits; not verified |
 | `relationship` | required: `father`, `mother`, `educator` or `nanny` (trimmed, case-insensitive) |
+| `role` | optional: `user` (default) or `admin`. `admin` needs the header `X-Admin-Key: <ADMIN_API_KEY>`: wrong or missing key 401 (-20), `ADMIN_API_KEY` not set on the server 403 (-21); any other value 422. The app never sends it; it is for creating dashboard admins |
 | `agreed_on_conditions` | optional boolean, the consent tick on the sign-up screen; stored in `users.agreed_on_conditions`, omitted means `false`. Sign-up does not refuse `false` yet; the app should only let the user continue once it is ticked |
 
 Goals are not part of sign-up: they belong to each child ([add a child](#children-add-a-child-signed-in)).
@@ -737,7 +739,7 @@ Behaviour (`usecases/user_signup`):
 
 - The `users` row (name, username, phone, relationship; `photo_id` NULL) and the `user_auth` row (username,
   bcrypt password, role `unverified_user`, SHA-256 hashes of both tokens) are written in one transaction.
-- The access and refresh tokens carry `role: unverified_user`. That role may use `/v1/me...`,
+- The access and refresh tokens carry `role: unverified_user` (`admin` for an admin sign-up). That role may use `/v1/me...`,
   `POST /v1/children` and `/v1/children/{id}...` like `user`; nothing promotes it yet.
 - The OTP endpoints and the `sign_up` purpose still exist but sign-up no longer reads the
   `sign_up` verified mark.

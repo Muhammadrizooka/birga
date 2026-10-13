@@ -36,7 +36,8 @@ func (r UserRole) IsKnown() bool {
 	return r == UserRoleUser || r == UserRoleAdmin || r == UserRolePaidUser || r == UserRoleUnverifiedUser
 }
 
-// SignUpRequest registers a user. The new user always gets UserRoleUnverifiedUser.
+// SignUpRequest registers a user. The new user gets UserRoleUnverifiedUser, or UserRoleAdmin when
+// Admin is set (the caller proved it may create admins).
 type SignUpRequest struct {
 	Name        string
 	Username    string
@@ -46,6 +47,8 @@ type SignUpRequest struct {
 	Relationship string
 	// AgreedOnConditions is the consent tick on the sign-up screen.
 	AgreedOnConditions bool
+	// Admin makes the new user an admin.
+	Admin bool
 }
 
 // TokenPair is what a client keeps after signing up. AccessExpiresIn is the access token lifetime.

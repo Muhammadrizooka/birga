@@ -1462,7 +1462,7 @@ const docTemplate = `{
         },
         "/v1/auth/signup": {
             "post": {
-                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- relationship is required: father, mother, educator or nanny (422)\n- no goals here: goals belong to each child (POST /v1/children)\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- returns the new user's user_id with the tokens\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
+                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- relationship is required: father, mother, educator or nanny (422)\n- no goals here: goals belong to each child (POST /v1/children)\n- role is user (default, the account gets unverified_user) or admin; admin needs the\nX-Admin-Key header with ADMIN_API_KEY (401 wrong or missing key, 403 admin API disabled)\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- returns the new user's user_id with the tokens\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
                 "consumes": [
                     "application/json"
                 ],
@@ -3359,6 +3359,15 @@ const docTemplate = `{
                         "nanny"
                     ],
                     "example": "mother"
+                },
+                "role": {
+                    "description": "Role is user (the default) or admin; admin needs the X-Admin-Key header.",
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "admin"
+                    ],
+                    "example": "user"
                 },
                 "username": {
                     "type": "string",

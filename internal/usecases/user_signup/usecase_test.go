@@ -148,3 +148,14 @@ func checkUser(t *testing.T, u domain.User) {
 		t.Fatalf("unexpected relationship: %v", *u.Relationship)
 	}
 }
+
+func TestExecute_Admin(t *testing.T) {
+	f := &fakes{}
+	r := req()
+	r.Admin = true
+
+	pair, err := newUseCase(f).Execute(context.Background(), r)
+	if err != nil || f.auth.Role != domain.UserRoleAdmin || pair.AccessToken != "access."+userID+".admin" {
+		t.Fatalf("got %v, role %s, token %s", err, f.auth.Role, pair.AccessToken)
+	}
+}

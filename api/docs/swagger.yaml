@@ -282,6 +282,14 @@ definitions:
         - nanny
         example: mother
         type: string
+      role:
+        description: Role is user (the default) or admin; admin needs the X-Admin-Key
+          header.
+        enum:
+        - user
+        - admin
+        example: user
+        type: string
       username:
         example: dilnoza_k
         type: string
@@ -1897,6 +1905,8 @@ paths:
         password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
         - relationship is required: father, mother, educator or nanny (422)
         - no goals here: goals belong to each child (POST /v1/children)
+        - role is user (default, the account gets unverified_user) or admin; admin needs the
+        X-Admin-Key header with ADMIN_API_KEY (401 wrong or missing key, 403 admin API disabled)
         - no profile photo here: set photo_id later with PATCH /v1/me
         - username or phone number already used: 409
         - returns the new user's user_id with the tokens

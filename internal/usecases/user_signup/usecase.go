@@ -54,7 +54,7 @@ func New(l logger.Logger, tx txRunner, users userRepo, auth authRepo, tokens tok
 }
 
 // Execute checks the request, then stores the user and their user_auth row (bcrypt password,
-// role unverified_user, token hashes) in one transaction and returns the tokens. Goals are not
+// role unverified_user, or admin with req.Admin, token hashes) in one transaction and returns the tokens. Goals are not
 // part of sign-up: they belong to each child.
 func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domain.TokenPair, error) {
 	req.Name = strings.TrimSpace(req.Name)
@@ -68,6 +68,11 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), uc.cost)
 	if err != nil {
 		return domain.TokenPair{}, errs.Errf(errs.ErrInternal, "bcrypt: %s", err.Error())
+	}
+
+	role := domain.UserRoleUnverifiedUser
+	if req.Admin {
+		role = domain.UserRoleAdmin
 	}
 
 	var pair domain.TokenPair
@@ -85,7 +90,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			return err
 		}
 
-		if pair, err = uc.issue(user.ID, domain.UserRoleUnverifiedUser); err != nil {
+		if pair, err = uc.issue(user.ID, role); err != nil {
 			return err
 		}
 
@@ -95,7 +100,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			UserID:           user.ID,
 			Username:         req.Username,
 			PasswordHash:     string(hash),
-			Role:             domain.UserRoleUnverifiedUser,
+			Role:             role,
 			AccessTokenHash:  domain.HashToken(pair.AccessToken),
 			RefreshTokenHash: domain.HashToken(pair.RefreshToken),
 		})
@@ -104,7 +109,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 		return domain.TokenPair{}, err
 	}
 
-	logger.WithContext(uc.l, ctx).Info("user signed up", zap.String("role", string(domain.UserRoleUnverifiedUser)))
+	logger.WithContext(uc.l, ctx).Info("user signed up", zap.String("role", string(role)))
 
 	return pair, nil
 }

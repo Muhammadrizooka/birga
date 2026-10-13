@@ -122,6 +122,31 @@ func TestSignUp(t *testing.T) {
 	}
 }
 
+func TestSignUp_Admin(t *testing.T) {
+	body := `{"name": "Admin", "username": "boss", "password": "s3cret-pass", "phone_number": "+998901234567",
+		"relationship": "mother", "role": "admin"}`
+
+	s, d := newTestServer(testAdminKey)
+
+	if code, r := do(t, s, http.MethodPost, "/v1/auth/signup", body, nil); code != http.StatusUnauthorized || d.auth.got.Name != "" {
+		t.Fatalf("no key: %d %+v", code, r)
+	}
+
+	if code, r := do(t, s, http.MethodPost, "/v1/auth/signup", body, map[string]string{adminKeyHeader: testAdminKey}); code != http.StatusOK || !d.auth.got.Admin {
+		t.Fatalf("with key: %d %+v admin=%v", code, r, d.auth.got.Admin)
+	}
+
+	if code, _ := do(t, s, http.MethodPost, "/v1/auth/signup", `{"role": "owner"}`, nil); code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown role: %d", code)
+	}
+
+	if s, _ := newTestServer(""); true {
+		if code, _ := do(t, s, http.MethodPost, "/v1/auth/signup", body, map[string]string{adminKeyHeader: "x"}); code != http.StatusForbidden {
+			t.Fatalf("admin API off: %d", code)
+		}
+	}
+}
+
 func TestRefreshToken(t *testing.T) {
 	s, d := newTestServer("")
 
