@@ -1,8 +1,68 @@
 # Operations
 
-How the API is built, deployed and watched. The server-side Docker Compose stack lives in
-the separate `birga/devops` folder (not yet pushed); its `README.md` has the full
-step-by-step guide. This page summarises what a backend developer needs to know.
+How the API is built, deployed and watched.
+
+The live server is a Debian 13 machine set up and deployed from GitHub Actions (see
+[Server](#server) and [GitHub Actions](#github-actions)). The Docker images and the Compose
+stack described further down are the earlier GitLab-based plan; they are kept for local use
+but do not run on the current server.
+
+## Server
+
+One Debian 13 server runs everything, installed from Debian packages rather than Docker:
+
+| Part | Where |
+|---|---|
+| PostgreSQL (database `birga`, role `birga`) | local only, port 5432 |
+| Redis | local only, port 6379 |
+| Backend API | systemd service `birga-backend`, binary `/opt/birga/backend/birga_backend`, listens on `127.0.0.1:8080` (metrics `127.0.0.1:9090`) |
+| Backend settings | `/etc/birga/backend.env` (root:birga, 640) |
+| Dashboard | static files in `/var/www/birga-dashboard` |
+| nginx | `api.<domain>` proxies to the API; `admin.<domain>` serves the dashboard and proxies `/v1/` to the API (same origin, no CORS); the bare IP serves the dashboard at `/` and the API under `/birga/` (Swagger: `http://<ip>/birga/swagger/index.html`) and `/v1/` for Swagger's "Try it out" |
+| HTTPS | Let's Encrypt via certbot, renewed automatically |
+| Firewall | ufw: SSH, HTTP and HTTPS only |
+| Backups | `pg_dump` nightly at 03:30 into `/var/backups/birga`, kept 14 days |
+
+`deploy/server/bootstrap.sh` builds all of this and is safe to run again. On its first run it
+creates `/etc/birga/backend.env` with a random database password and `JWT_SECRET`; later runs
+keep that file and only update the S3 keys. The server starts as `ENVIRONMENT=staging` with
+`SMS_PROVIDER=log`, so one-time codes appear in `journalctl -u birga-backend`; switch to
+`playmobile` and `production` once the SMS contract is in place.
+
+Useful commands on the server:
+
+```sh
+systemctl status birga-backend
+journalctl -u birga-backend -f
+nano /etc/birga/backend.env && systemctl restart birga-backend
+```
+
+## GitHub Actions
+
+Workflows in `.github/workflows/`:
+
+| Workflow | When | What |
+|---|---|---|
+| `ci.yml` | every pull request and push to `main` | golangci-lint (non-blocking: v2.12.2 cannot analyse Go 1.27 yet); tests against PostgreSQL 17 after migrations |
+| `ci.yml`, job `deploy` | push to `main` after tests pass (or run by hand on `main`) | builds the binary for the server's CPU, uploads it with `migrations/` and `seeds/`, then runs `deploy/server/release.sh`: migrate up, load `seeds/activities.sql` if `activities` is empty, swap the binary, restart, check `/health`, roll back to the previous binary if the check fails |
+| `server-setup.yml` | by hand (Actions tab, inputs: API domain, dashboard domain, certificate e-mail) | uploads `deploy/server/` and runs `bootstrap.sh` |
+
+The deploy job skips itself (with a notice) until the secrets exist and the server has been
+set up. The dashboard repository deploys itself the same way into `/var/www/birga-dashboard`.
+
+Repository secrets (Settings, Secrets and variables, Actions):
+
+| Secret | Value |
+|---|---|
+| `SERVER_HOST` | server IP address |
+| `SERVER_USER` | SSH user (`root`) |
+| `SERVER_SSH_KEY` | private half of the deploy key; its public half is in the server's `authorized_keys` |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | the `birga-backend-media` IAM key, the same values as in a local `.env`; written to the backend env file |
+
+`deploy/ci/ssh-setup.sh` only connects when the server's ED25519 host key matches
+`SERVER_HOST_FINGERPRINT` at the top of each workflow; update it there if the server is
+reinstalled. This repository is public, so its Actions logs are too: workflows must never
+print secrets or the env file.
 
 ## Images
 
