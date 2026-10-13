@@ -1,0 +1,111 @@
+# Tests every pull request and every push to main; a green push to main deploys the API to the
+# server. See docs/operations.md, "GitHub Actions".
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # ED25519 host key of the Birga server. A deploy stops if the server answers with another key.
+  SERVER_HOST_FINGERPRINT: SHA256:csj1yo18RrSUarQgIyREK2LFijzjzrN7c5UZt3yPP4M
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    # golangci-lint v2.12.2 (the version .gitlab-ci.yml pins) panics on the Go 1.27 standard
+    # library, so lint reports but does not fail the run until a newer release supports 1.27.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          # The released binary is built with an older Go than go.mod targets; build it here.
+          install-mode: goinstall
+          args: -c .golangci.yml
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: birga
+          POSTGRES_PASSWORD: birga
+          POSTGRES_DB: birga
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U birga -d birga"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    env:
+      TEST_POSTGRES_URL: postgres://birga:birga@localhost:5432/birga?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Migrate
+        run: |
+          go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
+          migrate -path migrations -database "$TEST_POSTGRES_URL" up
+      - name: Test
+        run: go test -race -count=1 ./...
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-backend
+      cancel-in-progress: false
+    env:
+      SSH_HOST: ${{ secrets.SERVER_HOST }}
+      SSH_USER: ${{ secrets.SERVER_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check the server is set up
+        id: ready
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          if [[ -z "$SSH_HOST" || -z "$SSH_KEY" ]]; then
+            echo "::notice::Server secrets are not set yet; skipping deploy."
+            echo "ok=false" >>"$GITHUB_OUTPUT"; exit 0
+          fi
+          deploy/ci/ssh-setup.sh
+          if ssh "$SSH_USER@$SSH_HOST" test -f /etc/birga/backend.env; then
+            echo "ok=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "::notice::Run the Server setup workflow first; skipping deploy."
+            echo "ok=false" >>"$GITHUB_OUTPUT"
+          fi
+      - name: Build
+        if: steps.ready.outputs.ok == 'true'
+        run: |
+          case "$(ssh "$SSH_USER@$SSH_HOST" uname -m)" in
+            x86_64) arch=amd64 ;;
+            aarch64) arch=arm64 ;;
+            *) echo "::error::unsupported server architecture"; exit 1 ;;
+          esac
+          CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags="-s -w" -o bin/birga_backend ./cmd/server
+      - name: Upload
+        if: steps.ready.outputs.ok == 'true'
+        run: |
+          rsync -az --delete migrations/ "$SSH_USER@$SSH_HOST:/opt/birga/backend/migrations/"
+          rsync -az --delete seeds/ "$SSH_USER@$SSH_HOST:/opt/birga/backend/seeds/"
+          rsync -az bin/birga_backend "$SSH_USER@$SSH_HOST:/opt/birga/backend/birga_backend.new"
+      - name: Migrate and restart
+        if: steps.ready.outputs.ok == 'true'
+        run: ssh "$SSH_USER@$SSH_HOST" 'bash -s' < deploy/server/release.sh
