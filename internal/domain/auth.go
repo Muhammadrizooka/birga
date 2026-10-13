@@ -44,8 +44,6 @@ type SignUpRequest struct {
 	PhoneNumber string
 	// Relationship is required, one of the Relationship* values.
 	Relationship string
-	// GoalIDs are optional ids of active goals.
-	GoalIDs []string
 	// AgreedOnConditions is the consent tick on the sign-up screen.
 	AgreedOnConditions bool
 }

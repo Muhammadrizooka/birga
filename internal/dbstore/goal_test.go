@@ -72,7 +72,7 @@ func TestGoalRepo_UniqueNames(t *testing.T) {
 	})
 }
 
-func TestUserRepo_RelationshipAndGoals(t *testing.T) {
+func TestChildRepo_Goals(t *testing.T) {
 	s := newTestStore(t)
 
 	inRollbackTx(t, s, func(ctx context.Context) {
@@ -82,15 +82,15 @@ func TestUserRepo_RelationshipAndGoals(t *testing.T) {
 		}
 
 		u, err := s.User().Create(ctx, domain.User{
-			Username: strPtr("goals_test"), PhoneNumber: strPtr("+998900000099"),
-			Relationship: strPtr(domain.RelationshipNanny), GoalIDs: []string{goal.ID},
+			Username: strPtr("goals_test"), PhoneNumber: strPtr("+998900000099"), Relationship: strPtr(domain.RelationshipNanny),
 		})
-		if err != nil {
-			t.Fatalf("Create user: %v", err)
+		if err != nil || *u.Relationship != domain.RelationshipNanny {
+			t.Fatalf("Create user: %+v %v", u, err)
 		}
 
-		if *u.Relationship != domain.RelationshipNanny || len(u.GoalIDs) != 1 || u.GoalIDs[0] != goal.ID {
-			t.Fatalf("unexpected user: %+v", u)
+		c, err := s.Child().Create(ctx, domain.Child{Name: "Goal", Age: 3, Gender: domain.GenderMale, GoalIDs: []string{goal.ID}})
+		if err != nil || len(c.GoalIDs) != 1 || c.GoalIDs[0] != goal.ID {
+			t.Fatalf("Create child: %+v %v", c, err)
 		}
 
 		a, err := s.Activity().Create(ctx, activity(goal.ID, 2, 6, true))
@@ -98,23 +98,25 @@ func TestUserRepo_RelationshipAndGoals(t *testing.T) {
 			t.Fatalf("Create activity: %v", err)
 		}
 
-		// Deleting the goal removes it from the user and from the activity.
+		// Deleting the goal removes it from the child and from the activity.
 		if err := s.Goal().Delete(ctx, goal.ID); err != nil {
 			t.Fatalf("Delete goal: %v", err)
 		}
 
-		got, err := s.User().Get(ctx, u.ID)
+		got, err := s.Child().Get(ctx, c.ID)
 		if err != nil || got.GoalIDs == nil || len(got.GoalIDs) != 0 {
-			t.Fatalf("Get user after goal delete: %+v, %v", got, err)
+			t.Fatalf("Get child after goal delete: %+v, %v", got, err)
 		}
 
 		if got, err := s.Activity().Get(ctx, a.ID); err != nil || len(got.GoalIDs) != 0 {
 			t.Fatalf("Get activity after goal delete: %+v, %v", got, err)
 		}
 
-		plain, err := s.User().Create(ctx, domain.User{Username: strPtr("nogoals_test"), PhoneNumber: strPtr("+998900000098")})
-		if err != nil || plain.Relationship != nil || plain.GoalIDs == nil {
-			t.Fatalf("Create plain user: %+v, %v", plain, err)
+		other, _ := s.Goal().Create(ctx, domain.Goal{NameUz: "Til test", NameRu: "Речь тест", NameEn: "Speech test"})
+
+		upd, err := s.Child().Update(ctx, c.ID, domain.ChildUpdate{GoalIDs: &[]string{other.ID}})
+		if err != nil || len(upd.GoalIDs) != 1 || upd.GoalIDs[0] != other.ID {
+			t.Fatalf("Update child goals: %+v, %v", upd, err)
 		}
 	})
 }

@@ -30,21 +30,22 @@ type dbChild struct {
 	Age       int16     `db:"age"`
 	Gender    string    `db:"gender"`
 	PhotoID   *string   `db:"photo_id"`
+	GoalIDs   []string  `db:"goal_ids"`
 	CreatedAt time.Time `db:"created_at"`
 	UpdatedAt time.Time `db:"updated_at"`
 }
 
-const childColumns = `id, name, age, gender, photo_id, created_at, updated_at`
+const childColumns = `id, name, age, gender, photo_id, goal_ids, created_at, updated_at`
 
 func (r *childRepo) Create(ctx context.Context, c domain.Child) (domain.Child, error) {
 	l := logger.FromCtx(ctx, "childRepo.Create")
 
 	q := `
-		INSERT INTO children (name, age, gender, photo_id)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO children (name, age, gender, photo_id, goal_ids)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING ` + childColumns
 
-	return r.one(ctx, l, q, c.Name, c.Age, c.Gender, c.PhotoID)
+	return r.one(ctx, l, q, c.Name, c.Age, c.Gender, c.PhotoID, nonNil(c.GoalIDs))
 }
 
 func (r *childRepo) Get(ctx context.Context, id string) (domain.Child, error) {
@@ -296,6 +297,10 @@ func childSet(upd domain.ChildUpdate) (string, []any) {
 		add("photo_id", nullIfEmpty(*upd.PhotoID))
 	}
 
+	if upd.GoalIDs != nil {
+		add("goal_ids", nonNil(*upd.GoalIDs))
+	}
+
 	return strings.Join(sets, ", "), args
 }
 
@@ -316,6 +321,7 @@ func (c dbChild) toDomain() domain.Child {
 		Age:       int(c.Age),
 		Gender:    c.Gender,
 		PhotoID:   c.PhotoID,
+		GoalIDs:   c.GoalIDs,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}

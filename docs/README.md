@@ -9,12 +9,10 @@ This repository is the Go API behind the app. Today it serves the activity catal
 small admin API for managing activities and users (create, read, update, publish, soft
 delete), sends and verifies one-time SMS codes (Play Mobile, codes kept in Redis) for account
 changes (sign-up skips OTP for now and gives the role `unverified_user`; it asks the user's
-relationship to the children and their goals), serves the list of goals (admins manage it),
-and uploads profile photos to AWS S3. For a signed-in parent it
-recommends the day's activity for a child, records completions with an optional reflection,
-and reports the child's streak. Child profiles exist in the database and repository
-(`children`, linked to parents many-to-many) but have no endpoints yet, so children are
-created outside the API for now.
+relationship to the children), serves the list of goals (admins manage it),
+and uploads profile photos to AWS S3. A signed-in parent adds children with their own goals;
+each child gets a 7-day plan rotating through its goals, records completions with an optional
+reflection, and has its own streak and calendar of done and missed plan days.
 
 ## Start here
 

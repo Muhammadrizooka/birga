@@ -95,41 +95,6 @@ func (r *completionRepo) List(ctx context.Context, f domain.CompletionFilter) ([
 	return out, total, nil
 }
 
-// Days returns the distinct days on which the child completed anything, newest first, and the
-// total number of completions.
-func (r *completionRepo) Days(ctx context.Context, childID string) ([]time.Time, int, error) {
-	l := logger.FromCtx(ctx, "completionRepo.Days").With(zap.String("child_id", childID))
-
-	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, `
-		SELECT completed_on, COUNT(*) FROM activity_completions
-		WHERE child_id = $1 GROUP BY completed_on ORDER BY completed_on DESC`, childID)
-	if err != nil {
-		l.Error("sqlClient.Query", zap.Error(err))
-
-		return nil, 0, errs.Errf(errs.ErrInternal, "%s", err.Error())
-	}
-
-	var (
-		days  []time.Time
-		total int
-		day   time.Time
-		count int
-	)
-
-	if _, err := pgx.ForEachRow(rows, []any{&day, &count}, func() error {
-		days = append(days, day)
-		total += count
-
-		return nil
-	}); err != nil {
-		l.Error("pgx.ForEachRow", zap.Error(err))
-
-		return nil, 0, errs.Errf(errs.ErrInternal, "%s", err.Error())
-	}
-
-	return days, total, nil
-}
-
 func (c dbCompletion) toDomain() domain.Completion {
 	return domain.Completion{
 		ID:          c.ID,

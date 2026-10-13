@@ -11,10 +11,7 @@ import (
 // MaxGoalNameLength caps each goal name, counted in characters.
 const MaxGoalNameLength = 100
 
-// MaxUserGoals caps how many goals a user can pick.
-const MaxUserGoals = 20
-
-// Goal is a development goal a user can pick at sign-up, named in Uzbek, Russian and English.
+// Goal is a development goal a parent can pick for a child, named in Uzbek, Russian and English.
 // Activities point at the goals they serve (Activity.GoalIDs).
 type Goal struct {
 	ID        string

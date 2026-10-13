@@ -34,8 +34,6 @@ type User struct {
 	PhoneNumber  *string
 	PhotoID      *string
 	Relationship *string
-	// GoalIDs are the ids of the goals the user picked; never nil when read from the database.
-	GoalIDs []string
 	// AgreedOnConditions is the consent to the terms given at sign-up.
 	AgreedOnConditions bool
 	// ReminderEnabled and ReminderTime are the daily reminder setting; ReminderTime is HH:MM in

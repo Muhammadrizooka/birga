@@ -111,7 +111,7 @@ func TestCompletionRepo_SameDayIsIdempotent(t *testing.T) {
 	})
 }
 
-func TestCompletionRepo_DaysAndList(t *testing.T) {
+func TestCompletionRepo_List(t *testing.T) {
 	s := newTestStore(t)
 
 	inRollbackTx(t, s, func(ctx context.Context) {
@@ -122,11 +122,6 @@ func TestCompletionRepo_DaysAndList(t *testing.T) {
 			if _, _, err := s.Completion().Create(ctx, domain.Completion{ChildID: child.ID, ActivityID: a.ID, CompletedOn: d}); err != nil {
 				t.Fatalf("Create %v: %v", d, err)
 			}
-		}
-
-		days, total, err := s.Completion().Days(ctx, child.ID)
-		if err != nil || total != 3 || len(days) != 3 || !days[0].Equal(oct3) || !days[2].Equal(oct3.AddDate(0, 0, -3)) {
-			t.Fatalf("Days: %v total=%d %v", days, total, err)
 		}
 
 		page, total, err := s.Completion().List(ctx, domain.CompletionFilter{ChildID: child.ID, Limit: 2})
@@ -145,76 +140,6 @@ func publishedActivity(t *testing.T, s *DBStore, ctx context.Context) domain.Act
 	}
 
 	return a
-}
-
-func TestActivityRepo_Recommend(t *testing.T) {
-	s := newTestStore(t)
-
-	inRollbackTx(t, s, func(ctx context.Context) {
-		hideOtherActivities(t, s, ctx)
-
-		_, child := parentAndChild(t, s, ctx, 3)
-		q := domain.RecommendationQuery{ChildID: child.ID, Age: 3, Day: oct3}
-
-		if _, err := s.Activity().Recommend(ctx, q); !errors.Is(err, errs.ErrNoRecommendation) {
-			t.Fatalf("empty catalogue: %v", err)
-		}
-
-		language, motor := testGoal(t, s, ctx, "language test"), testGoal(t, s, ctx, "motor test")
-
-		short := activity(language, 2, 4, true)
-		short.DurationMinutes = 5
-
-		a, _ := s.Activity().Create(ctx, short)
-		b, _ := s.Activity().Create(ctx, activity(language, 3, 5, true))
-		_, _ = s.Activity().Create(ctx, activity(language, 5, 6, true))  // too old for 3
-		_, _ = s.Activity().Create(ctx, activity(language, 2, 4, false)) // unpublished
-
-		first, err := s.Activity().Recommend(ctx, q)
-		if err != nil || (first.ID != a.ID && first.ID != b.ID) {
-			t.Fatalf("Recommend: %+v %v", first, err)
-		}
-
-		if again, _ := s.Activity().Recommend(ctx, q); again.ID != first.ID {
-			t.Fatalf("pick changed within a day: %s then %s", first.ID, again.ID)
-		}
-
-		// Once the pick is done, the other, never-done activity comes first.
-		if _, _, err := s.Completion().Create(ctx, domain.Completion{ChildID: child.ID, ActivityID: first.ID, CompletedOn: oct3}); err != nil {
-			t.Fatalf("Complete: %v", err)
-		}
-
-		next, err := s.Activity().Recommend(ctx, q)
-		if err != nil || next.ID == first.ID {
-			t.Fatalf("after completion: %+v %v", next, err)
-		}
-
-		q.MaxMinutes = 5
-		if got, err := s.Activity().Recommend(ctx, q); err != nil || got.ID != a.ID {
-			t.Fatalf("time limit: %+v %v", got, err)
-		}
-
-		q.MaxMinutes, q.GoalID = 0, motor
-		if _, err := s.Activity().Recommend(ctx, q); !errors.Is(err, errs.ErrNoRecommendation) {
-			t.Fatalf("goal filter: %v", err)
-		}
-
-		// An activity serving a preferred goal wins over never-done ones without it, even once done.
-		c, _ := s.Activity().Create(ctx, activity(motor, 2, 4, true))
-		if _, _, err := s.Completion().Create(ctx, domain.Completion{ChildID: child.ID, ActivityID: c.ID, CompletedOn: oct3}); err != nil {
-			t.Fatalf("Complete: %v", err)
-		}
-
-		q.GoalID, q.PreferGoalIDs = "", []string{motor}
-		if got, err := s.Activity().Recommend(ctx, q); err != nil || got.ID != c.ID {
-			t.Fatalf("preferred goal: %+v %v", got, err)
-		}
-
-		q.PreferGoalIDs = nil
-		if got, err := s.Activity().Recommend(ctx, q); err != nil || got.ID == c.ID {
-			t.Fatalf("no preference: %+v %v", got, err)
-		}
-	})
 }
 
 func TestChildRepo_GetForParent(t *testing.T) {

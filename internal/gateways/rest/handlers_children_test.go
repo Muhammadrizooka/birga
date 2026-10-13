@@ -10,7 +10,6 @@ import (
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
-	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 )
 
@@ -22,27 +21,24 @@ const (
 var bearer = map[string]string{authorizationHeader: "Bearer good"}
 
 type fakeChildActivities struct {
-	gotCreate    domain.Child
-	gotUpdate    domain.ChildUpdate
-	gotRestart   bool
-	gotRecommend activityrecommender.Request
-	gotRecord    completionrecorder.Request
-	gotList      domain.CompletionFilter
-	gotUserID    string
-	err          error
-}
-
-func (f *fakeChildActivities) Execute(_ context.Context, req activityrecommender.Request) (domain.Activity, error) {
-	f.gotRecommend = req
-
-	return domain.Activity{ID: testID}, f.err
+	gotCreate  domain.Child
+	gotUpdate  domain.ChildUpdate
+	gotRestart bool
+	gotRecord  completionrecorder.Request
+	gotList    domain.CompletionFilter
+	gotRange   [2]time.Time
+	gotUserID  string
+	todayDone  bool
+	err        error
 }
 
 func (f *fakeChildActivities) record(req completionrecorder.Request) (domain.Completion, error) {
 	f.gotRecord = req
 
+	day := 2
+
 	return domain.Completion{ID: testID, ChildID: req.ChildID, ActivityID: req.ActivityID,
-		CompletedOn: time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), Note: req.Note}, f.err
+		CompletedOn: time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), Note: req.Note, PlanDay: &day}, f.err
 }
 
 func (f *fakeChildActivities) list(userID string, fl domain.CompletionFilter) ([]domain.Completion, int, error) {
@@ -56,6 +52,15 @@ func (f *fakeChildActivities) streak(userID, childID string) (domain.Streak, err
 	last := time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC)
 
 	return domain.Streak{Current: 2, Longest: 5, CompletedToday: true, ThisWeek: 2, Total: 9, LastCompletedOn: &last}, f.err
+}
+
+func (f *fakeChildActivities) streakDays(userID, childID string, from, to time.Time) ([]domain.StreakDay, error) {
+	f.gotUserID, f.gotRange = userID, [2]time.Time{from, to}
+
+	return []domain.StreakDay{
+		{Day: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC), Status: domain.StreakDayMissed},
+		{Day: time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC), Status: domain.StreakDayDone},
+	}, f.err
 }
 
 func (f *fakeChildActivities) create(userID string, c domain.Child) (domain.Child, error) {
@@ -75,14 +80,22 @@ func (f *fakeChildActivities) plan(userID, childID string, restart bool) (domain
 	f.gotUserID, f.gotRestart = userID, restart
 	done := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
 
+	goal := testID
+	second := domain.PlanDayToday
+
+	if f.todayDone {
+		second = domain.PlanDayLocked
+	}
+
 	return domain.Plan{
+		ID:        "p1",
 		ChildID:   childID,
+		Number:    2,
 		StartedOn: done,
 		Days: []domain.PlanDay{
-			{PlanItem: domain.PlanItem{Theme: domain.PlanTheme{Day: 1, TitleUz: "Hisni top", Icon: "heart"}, Activity: domain.Activity{ID: testID}},
-				Status: domain.PlanDayDone, CompletedOn: &done},
-			{PlanItem: domain.PlanItem{Theme: domain.PlanTheme{Day: 2, TitleUz: "Meni tingla", Icon: "chat"}, Activity: domain.Activity{ID: testID}},
-				Status: domain.PlanDayToday},
+			{PlanItem: domain.PlanItem{Day: 1, GoalID: &goal, Activity: domain.Activity{ID: "a1"}, CompletedOn: &done},
+				Status: domain.PlanDayDone},
+			{PlanItem: domain.PlanItem{Day: 2, Activity: domain.Activity{ID: "a2"}}, Status: second},
 		},
 	}, f.err
 }
@@ -95,8 +108,12 @@ func (fn childUpdaterFunc) Execute(_ context.Context, userID, childID string, up
 
 type planGetterFunc func(string, string, bool) (domain.Plan, error)
 
-func (fn planGetterFunc) Execute(_ context.Context, userID, childID string, restart bool) (domain.Plan, error) {
-	return fn(userID, childID, restart)
+func (fn planGetterFunc) Execute(_ context.Context, userID, childID string) (domain.Plan, error) {
+	return fn(userID, childID, false)
+}
+
+func (fn planGetterFunc) Next(_ context.Context, userID, childID string) (domain.Plan, error) {
+	return fn(userID, childID, true)
 }
 
 type childCreatorFunc func(string, domain.Child) (domain.Child, error)
@@ -117,10 +134,14 @@ func (fn completionListerFunc) Execute(_ context.Context, userID string, f domai
 	return fn(userID, f)
 }
 
-type streakFunc func(string, string) (domain.Streak, error)
+type streakGetterFake struct{ f *fakeChildActivities }
 
-func (fn streakFunc) Execute(_ context.Context, userID, childID string) (domain.Streak, error) {
-	return fn(userID, childID)
+func (s streakGetterFake) Execute(_ context.Context, userID, childID string) (domain.Streak, error) {
+	return s.f.streak(userID, childID)
+}
+
+func (s streakGetterFake) Days(_ context.Context, userID, childID string, from, to time.Time) ([]domain.StreakDay, error) {
+	return s.f.streakDays(userID, childID, from, to)
 }
 
 func TestUserAuth(t *testing.T) {
@@ -140,29 +161,27 @@ func TestUserAuth(t *testing.T) {
 
 func TestRecommendActivity(t *testing.T) {
 	s, d := newTestServer("")
+	path := "/v1/children/" + testChildID + "/recommendation"
 
-	code, r := do(t, s, http.MethodGet, "/v1/children/"+testChildID+"/recommendation?goal_id="+testID+"&minutes=10", "", bearer)
-	if code != http.StatusOK {
+	code, r := do(t, s, http.MethodGet, path, "", bearer)
+	if data, _ := r.Data.(map[string]any); code != http.StatusOK || data["id"] != "a2" || d.kids.gotRestart {
 		t.Fatalf("got %d %+v", code, r)
-	}
-
-	want := activityrecommender.Request{UserID: testUserID, ChildID: testChildID, GoalID: testID, MaxMinutes: 10}
-	if d.kids.gotRecommend != want {
-		t.Fatalf("request = %+v, want %+v", d.kids.gotRecommend, want)
-	}
-
-	if code, _ := do(t, s, http.MethodGet, "/v1/children/"+testChildID+"/recommendation?minutes=ten", "", bearer); code != http.StatusBadRequest {
-		t.Fatalf("bad minutes: %d", code)
 	}
 
 	if code, _ := do(t, s, http.MethodGet, "/v1/children/nope/recommendation", "", bearer); code != http.StatusBadRequest {
 		t.Fatalf("bad child id: %d", code)
 	}
 
+	d.kids.todayDone = true
+
+	if code, r := do(t, s, http.MethodGet, path, "", bearer); code != http.StatusNotFound || r.ErrorNote != errs.ErrNoPlanDayToday.Error() {
+		t.Fatalf("nothing open today: %d %+v", code, r)
+	}
+
 	d.kids.err = errs.ErrNoRecommendation
 
-	if code, _ := do(t, s, http.MethodGet, "/v1/children/"+testChildID+"/recommendation", "", bearer); code != http.StatusNotFound {
-		t.Fatalf("no recommendation: %d", code)
+	if code, _ := do(t, s, http.MethodGet, path, "", bearer); code != http.StatusNotFound {
+		t.Fatalf("no activity: %d", code)
 	}
 }
 
@@ -180,8 +199,8 @@ func TestCompleteActivity(t *testing.T) {
 		t.Fatalf("request not mapped: %+v", got)
 	}
 
-	if data, _ := r.Data.(map[string]any); data["completed_on"] != "2026-10-03" {
-		t.Fatalf("completed_on = %v", data["completed_on"])
+	if data, _ := r.Data.(map[string]any); data["completed_on"] != "2026-10-03" || data["plan_day"] != float64(2) {
+		t.Fatalf("data = %v", data)
 	}
 
 	if code, _ := do(t, s, http.MethodPost, path, `{"activity_id":"x"}`, bearer); code != http.StatusUnprocessableEntity {
@@ -215,6 +234,25 @@ func TestListCompletionsAndStreak(t *testing.T) {
 		t.Fatalf("streak view: %+v", r.Data)
 	}
 
+	code, r = do(t, s, http.MethodGet, base+"/streak/days?from=2026-10-02&to=2026-10-03", "", bearer)
+	days, _ := r.Data.([]any)
+
+	if code != http.StatusOK || len(days) != 2 || !d.kids.gotRange[0].Equal(time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("streak days: %d %+v %v", code, r, d.kids.gotRange)
+	}
+
+	if first, _ := days[0].(map[string]any); first["day"] != "2026-10-02" || first["status"] != "missed" {
+		t.Fatalf("first day: %+v", first)
+	}
+
+	if code, _ := do(t, s, http.MethodGet, base+"/streak/days", "", bearer); code != http.StatusOK || !d.kids.gotRange[0].IsZero() {
+		t.Fatalf("default range: %d %v", code, d.kids.gotRange)
+	}
+
+	if code, _ := do(t, s, http.MethodGet, base+"/streak/days?from=yesterday", "", bearer); code != http.StatusUnprocessableEntity {
+		t.Fatalf("bad date: %d", code)
+	}
+
 	d.kids.err = errs.ErrChildNotFound
 
 	if code, _ := do(t, s, http.MethodGet, base+"/streak", "", bearer); code != http.StatusNotFound {
@@ -225,13 +263,14 @@ func TestListCompletionsAndStreak(t *testing.T) {
 func TestCreateChild(t *testing.T) {
 	s, d := newTestServer("")
 
-	code, r := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","age":4,"gender":"male"}`, bearer)
+	code, r := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","age":4,"gender":"male","goal_ids":["`+testID+`"]}`, bearer)
 	if code != http.StatusOK {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
-	want := domain.Child{Name: "Amir", Age: 4, Gender: domain.GenderMale}
-	if d.kids.gotUserID != testUserID || d.kids.gotCreate != want {
+	got := d.kids.gotCreate
+	if d.kids.gotUserID != testUserID || got.Name != "Amir" || got.Age != 4 || got.Gender != domain.GenderMale ||
+		len(got.GoalIDs) != 1 || got.GoalIDs[0] != testID {
 		t.Fatalf("user %q child %+v", d.kids.gotUserID, d.kids.gotCreate)
 	}
 
@@ -288,12 +327,13 @@ func TestAdminAuth_BearerToken(t *testing.T) {
 func TestUpdateChild(t *testing.T) {
 	s, d := newTestServer("")
 
-	code, r := do(t, s, http.MethodPatch, "/v1/children/"+testChildID, `{"age": 5, "photo_id": ""}`, bearer)
+	code, r := do(t, s, http.MethodPatch, "/v1/children/"+testChildID, `{"age": 5, "photo_id": "", "goal_ids": ["`+testID+`"]}`, bearer)
 	if code != http.StatusOK || d.kids.gotUserID != testUserID {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
-	if u := d.kids.gotUpdate; u.Age == nil || *u.Age != 5 || u.PhotoID == nil || *u.PhotoID != "" || u.Name != nil || u.Gender != nil {
+	if u := d.kids.gotUpdate; u.Age == nil || *u.Age != 5 || u.PhotoID == nil || *u.PhotoID != "" || u.Name != nil || u.Gender != nil ||
+		u.GoalIDs == nil || len(*u.GoalIDs) != 1 {
 		t.Fatalf("unexpected update: %+v", u)
 	}
 
@@ -334,7 +374,7 @@ func TestPlan(t *testing.T) {
 	first, _ := days[0].(map[string]any)
 	second, _ := days[1].(map[string]any)
 
-	if first["status"] != "done" || first["completed_on"] != "2026-10-10" || first["icon"] != "heart" ||
+	if data["number"] != float64(2) || first["status"] != "done" || first["completed_on"] != "2026-10-10" || first["goal_id"] != testID ||
 		second["status"] != "today" || second["completed_on"] != nil {
 		t.Fatalf("unexpected days: %+v", days)
 	}
@@ -347,5 +387,14 @@ func TestPlan(t *testing.T) {
 
 	if code, _ := do(t, s, http.MethodGet, "/v1/children/"+testChildID+"/plan", "", bearer); code != http.StatusNotFound {
 		t.Fatalf("empty catalogue: %d", code)
+	}
+}
+
+func TestPlan_NotDone(t *testing.T) {
+	s, d := newTestServer("")
+	d.kids.err = errs.ErrPlanNotDone
+
+	if code, r := do(t, s, http.MethodPost, "/v1/children/"+testChildID+"/plan", "", bearer); code != http.StatusConflict {
+		t.Fatalf("got %d %+v", code, r)
 	}
 }

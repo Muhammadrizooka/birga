@@ -10,7 +10,6 @@ import (
 
 	"gitlab.com/loyihalar/birga/backend/internal/config"
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
-	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger/ginlog"
@@ -86,10 +85,6 @@ type GoalUseCases struct {
 	Deleter goalDeleter
 }
 
-type activityRecommender interface {
-	Execute(ctx context.Context, req activityrecommender.Request) (domain.Activity, error)
-}
-
 type completionRecorder interface {
 	Execute(ctx context.Context, req completionrecorder.Request) (domain.Completion, error)
 }
@@ -100,6 +95,7 @@ type completionLister interface {
 
 type streakGetter interface {
 	Execute(ctx context.Context, userID, childID string) (domain.Streak, error)
+	Days(ctx context.Context, userID, childID string, from, to time.Time) ([]domain.StreakDay, error)
 }
 
 type childCreator interface {
@@ -115,19 +111,19 @@ type childUpdater interface {
 }
 
 type planGetter interface {
-	Execute(ctx context.Context, userID, childID string, restart bool) (domain.Plan, error)
+	Execute(ctx context.Context, userID, childID string) (domain.Plan, error)
+	Next(ctx context.Context, userID, childID string) (domain.Plan, error)
 }
 
 // ChildActivityUseCases groups the use cases behind the signed-in /v1/children endpoints.
 type ChildActivityUseCases struct {
-	Creator     childCreator
-	Getter      childGetter
-	Updater     childUpdater
-	Plan        planGetter
-	Recommender activityRecommender
-	Recorder    completionRecorder
-	Lister      completionLister
-	Streak      streakGetter
+	Creator  childCreator
+	Getter   childGetter
+	Updater  childUpdater
+	Plan     planGetter
+	Recorder completionRecorder
+	Lister   completionLister
+	Streak   streakGetter
 }
 
 type userCreator interface {
@@ -253,14 +249,13 @@ type Server struct {
 	goalUpdater goalUpdater
 	goalDeleter goalDeleter
 
-	childCreator        childCreator
-	childGetter         childGetter
-	childUpdater        childUpdater
-	planGetter          planGetter
-	activityRecommender activityRecommender
-	completionRecorder  completionRecorder
-	completionLister    completionLister
-	streakGetter        streakGetter
+	childCreator       childCreator
+	childGetter        childGetter
+	childUpdater       childUpdater
+	planGetter         planGetter
+	completionRecorder completionRecorder
+	completionLister   completionLister
+	streakGetter       streakGetter
 
 	userCreator userCreator
 	userLister  userLister
@@ -331,14 +326,13 @@ func New(cfg config.Application,
 		goalUpdater: goals.Updater,
 		goalDeleter: goals.Deleter,
 
-		childCreator:        childActivities.Creator,
-		childGetter:         childActivities.Getter,
-		childUpdater:        childActivities.Updater,
-		planGetter:          childActivities.Plan,
-		activityRecommender: childActivities.Recommender,
-		completionRecorder:  childActivities.Recorder,
-		completionLister:    childActivities.Lister,
-		streakGetter:        childActivities.Streak,
+		childCreator:       childActivities.Creator,
+		childGetter:        childActivities.Getter,
+		childUpdater:       childActivities.Updater,
+		planGetter:         childActivities.Plan,
+		completionRecorder: childActivities.Recorder,
+		completionLister:   childActivities.Lister,
+		streakGetter:       childActivities.Streak,
 
 		userCreator: users.Creator,
 		userLister:  users.Lister,

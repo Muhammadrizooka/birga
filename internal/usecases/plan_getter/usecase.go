@@ -3,6 +3,7 @@ package plangetter
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -16,101 +17,103 @@ type childRepo interface {
 	GetForParent(ctx context.Context, id, userID string) (domain.Child, error)
 }
 
-type userRepo interface {
-	Get(ctx context.Context, id string) (domain.User, error)
-}
-
 type planRepo interface {
-	Themes(ctx context.Context) ([]domain.PlanTheme, error)
 	LockChild(ctx context.Context, childID string) error
-	Items(ctx context.Context, childID string) ([]domain.PlanItem, []bool, time.Time, error)
+	Current(ctx context.Context, childID string) (domain.Plan, []domain.PlanItem, []bool, error)
+	Create(ctx context.Context, childID string, number int, startedOn time.Time, items []domain.PlanItem) (string, error)
 	Pick(ctx context.Context, p domain.PlanPick) (domain.Activity, error)
-	Replace(ctx context.Context, childID string, startedOn time.Time, items []domain.PlanItem) error
-	SetActivity(ctx context.Context, childID string, day int, activityID string) error
-	CompletionDays(ctx context.Context, childID string, since time.Time) (map[string][]time.Time, error)
+	SetActivity(ctx context.Context, planID string, day int, activityID string) error
+	DoneDays(ctx context.Context, childID string) ([]time.Time, int, time.Time, error)
 }
 
 type txRunner interface {
 	InTx(ctx context.Context, h func(context.Context) error) error
 }
 
-// UseCase returns a child's 7-day plan, making one the first time it is asked for.
+// UseCase returns a child's current 7-day plan and starts the next one.
 type UseCase struct {
 	l        logger.Logger
 	tx       txRunner
 	children childRepo
-	users    userRepo
 	plans    planRepo
 	now      func() time.Time
 }
 
 // New creates a new plan getter use case.
-func New(l logger.Logger, tx txRunner, children childRepo, users userRepo, plans planRepo) *UseCase {
-	return &UseCase{l: l, tx: tx, children: children, users: users, plans: plans, now: time.Now}
+func New(l logger.Logger, tx txRunner, children childRepo, plans planRepo) *UseCase {
+	return &UseCase{l: l, tx: tx, children: children, plans: plans, now: time.Now}
 }
 
-// Execute returns the child's plan with each day's status. With restart, or when the child has no
-// plan yet, a new plan starting today replaces the old one. A day not yet done whose activity was
-// unpublished or deleted since gets a new activity. Only the child's parents may ask
-// (errs.ErrChildNotFound otherwise); no activity for the child's age is errs.ErrNoRecommendation.
-func (uc *UseCase) Execute(ctx context.Context, userID, childID string, restart bool) (domain.Plan, error) {
+// Execute returns the child's current plan with each day's status, making the first plan when
+// the child has none yet. A day not yet done whose activity was unpublished or deleted since gets
+// a new activity. Only the child's parents may ask (errs.ErrChildNotFound otherwise); no activity
+// for the child's age is errs.ErrNoRecommendation.
+func (uc *UseCase) Execute(ctx context.Context, userID, childID string) (domain.Plan, error) {
+	return uc.run(ctx, userID, childID, false)
+}
+
+// Next starts the child's next plan, today, from the child's goals as they are now. The current
+// plan must be done (errs.ErrPlanNotDone otherwise); a child with no plan gets its first one.
+func (uc *UseCase) Next(ctx context.Context, userID, childID string) (domain.Plan, error) {
+	return uc.run(ctx, userID, childID, true)
+}
+
+// Start makes the first plan of a child that was just created, inside the caller's transaction.
+// When no activity fits the child's age yet, it makes none; the first Execute tries again.
+func (uc *UseCase) Start(ctx context.Context, child domain.Child) error {
+	_, _, err := uc.create(ctx, child, 1)
+	if errors.Is(err, errs.ErrNoRecommendation) {
+		logger.WithContext(uc.l, ctx).Warn("no activity for the first plan", zap.String("child_id", child.ID))
+
+		return nil
+	}
+
+	return err
+}
+
+func (uc *UseCase) run(ctx context.Context, userID, childID string, next bool) (domain.Plan, error) {
 	child, err := uc.children.GetForParent(ctx, childID, userID)
 	if err != nil {
 		return domain.Plan{}, err
 	}
 
-	user, err := uc.users.Get(ctx, userID)
-	if err != nil {
-		return domain.Plan{}, err
-	}
-
-	var (
-		today = domain.LocalDay(uc.now())
-		pick  = domain.PlanPick{
-			ChildID:       child.ID,
-			Age:           min(max(child.Age, domain.MinChildAge), domain.MaxChildAge),
-			PreferGoalIDs: user.GoalIDs,
-		}
-		plan = domain.Plan{ChildID: child.ID}
-	)
+	var plan domain.Plan
 
 	err = uc.tx.InTx(ctx, func(ctx context.Context) error {
 		if err := uc.plans.LockChild(ctx, child.ID); err != nil {
 			return err
 		}
 
-		items, usable, startedOn, err := uc.plans.Items(ctx, child.ID)
+		cur, items, usable, err := uc.plans.Current(ctx, child.ID)
 		if err != nil {
 			return err
 		}
 
-		if restart || len(items) == 0 {
-			if items, err = uc.build(ctx, pick); err != nil {
-				return err
-			}
-
-			startedOn, usable = today, nil
-
-			if err := uc.plans.Replace(ctx, child.ID, startedOn, items); err != nil {
-				return err
-			}
-
-			logger.WithContext(uc.l, ctx).Info("plan started", zap.String("child_id", child.ID), zap.Bool("restart", restart))
-		}
-
-		done, err := uc.plans.CompletionDays(ctx, child.ID, startedOn)
+		doneToday, err := uc.doneToday(ctx, child.ID)
 		if err != nil {
 			return err
 		}
 
-		days, _ := domain.BuildPlanDays(items, startedOn, today, done)
+		if cur.ID != "" && next {
+			if _, completed := domain.BuildPlanDays(items, doneToday); !completed {
+				return errs.ErrPlanNotDone
+			}
+		}
 
-		if items, err = uc.repair(ctx, pick, items, usable, days); err != nil {
+		if cur.ID == "" || next {
+			if cur, items, err = uc.create(ctx, child, cur.Number+1); err != nil {
+				return err
+			}
+
+			usable = nil
+		}
+
+		if items, err = uc.repair(ctx, child, cur, items, usable); err != nil {
 			return err
 		}
 
-		plan.StartedOn = startedOn
-		plan.Days, plan.Completed = domain.BuildPlanDays(items, startedOn, today, done)
+		plan = cur
+		plan.Days, plan.Completed = domain.BuildPlanDays(items, doneToday)
 
 		return nil
 	})
@@ -121,47 +124,66 @@ func (uc *UseCase) Execute(ctx context.Context, userID, childID string, restart 
 	return plan, nil
 }
 
-// build picks an activity for every theme, different ones while the catalogue allows.
-func (uc *UseCase) build(ctx context.Context, pick domain.PlanPick) ([]domain.PlanItem, error) {
-	themes, err := uc.plans.Themes(ctx)
+// doneToday reports whether a plan day of the child was done today: then no other day opens today.
+func (uc *UseCase) doneToday(ctx context.Context, childID string) (bool, error) {
+	days, _, _, err := uc.plans.DoneDays(ctx, childID)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 
-	items := make([]domain.PlanItem, 0, len(themes))
-	pick.ExcludeIDs = make([]string, 0, len(themes))
+	return len(days) > 0 && !days[0].Before(domain.LocalDay(uc.now())), nil
+}
 
-	for _, th := range themes {
-		a, err := uc.pick(ctx, pick, th)
+// create makes plan number n of the child, starting today: each day serves the next of the
+// child's goals in turn, with a different activity while the catalogue allows.
+func (uc *UseCase) create(ctx context.Context, child domain.Child, n int) (domain.Plan, []domain.PlanItem, error) {
+	var (
+		today = domain.LocalDay(uc.now())
+		pick  = newPick(child, n)
+		items = make([]domain.PlanItem, 0, domain.PlanLength)
+	)
+
+	for i, goalID := range domain.PlanGoals(child.GoalIDs, n) {
+		it := domain.PlanItem{Day: i + 1, GoalID: goalID}
+
+		a, err := uc.pick(ctx, pick, it)
 		if err != nil {
-			return nil, err
+			return domain.Plan{}, nil, err
 		}
 
-		items = append(items, domain.PlanItem{Theme: th, Activity: a})
+		it.Activity = a
+		items = append(items, it)
 		pick.ExcludeIDs = append(pick.ExcludeIDs, a.ID)
 	}
 
-	return items, nil
+	id, err := uc.plans.Create(ctx, child.ID, n, today, items)
+	if err != nil {
+		return domain.Plan{}, nil, err
+	}
+
+	logger.WithContext(uc.l, ctx).Info("plan started", zap.String("child_id", child.ID), zap.Int("number", n))
+
+	return domain.Plan{ID: id, ChildID: child.ID, Number: n, StartedOn: today}, items, nil
 }
 
 // repair gives a day that is not done yet a new activity when its own was unpublished or deleted.
-func (uc *UseCase) repair(ctx context.Context, pick domain.PlanPick, items []domain.PlanItem, usable []bool, days []domain.PlanDay) ([]domain.PlanItem, error) {
-	pick.ExcludeIDs = make([]string, 0, len(items))
+func (uc *UseCase) repair(ctx context.Context, child domain.Child, plan domain.Plan, items []domain.PlanItem, usable []bool) ([]domain.PlanItem, error) {
+	pick := newPick(child, plan.Number)
 	for _, it := range items {
 		pick.ExcludeIDs = append(pick.ExcludeIDs, it.Activity.ID)
 	}
 
 	for i := range usable {
-		if usable[i] || days[i].Status == domain.PlanDayDone {
+		if usable[i] || items[i].CompletedOn != nil {
 			continue
 		}
 
-		a, err := uc.pick(ctx, pick, items[i].Theme)
+		a, err := uc.pick(ctx, pick, items[i])
 		if err != nil {
 			return nil, err
 		}
 
-		if err := uc.plans.SetActivity(ctx, pick.ChildID, items[i].Theme.Day, a.ID); err != nil {
+		if err := uc.plans.SetActivity(ctx, plan.ID, items[i].Day, a.ID); err != nil {
 			return nil, err
 		}
 
@@ -172,10 +194,21 @@ func (uc *UseCase) repair(ctx context.Context, pick domain.PlanPick, items []dom
 	return items, nil
 }
 
-// pick chooses the activity for one theme, repeating an activity already in the plan only when
-// the catalogue for the child's age has nothing else.
-func (uc *UseCase) pick(ctx context.Context, pick domain.PlanPick, th domain.PlanTheme) (domain.Activity, error) {
-	pick.Day, pick.GoalID = th.Day, th.GoalID
+func newPick(child domain.Child, n int) domain.PlanPick {
+	return domain.PlanPick{
+		ChildID:      child.ID,
+		Age:          min(max(child.Age, domain.MinChildAge), domain.MaxChildAge),
+		ChildGoalIDs: child.GoalIDs,
+		ExcludeIDs:   make([]string, 0, domain.PlanLength),
+		Seed:         strconv.Itoa(n),
+	}
+}
+
+// pick chooses the activity for one day, repeating an activity already in the plan only when the
+// catalogue for the child's age has nothing else.
+func (uc *UseCase) pick(ctx context.Context, pick domain.PlanPick, it domain.PlanItem) (domain.Activity, error) {
+	pick.GoalID = it.GoalID
+	pick.Seed += "-" + strconv.Itoa(it.Day)
 
 	a, err := uc.plans.Pick(ctx, pick)
 	if errors.Is(err, errs.ErrNoRecommendation) && len(pick.ExcludeIDs) > 0 {

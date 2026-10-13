@@ -24,7 +24,7 @@ type UpdateGoalRequest struct {
 }
 
 // ListGoals godoc swagger
-// @Summary lists the goals a user can pick at sign-up
+// @Summary lists the goals a parent can pick for a child
 // @Description - open without a token; every active goal, oldest first, not paginated
 // @Tags goals
 // @Produce json
@@ -167,8 +167,8 @@ func (s *Server) UpdateGoal() gin.HandlerFunc {
 
 // DeleteGoal godoc swagger
 // @Summary soft-deletes a goal
-// @Description - sets deleted_at: the goal disappears from /v1/goals, sign-up refuses its id, and its
-// @Description   id is removed from every user's goal_ids; its names can be used again
+// @Description - sets deleted_at: the goal disappears from /v1/goals, children can no longer pick it,
+// @Description   and its id is removed from every child's and activity's goal_ids; its names can be used again
 // @Tags admin
 // @Security AdminKey
 // @Security BearerAuth

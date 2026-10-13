@@ -15,16 +15,22 @@ const (
 // 2 to 6 activity range so a profile stays valid as the child grows.
 const MaxChildProfileAge = 18
 
+// MaxChildGoals caps how many goals a child can have.
+const MaxChildGoals = 20
+
 // MaxChildNameLength caps a child's name, counted in characters.
 const MaxChildNameLength = 100
 
 // Child is a child profile. It belongs to one or more parents (users) through user_children.
 type Child struct {
-	ID        string
-	Name      string
-	Age       int
-	Gender    string
-	PhotoID   *string
+	ID      string
+	Name    string
+	Age     int
+	Gender  string
+	PhotoID *string
+	// GoalIDs are the goals the parent picked for this child; the child's plans rotate through
+	// them. Never nil when read from the database.
+	GoalIDs   []string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -35,11 +41,12 @@ type ChildUpdate struct {
 	Age     *int
 	Gender  *string
 	PhotoID *string
+	GoalIDs *[]string // replaces the whole list; it then affects the next plan, not the current one
 }
 
 // IsEmpty reports whether the update changes nothing.
 func (u ChildUpdate) IsEmpty() bool {
-	return u.Name == nil && u.Age == nil && u.Gender == nil && u.PhotoID == nil
+	return u.Name == nil && u.Age == nil && u.Gender == nil && u.PhotoID == nil && u.GoalIDs == nil
 }
 
 // ChildFilter narrows a child listing. A non-empty ParentID lists only that user's children.

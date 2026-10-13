@@ -27,8 +27,8 @@ Every response, success or failure, has the same shape:
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
 | -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification |
-| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, OTP expired or not requested, `reset_password` OTP for a number no user has |
-| -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
+| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
+| -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken`; starting the next plan before the current one is done |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
 | -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
 | -70 | 429 | rate limited | OTP requested again too soon, too many OTPs for a phone or a User-Agent, too many wrong OTP codes |
@@ -200,9 +200,10 @@ child's history and streak do not change. There is no undelete endpoint.
 
 ### Goals
 
-Development goals a user picks at sign-up (for example "Speech development"), named in Uzbek,
-Russian and English. Activities point at the goals they serve (`goal_ids`), and the
-[recommendation](#recommendation) prefers activities serving the caller's goals.
+Development goals a parent picks for each child (for example "Speech development"), named in
+Uzbek, Russian and English. A child has its own goals (`goal_ids` on the
+[child](#children-add-a-child-signed-in)), activities point at the goals they serve (`goal_ids`),
+and the child's [7-day plan](#children-7-day-plan-signed-in) rotates through the child's goals.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
@@ -212,8 +213,7 @@ Russian and English. Activities point at the goals they serve (`goal_ids`), and 
 | PATCH | `/v1/admin/goals/{id}` | admin | rename a goal |
 | DELETE | `/v1/admin/goals/{id}` | admin | soft-delete a goal |
 
-Reading is open without a token because the app shows the list on the sign-up screen, before
-the user has one. List response `data`: `{"items": [goal, ...], "total": 6}`; see
+Reading is open without a token, so the app can show the list before the user has one. List response `data`: `{"items": [goal, ...], "total": 6}`; see
 [Goal object](#goal-object).
 
 Create body:
@@ -232,8 +232,9 @@ Validation (`usecases/goal_creator`, `usecases/goal_updater`):
 
 PATCH takes the same fields, all optional; omitted or `null` fields are kept.
 
-Delete sets `deleted_at`: the goal leaves `/v1/goals`, sign-up refuses its id, and its id is
-removed from every user's and every activity's `goal_ids` in the same statement. Its names can be
+Delete sets `deleted_at`: the goal leaves `/v1/goals`, children can no longer pick it, and its id
+is removed from every child's and every activity's `goal_ids` in the same statement. Plan days
+that already serve it keep its id. Its names can be
 used again. An activity whose only goal is deleted keeps working but no longer matches any goal
 filter or preference until an admin gives it a new goal. A
 second delete is 404; there is no undelete.
@@ -332,7 +333,8 @@ its `user_children` link to the caller are written in one transaction, so the ca
 child's first parent and a child never exists without one.
 
 ```json
-{"name": "Amir", "age": 4, "gender": "male", "photo_id": null}
+{"name": "Amir", "age": 4, "gender": "male", "photo_id": null,
+ "goal_ids": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00", "8d0e6f1a-3b2c-4d5e-9f8a-7b6c5d4e3f2a"]}
 ```
 
 | Field | Rules |
@@ -341,15 +343,20 @@ child's first parent and a child never exists without one.
 | `age` | required, years, 0 to 18 (wider than the 2 to 6 activity range so the profile stays valid) |
 | `gender` | required, `male` or `female` (case-insensitive) |
 | `photo_id` | optional id from `POST /v1/media`; an unknown id is 422 |
+| `goal_ids` | required, 1 to 20 goal ids from [`GET /v1/goals`](#goals), the goals picked for this child; repeats are stored once; an id that is not an active goal is 422 `goals contains ids that are not active goals, ...` |
 
-Response `data` is the child: `id`, `name`, `age`, `gender`, `photo_id`, `created_at`,
-`updated_at`. Use `id` in the `/v1/children/{id}/...` endpoints below. Errors: 400 bad JSON,
+In the same transaction the child gets its first [7-day plan](#children-7-day-plan-signed-in),
+made from its goals and age (when no published activity fits the age yet, the plan is made on
+the first `GET .../plan` instead).
+
+Response `data` is the child: `id`, `name`, `age`, `gender`, `photo_id`, `goal_ids`,
+`created_at`, `updated_at`. Use `id` in the `/v1/children/{id}/...` endpoints below. Errors: 400 bad JSON,
 401 no or invalid token, 422 a rule above.
 
 ```bash
 curl -X POST localhost:8080/v1/children \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Amir","age":4,"gender":"male"}'
+  -d '{"name":"Amir","age":4,"gender":"male","goal_ids":["'$GOAL'"]}'
 ```
 
 `GET /v1/me/children` lists the caller's children and `GET /v1/children/{id}` returns one
@@ -363,7 +370,8 @@ second parent.
 | PATCH | `/v1/children/{id}` | change some fields of one of the caller's children |
 
 Needs [user authentication](#user-authentication); any role. Body: any of `name`, `age`,
-`gender`, `photo_id`. Omitted or `null` fields are kept; `""` clears `photo_id`. The given fields
+`gender`, `photo_id`, `goal_ids`. Omitted or `null` fields are kept; `""` clears `photo_id`;
+`goal_ids` replaces the child's goals (1 to 20 active goal ids, 422 otherwise). The given fields
 follow the [add-child rules](#children-add-a-child-signed-in) (`usecases/child_updater`): `name`
 1 to 100 characters after trimming, `age` 0 to 18, `gender` `male` or `female`
 (case-insensitive), `photo_id` an id from `POST /v1/media` (unknown: 422). An empty body is 422
@@ -378,50 +386,35 @@ curl -X PATCH localhost:8080/v1/children/$CHILD \
   -d '{"name":"Amirjon","age":5}'
 ```
 
-A changed age applies to the next recommendation; a plan already made keeps its activities.
+A changed age or changed goals apply to the child's next plan; the current plan keeps its days.
 
-### Children: recommendation, completions, streak (signed in)
+### Children: today's activity, completions, streak (signed in)
 
 All of these need [user authentication](#user-authentication) and a child linked to the
-caller. Days are calendar days in Uzbekistan time (UTC+5, `domain.Location`).
+caller. Days are calendar days in Uzbekistan time (UTC+5, `domain.Location`). Everything is per
+child: a parent with three children has three plans and three streaks.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/v1/children/{id}/recommendation` | today's activity for the child |
+| GET | `/v1/children/{id}/recommendation` | today's plan activity for the child |
 | POST | `/v1/children/{id}/completions` | mark an activity done today, with an optional reflection note |
 | GET | `/v1/children/{id}/completions` | the child's completions, newest first (paged) |
 | GET | `/v1/children/{id}/streak` | streak and progress counters |
+| GET | `/v1/children/{id}/streak/days` | the streak calendar: done and missed days |
 
 #### Recommendation
 
-Query parameters, both optional:
-
-| Param | Type | Rules |
-|---|---|---|
-| `goal_id` | UUID string | only activities serving this goal (from [`GET /v1/goals`](#goals)); 422 if not a UUID |
-| `minutes` | int | time available; keeps activities with `duration_minutes <= minutes`; 400 if not an integer, 422 if negative |
-
-Rules (`activityRepo.Recommend`), all in one query:
-
-1. Candidates are published, non-deleted activities whose age range contains the child's age.
-   The age is clamped to 2..6 first, so a 1-year-old gets 2-year activities and a 7-year-old
-   gets 6-year ones.
-2. Without `goal_id`, activities serving at least one of the goals the caller picked at sign-up
-   (`users.goal_ids`) come first. A caller with no goals gets no preference. With two parents,
-   each sees the pick for their own goals.
-3. Within that, activities the child has never completed come first, then the one completed
-   longest ago. A preferred-goal activity done yesterday still beats a never-done one outside
-   the caller's goals, so a small catalogue cycles through the caller's goals.
-4. Ties are broken by `md5(activity id || child id || date)`, so the pick stays the same all
-   day, changes the next day, and differs between children. Completing it moves it to the
-   back, so asking again after a completion suggests the next activity.
-
-No candidate: 404, `no published activity matches this child's age and the filters`.
+The activity of the [plan](#children-7-day-plan-signed-in) day that is open today (`status`
+`today`); the call makes the child's first plan if it has none. It takes no query parameters.
 Response: an [activity object](#activity-object).
 
+- 404 `no plan day is open today: ...` (error code -30) when today's plan day is already done
+  (the next one opens tomorrow) or the plan is done (start the next one with
+  `POST /v1/children/{id}/plan`).
+- 404 `no published activity matches this child's age and the filters` when no activity fits.
+
 ```bash
-curl -H "Authorization: Bearer $TOKEN" \
-  'localhost:8080/v1/children/'$CHILD'/recommendation?minutes=10'
+curl -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/recommendation
 ```
 
 #### Complete
@@ -435,8 +428,12 @@ curl -H "Authorization: Bearer $TOKEN" \
   characters (422).
 - The completion is for today. Sending the same activity again on the same day returns the
   existing completion, replacing its note when a new one is sent; it is never counted twice.
+- When the activity is the child's plan day open today, that day is marked done and counts
+  toward the child's streak; `plan_day` in the response names the day (1 to 7). Any other
+  activity (from the catalogue, or a later plan day ahead of time) only goes into the history:
+  `plan_day` is `null`.
 
-Response: a [completion object](#completion-object).
+Response: a [completion object](#completion-object) with `plan_day`.
 
 #### Streak
 
@@ -448,85 +445,117 @@ Response:
 
 | Field | Meaning |
 |---|---|
-| `current` | consecutive days with at least one completion, ending today; while today has none yet it ends yesterday, so the streak is only lost after a whole day is missed |
-| `longest` | the longest such run ever |
-| `completed_today` | at least one completion today |
-| `this_week` | days with a completion since Monday (the concept favours weekly goals of 2 to 5 activities over daily perfection) |
-| `total` | all completions |
-| `last_completed_on` | date of the latest completion, `null` before the first |
+Only the child's plan counts: a day is a streak day when one of the child's plan days was done
+on it ([Complete](#complete) with `plan_day` set). Other completions stay in the history but do
+not keep the streak. Each child has its own streak, shared by all its parents.
 
-Pausing or repairing a streak is not built yet.
+| Field | Meaning |
+|---|---|
+| `current` | consecutive streak days ending today; while today has none yet it ends yesterday, so the streak is only lost after a whole day is missed |
+| `longest` | the longest such run ever |
+| `completed_today` | a plan day was done today |
+| `this_week` | streak days since Monday |
+| `total` | plan days done, over all the child's plans |
+| `last_completed_on` | the latest streak day, `null` before the first |
+
+#### Streak days
+
+`GET /v1/children/{id}/streak/days?from=2026-10-01&to=2026-10-13`: the calendar for the
+Streaks page, one entry per day, oldest first.
+
+```json
+[{"day": "2026-10-11", "status": "done"}, {"day": "2026-10-12", "status": "missed"},
+ {"day": "2026-10-13", "status": "today"}]
+```
+
+| `status` | Meaning |
+|---|---|
+| `done` | a plan day was done that day |
+| `missed` | no plan day was done that day; it reset the streak. Days between finishing a plan and starting the next also count as missed when nothing is done |
+| `today` | today, nothing done yet: not missed until the day is over |
+
+`from` and `to` are optional dates (`YYYY-MM-DD`), both inclusive. Without them the range is the
+last 28 days up to today; without `from`, the 28 days up to `to`. Days before the child's first
+plan started and days after today are left out, so a child without a plan gets `[]`. A range
+over 366 days or `from` after `to` is 422; a date that does not parse is 422.
 
 ### Children: 7-day plan (signed in)
 
-The app's "Reja" tab (Figma section 7): seven day themes, one activity for each, done one day
-at a time. Needs [user authentication](#user-authentication) and a child linked to the caller.
+The app's "Reja" tab: seven activities, one per day, built from the child's goals. Needs
+[user authentication](#user-authentication) and a child linked to the caller. Each child has its
+own plans; the latest one is the current plan.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/v1/children/{id}/plan` | the child's current plan; the first call makes it |
-| POST | `/v1/children/{id}/plan` | start a new plan from today, replacing the current one (no body) |
+| GET | `/v1/children/{id}/plan` | the child's current plan (made when the child was added, or on the first call) |
+| POST | `/v1/children/{id}/plan` | start the next plan, after the current one is done (no body) |
 
-**Making a plan** (`usecases/plan_getter`, `planRepo.Pick`). The seven themes are the rows of
-[`plan_themes`](data-model.md#plan_themes), the same for every child. For each theme in day order
-the plan takes one published activity whose age range contains the child's age (clamped to
-2..6), not yet used in this plan, ordered by:
+**Making a plan** (`usecases/plan_getter`, `planRepo.Pick`). Plan number *n* gives its seven days
+the child's goals in turn, starting one goal further with each plan: with goals A, B, C plan 1 is
+A B C A B C A, plan 2 is B C A B C A B, so no goal always gets the extra day. A child with one goal
+gets it every day; a child whose goals were all deleted gets days with no goal. For each day the
+plan takes one published activity whose age range contains the child's age (clamped to 2..6),
+not yet used in this plan, ordered by:
 
-1. serving the theme's goal (`goal_id`, when set);
-2. serving one of the goals the caller picked at sign-up;
+1. serving the day's goal;
+2. serving more of the child's goals;
 3. never done by the child, then done longest ago;
-4. a tie-break by `md5(activity id || child id || day)`.
+4. a tie-break by `md5(activity id || child id || plan number and day)`.
 
 When the catalogue for the age has fewer than seven activities, later days repeat earlier
 activities. No published activity for the age at all: 404 `no published activity matches this
-child's age and the filters`. The plan is stored (`child_plan_days`) and stays the same on later
-calls; `started_on` is the day it was made. Two parents asking at once get the same plan (the
-child row is locked while it is made). If a day that is not done yet points at an activity
-unpublished or deleted since, that day gets a new activity on the next read.
+child's age and the filters`. The plan is stored (`child_plans`, `child_plan_days`) and stays
+the same; changing the child's goals or age only affects the next plan. Two parents asking at
+once get the same plan (the child row is locked while it is made). If a day that is not done
+yet points at an activity unpublished or deleted since, that day gets a new activity on the next
+read.
 
-**Progress** is read from the child's [completions](#complete); there is no separate "done"
-call. Complete a day with `POST /v1/children/{id}/completions` and the day's `activity.id`.
-Days are done in order, one per calendar day (Uzbekistan time): day N counts as done by the
-first completion of its activity on a day after day N-1 was done (day 1: on or after
-`started_on`). So:
+**Progress.** Complete a day with `POST /v1/children/{id}/completions` and the day's
+`activity.id`; the response's `plan_day` confirms it counted. Days are done in order, at most one
+plan day per calendar day (Uzbekistan time), counting all the child's plans:
 
 | `status` | Meaning |
 |---|---|
 | `done` | done; `completed_on` is the day |
 | `today` | the next day to do, open now |
-| `locked` | a later day, or the next day while the previous one was done today (it opens tomorrow) |
+| `locked` | a later day, or the next day while a plan day was already done today (it opens tomorrow) |
 
-Completing a later day's activity early, or two days' activities on one day, does not skip
-ahead. `completed` is `true` once all seven days are done; then `POST` starts the next plan.
-Completions stay in the history and the streak whatever happens to the plan.
+**A missed day pauses the plan**: the open day stays open, however many days pass, until it is
+done, so no day is skipped and a plan can take more than seven calendar days (the missed days
+still break the [streak](#streak)). Completing a later day's activity early does not skip ahead.
+
+**The next plan.** `completed` is `true` once all seven days are done. Then `POST` starts plan
+`number + 1` today, from the child's goals as they are at that moment (change them first with
+[`PATCH /v1/children/{id}`](#children-edit-a-child-signed-in) if wanted). When the last day was
+done today, day 1 of the new plan opens tomorrow. `POST` before the plan is done is 409
+`the current plan is not done yet, ...` (error code -40).
 
 Response `data`:
 
 ```json
 {
+  "id": "8c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
   "child_id": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
+  "number": 1,
   "started_on": "2026-10-11",
   "completed": false,
   "days": [
-    {"day": 1, "title_uz": "Hisni top", "title_ru": "Угадай эмоцию", "icon": "heart",
-     "goal_id": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00", "status": "done", "completed_on": "2026-10-11",
+    {"day": 1, "goal_id": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00", "status": "done", "completed_on": "2026-10-11",
      "activity": {"id": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11", "title_uz": "Sharni puflaymiz", "...": "..."}},
-    {"day": 2, "title_uz": "Meni tingla", "title_ru": "Послушай меня", "icon": "chat",
-     "goal_id": null, "status": "today", "completed_on": null, "activity": {"...": "..."}}
+    {"day": 2, "goal_id": "8d0e6f1a-3b2c-4d5e-9f8a-7b6c5d4e3f2a", "status": "today", "completed_on": null,
+     "activity": {"...": "..."}}
   ]
 }
 ```
 
-`days` always has seven entries in day order. `title_uz`/`title_ru` are the theme names without
-the "1-kun:" / "День 1:" prefix. `icon` is one of `heart`, `chat`, `blocks`, `gift`, `sparkle`,
-`bulb`, `star`. `activity` is an [activity object](#activity-object).
+`days` always has seven entries in day order. `goal_id` is the child's goal the day serves (show
+its name from [`GET /v1/goals`](#goals)); `null` when the child had no goals. `activity` is an
+[activity object](#activity-object).
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
 curl -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
 ```
-
-The themes have no admin endpoint yet; change them in the database.
 
 ### OTP (public)
 
@@ -675,7 +704,6 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
   "password": "s3cret-pass",
   "phone_number": "+998901234567",
   "relationship": "mother",
-  "goals": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"],
   "agreed_on_conditions": true
 }
 ```
@@ -687,10 +715,10 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
 | `password` | 8 to 72 bytes (bcrypt reads at most 72); stored only as a bcrypt hash |
 | `phone_number` | Uzbek number, `+998` and 9 digits; not verified |
 | `relationship` | required: `father`, `mother`, `educator` or `nanny` (trimmed, case-insensitive) |
-| `goals` | optional, up to 20 goal ids from [`GET /v1/goals`](#goals); repeats are stored once; every id must be an active goal |
 | `agreed_on_conditions` | optional boolean, the consent tick on the sign-up screen; stored in `users.agreed_on_conditions`, omitted means `false`. Sign-up does not refuse `false` yet; the app should only let the user continue once it is ticked |
 
-Any other field (for example an old client's `user_role` or `photo_id`) is ignored.
+Goals are not part of sign-up: they belong to each child ([add a child](#children-add-a-child-signed-in)).
+Any other field (for example an old client's `user_role`, `photo_id` or `goals`) is ignored.
 
 Response `data`:
 
@@ -705,10 +733,9 @@ Behaviour (`usecases/user_signup`):
 | Result | HTTP | error_code | error_note |
 |---|---:|---:|---|
 | invalid field | 422 | -10 | which field and why |
-| a `goals` id that is not an active goal | 422 | -10 | `goals contains ids that are not active goals, ...` |
 | username or phone number belongs to an active user | 409 | -40 | `username is already taken` / `phone number is already taken` |
 
-- The `users` row (name, username, phone, relationship, `goal_ids`; `photo_id` NULL) and the `user_auth` row (username,
+- The `users` row (name, username, phone, relationship; `photo_id` NULL) and the `user_auth` row (username,
   bcrypt password, role `unverified_user`, SHA-256 hashes of both tokens) are written in one transaction.
 - The access and refresh tokens carry `role: unverified_user`. That role may use `/v1/me...`,
   `POST /v1/children` and `/v1/children/{id}...` like `user`; nothing promotes it yet.
@@ -935,7 +962,6 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `phone_number` | string or `null` | E.164; always set for users created through the API |
 | `photo_id` | UUID string or `null` | profile photo, a media id from `POST /v1/media` |
 | `relationship` | string or `null` | `father`, `mother`, `educator` or `nanny`; `null` for users created before sign-up asked for it, or by an admin |
-| `goal_ids` | array of UUID strings | goals picked at sign-up, always an array (may be empty); see [Goals](#goals) |
 | `agreed_on_conditions` | bool | consent given at sign-up (or later through `PATCH /v1/me`); `false` for older users and users created by an admin |
 | `reminder_enabled` | bool | daily reminder on or off, `false` by default |
 | `reminder_time` | string | daily reminder time, `HH:MM` in Uzbekistan time, `"18:00"` by default |
@@ -979,3 +1005,4 @@ Soft-deleted activities are never returned, so `deleted_at` is not part of the o
 | `completed_on` | date `YYYY-MM-DD` | day in Uzbekistan time |
 | `note` | string or `null` | caregiver's reflection |
 | `created_at` | RFC 3339 timestamp | first time it was marked that day |
+| `plan_day` | int or `null` | only in the `POST .../completions` response: the plan day (1 to 7) this completion did, `null` when it did not count for the plan |

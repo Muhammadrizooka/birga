@@ -38,10 +38,10 @@ Indexes:
 
 - primary key on `id`
 - `activities_published_goal_ids_idx`, GIN on `(goal_ids) WHERE is_published AND deleted_at IS NULL`,
-  for the goal filter and the goal preference of the recommendation (`000011`; it replaces
+  for the goal filter and the goal preference of the plan (`000011`; it replaces
   `activities_published_goal_idx` on the old `goal` column)
 
-Like `users.goal_ids`, `goal_ids` cannot carry a foreign key. The admin API requires 1 to 5
+Like `children.goal_ids`, `goal_ids` cannot carry a foreign key. The admin API requires 1 to 5
 active goal ids (`domain.MaxActivityGoals`, checked with `goalRepo.CountActive`), and deleting a
 goal removes its id from every activity (see [`goals`](#goals)). The application additionally
 caps `duration_minutes` at 60, which the database does not enforce.
@@ -85,7 +85,6 @@ setting `deleted_at`.
 | `phone_number` | `VARCHAR(15)` | yes | | E.164 length limit; unique among non-deleted users |
 | `photo_id` | `UUID` | yes | | id of the profile photo, references `media(id)` `ON DELETE SET NULL` (constraint `users_photo_id_fkey`, added by `000003_create_media_table`); NULL after sign-up, set through `PATCH /v1/me` |
 | `relationship` | `user_relationship` | yes | | enum `father`, `mother`, `educator`, `nanny` (added by `000010_add_relationship_and_goals`); required by sign-up, NULL for older users and users created by an admin |
-| `goal_ids` | `UUID[]` | no | `'{}'` | ids of `goals` the user picked at sign-up (added by `000010_add_relationship_and_goals`); no foreign key, see [`goals`](#goals) |
 | `agreed_on_conditions` | `BOOLEAN` | no | `FALSE` | consent to the terms, the tick on the sign-up screen (added by `000012_add_user_consent_and_reminder`); FALSE for older users and users created by an admin |
 | `reminder_enabled` | `BOOLEAN` | no | `FALSE` | daily reminder on or off (`000012`) |
 | `reminder_time` | `VARCHAR(5)` | no | `'18:00'` | daily reminder time, `HH:MM` 24-hour, Uzbekistan time (`000012`); check `users_reminder_time_chk` |
@@ -110,9 +109,9 @@ rows with `deleted_at IS NULL` and maps violations of `users_username_uniq` and
 
 ### `goals`
 
-Development goals a user picks at sign-up, named in three languages. Created by
+Development goals a parent picks for each child, named in three languages. Created by
 `000010_add_relationship_and_goals`. Rows are soft-deleted by setting `deleted_at`. Activities
-point at goals through `activities.goal_ids`.
+point at goals through `activities.goal_ids`, children through `children.goal_ids`.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -129,13 +128,18 @@ Indexes: `goals_name_uz_uniq`, `goals_name_ru_uniq`, `goals_name_en_uniq`, uniqu
 ignoring case; deleting a goal frees its names. `internal/dbstore/goal.go` maps a violation to
 409 (`errs.ErrGoalNameTaken`).
 
-`users.goal_ids` and `activities.goal_ids` point at goals, but Postgres cannot put a foreign key
-on array elements, so:
+`children.goal_ids` and `activities.goal_ids` point at goals, but Postgres cannot put a foreign
+key on array elements, so:
 
-- sign-up and the activity admin endpoints check that every id is an active goal
-  (`goalRepo.CountActive`) before writing;
-- `goalRepo.Delete` soft-deletes the goal and removes its id from every `users.goal_ids` and
+- the child endpoints (add, edit) and the activity admin endpoints check that every id is an
+  active goal (`goalRepo.CountActive`) before writing;
+- `goalRepo.Delete` soft-deletes the goal and removes its id from every `children.goal_ids` and
   `activities.goal_ids` (`array_remove`) in one statement, so nothing keeps a deleted goal.
+  `child_plan_days.goal_id` keeps it: a plan already made does not change.
+
+Until `000014_child_goals_and_plans` the goals were the parent's (`users.goal_ids`, picked at
+sign-up). That migration copied each child's first parent's goals to the child and dropped the
+column.
 
 Repository (`store.Goal()`): `Create`, `Get`, `List` (all active, oldest first), `CountActive`,
 `Update` (partial), `Delete` (soft, see above).
@@ -213,6 +217,7 @@ Child profiles. Created by `000006_create_children_tables`. Rows are soft-delete
 | `age` | `SMALLINT` | no | | age in years, as entered; not advanced automatically |
 | `gender` | `TEXT` | no | | `male` or `female` |
 | `photo_id` | `UUID` | yes | | references `media(id)` `ON DELETE SET NULL` (constraint `children_photo_id_fkey`), same as `users.photo_id` |
+| `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) picked for this child, in the order given (added by `000014_child_goals_and_plans`); no foreign key. The API requires 1 to 20 (`domain.MaxChildGoals`); empty only for a child whose goals were all deleted |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |
@@ -298,52 +303,58 @@ Indexes:
 - `activity_completions_child_day_idx` on `(child_id, completed_on DESC)`, for the streak and
   the history list
 
-Repository (`store.Completion()`): `Create` (returns whether a new row was inserted), `List`
-(one child, paged, newest day first) and `Days` (distinct days with a completion, newest
-first, plus the total count). The streak itself is computed in Go by `domain.ComputeStreak`.
+Repository (`store.Completion()`): `Create` (returns whether a new row was inserted) and `List`
+(one child, paged, newest day first). A completion is history; only the plan days it marks done
+(`child_plan_days.completed_on`) count toward the streak.
 
 `childRepo.GetForParent(id, userID)` returns a child only when it is active and linked to that
 user; every per-child use case calls it first.
 
-### `plan_themes`
+### `child_plans`
 
-The seven day themes of the 7-day plan, the same for every child. Created by
-`000013_create_plans`, which also inserts the seven themes of Figma section 7 (reference data the
-API needs, like the goals created by `000011`). There is no admin API for them yet.
+One row per 7-day plan of a child. Created by `000014_child_goals_and_plans`, which also dropped
+the fixed-theme plan of `000013_create_plans` (`plan_themes` and its `child_plan_days`); those
+plans were not carried over, every child gets a new plan the next time it is asked for.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
-| `day` | `SMALLINT` | no | | primary key, 1 to 7 (`plan_themes_day_chk`) |
-| `title_uz`, `title_ru` | `TEXT` | no | | theme name, e.g. `Hisni top` / `Угадай эмоцию` |
-| `icon` | `TEXT` | no | | icon key for the app: `heart`, `chat`, `blocks`, `gift`, `sparkle`, `bulb`, `star` |
-| `goal_id` | `UUID` | yes | | goal the day's activity should serve; NULL for any. No foreign key, like `users.goal_ids` |
-| `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+| `id` | `UUID` | no | `gen_random_uuid()` | primary key |
+| `child_id` | `UUID` | no | | references `children(id)` `ON DELETE CASCADE` |
+| `number` | `INT` | no | | the child's plans counted from 1 (`child_plans_number_chk`); the highest is the current plan |
+| `started_on` | `DATE` | no | | local day (Uzbekistan) the plan was made |
+| `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 
-The migration looks the goals up by English name (Emotions, Language, Motor skills, Social
-skills, Thinking, Emotions for days 1, 2, 3, 4, 6, 7; day 5 has none). On a database without goals
-yet they stay NULL; `seeds/activities.sql` fills them in after creating the starter goals.
-Deleting a goal does not clear `goal_id`; the theme then simply matches no activity first.
+Unique `(child_id, number)` (`child_plans_child_number_uniq`). Plans are never deleted, so the
+done days of earlier plans keep counting in the streak.
 
 ### `child_plan_days`
 
-The activity picked for each day of a child's current plan. Created by `000013_create_plans`.
-Starting a new plan deletes the child's rows and inserts seven new ones.
+The seven days of a plan. Created by `000014_child_goals_and_plans`.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
-| `child_id` | `UUID` | no | | references `children(id)` `ON DELETE CASCADE` |
-| `day` | `SMALLINT` | no | | references `plan_themes(day)` |
+| `plan_id` | `UUID` | no | | references `child_plans(id)` `ON DELETE CASCADE` |
+| `day` | `SMALLINT` | no | | 1 to 7 (`child_plan_days_day_chk`) |
+| `goal_id` | `UUID` | yes | | the child's goal the day serves; NULL when the child had no goals. No foreign key, kept when the goal is deleted |
 | `activity_id` | `UUID` | no | | references `activities(id)` `ON DELETE CASCADE` (only manual hard deletes) |
-| `started_on` | `DATE` | no | | local day (Uzbekistan) the plan was made; the same on all of a child's rows |
+| `completed_on` | `DATE` | yes | | local day the day was done as part of the plan; NULL while not done |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 
-Primary key `(child_id, day)`. Progress is not stored here: the API derives each day's status
-from `activity_completions` (see [api.md](api.md#children-7-day-plan-signed-in) and
-`domain.BuildPlanDays`).
+Primary key `(plan_id, day)`; partial index `child_plan_days_done_idx` on
+`(plan_id, completed_on) WHERE completed_on IS NOT NULL` for the streak.
 
-Repository (`store.Plan()`): `Themes`, `LockChild` (`SELECT ... FOR UPDATE` on the child, so
-a plan is made once), `Items` (the plan with each day's activity and whether it is still
-published), `Pick`, `Replace`, `SetActivity` and `CompletionDays`.
+Rules kept by the application (`planRepo.MarkDone`, called by `POST .../completions` in the same
+transaction as the completion, with the child row locked): only the first undone day of the
+child's latest plan can be marked, only with that day's activity, and only when no plan day of
+the child has `completed_on` on that day or later, so at most one plan day per calendar day. The
+streak and the streak calendar are the distinct `completed_on` days of all the child's plans
+(`domain.ComputeStreak`, `domain.StreakDays`). See
+[api.md](api.md#children-7-day-plan-signed-in) for the statuses (`domain.BuildPlanDays`).
+
+Repository (`store.Plan()`): `LockChild` (`SELECT ... FOR UPDATE` on the child, so a plan is made
+once), `Current` (the latest plan with each day and whether its activity is still published),
+`Create`, `Pick`, `SetActivity`, `MarkDone` and `DoneDays` (done days newest first, their count
+and the first plan's start).
 
 ## Conventions
 
