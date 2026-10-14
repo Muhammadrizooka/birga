@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Redacted report for the Server diagnostics workflow (public logs: no secret values).
+# Env: GREP (log filter), SINCE (journalctl --since).
+set -uo pipefail
+mask() { sed -E 's/[0-9]{9,}/<digits>/g; s/(Bearer|token|password|secret)[^ ,"]*[ :="]+[^ ,"]+/\1 <hidden>/Ig'; }
+
+echo "== services"
+systemctl is-active birga-backend postgresql redis-server nginx loki alloy grafana-server 2>&1 | paste -sd' '
+
+echo "== backend settings (set or empty, values hidden)"
+for k in ENVIRONMENT S3_BUCKET S3_REGION S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_ENDPOINT S3_PUBLIC_BASE_URL MEDIA_MAX_SIZE SMS_PROVIDER; do
+	v="$(grep -E "^${k}=" /etc/birga/backend.env | head -1 | cut -d= -f2-)"
+	case "$k" in
+	ENVIRONMENT | S3_BUCKET | S3_REGION | MEDIA_MAX_SIZE | SMS_PROVIDER) echo "$k=${v:-<empty>}" ;;
+	*) [[ -n "$v" ]] && echo "$k=<set>" || echo "$k=<empty>" ;;
+	esac
+done
+
+echo "== nginx client_max_body_size"
+grep -rh client_max_body_size /etc/nginx/sites-enabled/ | sort | uniq -c
+
+echo "== API log lines matching '$GREP' since $SINCE (last 60)"
+journalctl -u birga-backend --since "$SINCE" -o cat --no-pager | grep -i -- "$GREP" | tail -60 | mask
+
+echo "== API errors since $SINCE (last 30)"
+journalctl -u birga-backend --since "$SINCE" -o cat --no-pager | grep -E '"level":"(error|warn)"' | tail -30 | mask
+
+echo "== nginx requests matching '$GREP' (last 40; IPs masked)"
+grep -ih -- "$GREP" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev/null | tail -40 |
+	sed -E 's/^[0-9a-f.:]+ /<ip> /' | mask
+
+echo "== nginx errors (last 20)"
+tail -20 /var/log/nginx/error.log 2>/dev/null | sed -E 's/client: [0-9a-f.:]+/client: <ip>/' | mask

@@ -1,0 +1,43 @@
+# Prints a redacted health report from the server: service states, which settings are set
+# (never their values), and recent log lines for one topic. Run by hand from the Actions tab.
+# This repository is public, so the output must never contain secrets: values from the env
+# file are reported only as set/empty, and long digit runs (phone numbers) are masked.
+name: Server diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      grep:
+        description: Text to look for in the API and nginx logs (e.g. media)
+        required: true
+        default: media
+      since:
+        description: How far back to look (journalctl --since)
+        required: true
+        default: 24 hours ago
+
+permissions:
+  contents: read
+
+env:
+  # Keep in step with ci.yml.
+  SERVER_HOST_FINGERPRINT: SHA256:csj1yo18RrSUarQgIyREK2LFijzjzrN7c5UZt3yPP4M
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.SERVER_HOST }}
+      SSH_USER: ${{ secrets.SERVER_USER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Connect to the server
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: deploy/ci/ssh-setup.sh
+      - name: Report
+        env:
+          GREP: ${{ inputs.grep }}
+          SINCE: ${{ inputs.since }}
+        run: |
+          ssh "$SSH_USER@$SSH_HOST" "GREP=$(printf %q "$GREP") SINCE=$(printf %q "$SINCE") bash -s" < deploy/server/diagnostics.sh
