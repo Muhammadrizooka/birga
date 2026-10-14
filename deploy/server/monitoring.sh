@@ -15,8 +15,8 @@ if [[ ! -f /etc/apt/keyrings/grafana.gpg ]]; then
 fi
 echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" \
 	>/etc/apt/sources.list.d/grafana.list
-apt-get update -q
-apt-get install -y -q grafana loki alloy
+apt-get -o DPkg::Lock::Timeout=600 update -q
+apt-get -o DPkg::Lock::Timeout=600 install -y -q grafana loki alloy
 
 echo "Loki"
 install -m 644 "$HERE/loki.yaml" /etc/loki/config.yml
