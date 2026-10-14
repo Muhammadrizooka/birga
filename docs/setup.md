@@ -128,8 +128,8 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `S3_ENDPOINT` | empty | S3-compatible endpoint (MinIO, LocalStack), e.g. `http://localhost:9000`; also switches to path-style URLs. Empty means AWS |
 | `S3_PUBLIC_BASE_URL` | empty | prefix of the photo URLs returned to clients, e.g. a CloudFront domain. Empty means `https://<bucket>.s3.<region>.amazonaws.com` (or `<endpoint>/<bucket>`) |
 | `S3_KEY_PREFIX` | empty | prefix for every object key, e.g. `staging/`, to share one bucket between environments |
-| `S3_TIMEOUT` | `30s` | timeout of one S3 request |
-| `MEDIA_MAX_SIZE` | `5242880` | largest accepted upload in bytes (5 MiB), after base64 decoding |
+| `S3_TIMEOUT` | `5m` | timeout of one S3 request; long enough to send a 100 MiB photo to Sydney |
+| `MEDIA_MAX_SIZE` | `104857600` | largest accepted upload in bytes (100 MiB), after base64 decoding. nginx allows bodies up to 140 MB (`client_max_body_size`), room for 100 MiB sent as base64 |
 
 When you add a setting, add it to `config.go`, `.env.example` and this table.
 

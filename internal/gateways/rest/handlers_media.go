@@ -32,7 +32,7 @@ type mediaView struct {
 // @Description   either the file itself (multipart file part) or the file as a base64 string; a data URL
 // @Description   prefix such as "data:image/png;base64," is allowed
 // @Description - accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)
-// @Description - at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)
+// @Description - at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)
 // @Description - the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {"photo_id": id});
 // @Description   url is where clients load the image from
 // @Description - 503 when S3 is not configured (S3_BUCKET empty)
