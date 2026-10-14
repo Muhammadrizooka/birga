@@ -3,7 +3,7 @@
 # Env: GREP (log filter), SINCE (journalctl --since).
 set -uo pipefail
 mask() {
-	sed -E 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g; s/([0-9a-f]{1,4}:){2,7}[0-9a-f]{1,4}/<ip>/Ig;
+	sed -E 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g; s/[0-9a-f]{1,4}(:[0-9a-f]{0,4}){3,7}/<ip>/Ig;
 		s/; id [0-9a-f]+\)/; id <device>)/g; s/[0-9]{9,}/<digits>/g;
 		s/(Bearer|token|password|secret)[^ ,"]*[ :="]+[^ ,"]+/\1 <hidden>/Ig'
 }
