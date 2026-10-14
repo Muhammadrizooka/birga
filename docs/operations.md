@@ -52,7 +52,9 @@ Grafana's apt repository:
   `/root/grafana-admin-password`; read it with
   `ssh root@<server> cat /root/grafana-admin-password`. The home dashboard *Birga logs*
   (folder Birga) shows log volume by level, API errors and warnings, all API lines and nginx
-  lines, with a search box. In Explore, `{service="api"} | json | request_id="<id>"` follows
+  lines, with a search box. Each API request line carries the JSON response body as `response`
+(at most 16 KiB, longer bodies end in `...(cut)`), so error notes and returned data can be read
+there; request bodies are not logged. In Explore, `{service="api"} | json | request_id="<id>"` follows
   one request.
 
 Config files live in `deploy/server/monitoring/`. Grafana is plain HTTP on the IP until the

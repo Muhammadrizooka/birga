@@ -10,6 +10,7 @@ import (
 
 	"gitlab.com/loyihalar/birga/backend/internal/config"
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
+	"gitlab.com/loyihalar/birga/backend/internal/errs"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger/ginlog"
@@ -309,9 +310,19 @@ func New(cfg config.Application,
 	}
 
 	r := gin.New()
+	// Unknown routes and methods answer with the JSON envelope too, not gin's plain text.
+	r.HandleMethodNotAllowed = true
+	r.NoRoute(func(c *gin.Context) {
+		fail(c, http.StatusNotFound, _errCodeNotFound, "no such endpoint: "+c.Request.Method+" "+c.Request.URL.Path)
+	})
+	r.NoMethod(func(c *gin.Context) {
+		fail(c, http.StatusMethodNotAllowed, _errCodeBadRequest, "method "+c.Request.Method+" is not allowed on "+c.Request.URL.Path)
+	})
 	r.Use(
 		ginlog.RequestID(),
-		ginlog.Recovery(true),
+		ginlog.Recovery(true, func(c *gin.Context) {
+			fail(c, http.StatusInternalServerError, _errCodeInternalErr, errs.ErrInternal.Error())
+		}),
 		ginlog.LogExcept(noisyRoutes, ginlog.DefaultResolver),
 		metrics.Gin(resolveErrCode, noisyRoutes...),
 		corsMiddleware(),
