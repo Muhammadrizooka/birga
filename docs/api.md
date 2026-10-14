@@ -856,8 +856,12 @@ Rules (`usecases/media_uploader`):
 - the type is detected from the bytes, not from the file name or `Content-Type`: JPEG, PNG
   or WebP only, otherwise 422 `unsupported file type, upload a JPEG, PNG or WebP image`.
   HEIC from iPhones is not accepted; the app should convert to JPEG before upload;
-- at most `MEDIA_MAX_SIZE` bytes after decoding (default 5 MiB), otherwise 422; an empty file
-  is 422 too;
+- at most `MEDIA_MAX_SIZE` bytes after decoding (default 100 MiB), otherwise 422; an empty file
+  is 422 too. A base64 body is 4/3 of the file, so a 100 MiB file sent as base64 is about
+  134 MB on the wire; nginx accepts bodies up to 140 MB (`client_max_body_size 140m`), a larger
+  one is 413 from nginx with an HTML body, not the JSON envelope;
+- an upload may take up to 5 minutes (read, then sent on to S3); clients should use a timeout
+  at least that long for this call;
 - a missing `file` field or invalid base64 is 400;
 - when S3 is not configured (`S3_BUCKET` empty) the endpoint answers 503 `media uploads are
   disabled`; a failed S3 call is 500.

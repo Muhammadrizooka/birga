@@ -2733,7 +2733,7 @@ const docTemplate = `{
         },
         "/v1/media": {
             "post": {
-                "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from\n- 503 when S3 is not configured (S3_BUCKET empty)",
+                "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from\n- 503 when S3 is not configured (S3_BUCKET empty)",
                 "consumes": [
                     "multipart/form-data",
                     "application/x-www-form-urlencoded"

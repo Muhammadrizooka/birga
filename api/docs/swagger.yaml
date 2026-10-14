@@ -2778,7 +2778,7 @@ paths:
         either the file itself (multipart file part) or the file as a base64 string; a data URL
         prefix such as "data:image/png;base64," is allowed
         - accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)
-        - at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)
+        - at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)
         - the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {"photo_id": id});
         url is where clients load the image from
         - 503 when S3 is not configured (S3_BUCKET empty)

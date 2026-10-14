@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -17,6 +18,12 @@ const (
 	mediaFormField = "file"
 	// multipartOverhead is room for multipart boundaries, headers and other form fields.
 	multipartOverhead = 64 << 10
+	// multipartMemory is how much of a multipart form is kept in memory; larger file parts go to
+	// a temporary file, so a 100 MiB upload is not held twice.
+	multipartMemory = 8 << 20
+	// mediaUploadTimeout replaces the server's 30s read and write deadlines for an upload: reading a
+	// large body and sending it on to S3 takes longer.
+	mediaUploadTimeout = 5 * time.Minute
 )
 
 type mediaView struct {
@@ -32,7 +39,7 @@ type mediaView struct {
 // @Description   either the file itself (multipart file part) or the file as a base64 string; a data URL
 // @Description   prefix such as "data:image/png;base64," is allowed
 // @Description - accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)
-// @Description - at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)
+// @Description - at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)
 // @Description - the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {"photo_id": id});
 // @Description   url is where clients load the image from
 // @Description - 503 when S3 is not configured (S3_BUCKET empty)
@@ -54,6 +61,11 @@ func (s *Server) UploadMedia() gin.HandlerFunc {
 
 			return
 		}
+
+		// Not supported by every ResponseWriter (e.g. in tests); the server deadlines apply then.
+		rc := http.NewResponseController(c.Writer)
+		_ = rc.SetReadDeadline(time.Now().Add(mediaUploadTimeout))
+		_ = rc.SetWriteDeadline(time.Now().Add(mediaUploadTimeout))
 
 		maxSize := s.mediaUploader.MaxSize()
 		// base64 is 4/3 the size of the file it encodes.
@@ -83,7 +95,7 @@ func readMediaField(c *gin.Context, maxSize int64) ([]byte, error) {
 	// Parse the form explicitly: c.FormFile hides the error of a urlencoded body (e.g. too large).
 	var err error
 	if c.ContentType() == gin.MIMEMultipartPOSTForm {
-		err = c.Request.ParseMultipartForm(maxSize + multipartOverhead)
+		err = c.Request.ParseMultipartForm(multipartMemory)
 	} else {
 		err = c.Request.ParseForm()
 	}

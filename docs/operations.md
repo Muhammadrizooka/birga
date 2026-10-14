@@ -163,7 +163,17 @@ service there (no persistence or backups needed) before deploying this version.
 [The Birga AWS setup](setup.md#the-birga-aws-setup) for the bucket `birga-staging` in
 `ap-southeast-2` and the backend's IAM user). Set the same `S3_*` values in the server's
 environment before deploying. Without
-it, uploads answer 503 and the rest of the API works. S3 calls show up in
+it, uploads answer 503 and the rest of the API works.
+
+**Upload size.** One upload is at most `MEDIA_MAX_SIZE` (default 100 MiB). The limits that go
+with it: nginx `client_max_body_size 140m` and `proxy_read_timeout`/`proxy_send_timeout 300s`
+in `deploy/server/nginx-*.conf`, 5-minute read and write deadlines for `POST /v1/media` in the
+API (other routes keep 30s), and `S3_TIMEOUT=5m`. Multipart file parts above 8 MiB are
+buffered in a temporary file, but the whole file is still read into memory once before it
+goes to S3, so each upload in flight can use about 100 MiB of RAM (a base64 upload about
+250 MiB). The nginx files reach the server only through the `server-setup.yml` workflow, not
+through a normal deploy; `MEDIA_MAX_SIZE` or `S3_TIMEOUT` set in `/etc/birga/backend.env`
+override the defaults. S3 itself needs no change: one `PutObject` takes up to 5 GB. S3 calls show up in
 `birga_http_client_request_duration_seconds{service="s3"}`. Turn on bucket versioning or
 a lifecycle rule if old photos should be kept or expired; the API never deletes a photo
 that a media row points to.
