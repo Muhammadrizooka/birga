@@ -1,0 +1,36 @@
+// Ships Birga logs to the local Loki: the API's journal (JSON lines from zap) and nginx's
+// access and error logs. Labels: service="api" or service="nginx"; the API also gets level.
+
+loki.write "local" {
+  endpoint {
+    url = "http://127.0.0.1:3100/loki/api/v1/push"
+  }
+}
+
+loki.source.journal "api" {
+  matches       = "_SYSTEMD_UNIT=birga-backend.service"
+  labels        = { service = "api" }
+  forward_to    = [loki.process.api.receiver]
+}
+
+loki.process "api" {
+  stage.json {
+    expressions = { level = "level" }
+  }
+  stage.labels {
+    values = { level = "" }
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+local.file_match "nginx" {
+  path_targets = [
+    { "__path__" = "/var/log/nginx/access.log", "service" = "nginx", "log" = "access" },
+    { "__path__" = "/var/log/nginx/error.log", "service" = "nginx", "log" = "error" },
+  ]
+}
+
+loki.source.file "nginx" {
+  targets    = local.file_match.nginx.targets
+  forward_to = [loki.write.local.receiver]
+}
