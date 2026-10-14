@@ -222,6 +222,8 @@ type userView struct {
 	Username    *string `json:"username" example:"dilnoza_95"`
 	PhoneNumber *string `json:"phone_number" example:"+998901234567"`
 	PhotoID     *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	// PhotoURL is where clients load the photo from (GET, no token); null without a photo.
+	PhotoURL *string `json:"photo_url" example:"/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	// Relationship is null for users created before sign-up asked for it, or by an admin.
 	Relationship *string `json:"relationship" example:"mother" enums:"father,mother,educator,nanny"`
 	// AgreedOnConditions is the consent to the terms given at sign-up.
@@ -247,6 +249,7 @@ func toUserView(u domain.User) userView {
 		Username:     u.Username,
 		PhoneNumber:  u.PhoneNumber,
 		PhotoID:      u.PhotoID,
+		PhotoURL:     photoURL(u.PhotoID),
 		Relationship: u.Relationship,
 
 		AgreedOnConditions: u.AgreedOnConditions,

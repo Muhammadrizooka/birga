@@ -597,6 +597,11 @@ definitions:
       photo_id:
         example: 5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
         type: string
+      photo_url:
+        description: PhotoURL is where the app loads the photo from (GET, no token);
+          null without a photo.
+        example: /v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
       updated_at:
         type: string
     type: object
@@ -733,7 +738,7 @@ definitions:
         example: 183244
         type: integer
       url:
-        example: https://birga-staging.s3.ap-southeast-2.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg
+        example: /v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
     type: object
   rest.planDayView:
@@ -800,6 +805,11 @@ definitions:
         type: string
       photo_id:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      photo_url:
+        description: PhotoURL is where clients load the photo from (GET, no token);
+          null without a photo.
+        example: /v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
       relationship:
         description: Relationship is null for users created before sign-up asked for
@@ -951,6 +961,11 @@ definitions:
         type: string
       photo_id:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      photo_url:
+        description: PhotoURL is where clients load the photo from (GET, no token);
+          null without a photo.
+        example: /v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
       relationship:
         description: Relationship is null for users created before sign-up asked for
@@ -2780,7 +2795,7 @@ paths:
         - accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)
         - at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)
         - the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {"photo_id": id});
-        url is where clients load the image from
+        url is where clients load the image from: GET /v1/media/{id} on this API
         - 503 when S3 is not configured (S3_BUCKET empty)
       parameters:
       - description: 'the image: a file part, or a base64 string in the same field'
@@ -2817,6 +2832,37 @@ paths:
           schema:
             $ref: '#/definitions/rest.ServiceUnavailableResponse'
       summary: uploads an image (a profile photo) to S3
+      tags:
+      - media
+  /v1/media/{id}:
+    get:
+      description: |-
+        - redirects (302) to a short-lived signed link to the image in the private S3 bucket
+        (valid MEDIA_LINK_TTL, default 1 hour); image widgets follow it on their own
+        - needs no token, so <img> and Image.network work; ids are random UUIDs
+        - unknown id: 404; S3 not configured: 503
+      parameters:
+      - description: media id (photo_id)
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Found
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/rest.ServiceUnavailableResponse'
+      summary: opens an uploaded image
       tags:
       - media
   /v1/otp/send:

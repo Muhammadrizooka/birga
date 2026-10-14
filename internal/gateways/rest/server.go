@@ -183,9 +183,15 @@ type otpVerifier interface {
 	Execute(ctx context.Context, req domain.OTPVerifyRequest) error
 }
 
+// mediaLinker gives a short-lived link to an uploaded file.
+type mediaLinker interface {
+	Link(ctx context.Context, id string) (string, error)
+}
+
 type mediaUploader interface {
 	Execute(ctx context.Context, up domain.MediaUpload) (domain.Media, error)
 	MaxSize() int64
+	mediaLinker
 }
 
 type signUp interface {
@@ -279,6 +285,8 @@ type Server struct {
 
 	// mediaUploader is nil when S3 is not configured; POST /v1/media then answers 503.
 	mediaUploader mediaUploader
+	// mediaLinker is nil when S3 is not configured; GET /v1/media/{id} then answers 503.
+	mediaLinker mediaLinker
 }
 
 func New(cfg config.Application,
@@ -353,6 +361,10 @@ func New(cfg config.Application,
 		logout:         auth.Logout,
 		forgotPassword: auth.ForgotPassword,
 		mediaUploader:  media,
+	}
+
+	if media != nil {
+		s.mediaLinker = media
 	}
 
 	s.httpServer = &http.Server{

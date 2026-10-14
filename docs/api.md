@@ -352,7 +352,7 @@ In the same transaction the child gets its first [7-day plan](#children-7-day-pl
 made from its goals and age (when no published activity fits the age yet, the plan is made on
 the first `GET .../plan` instead).
 
-Response `data` is the child: `id`, `name`, `age`, `gender`, `photo_id`, `goal_ids`,
+Response `data` is the child: `id`, `name`, `age`, `gender`, `photo_id`, `photo_url` (see [Media](#media-public)), `goal_ids`,
 `created_at`, `updated_at`. Use `id` in the `/v1/children/{id}/...` endpoints below. Errors: 400 bad JSON,
 401 no or invalid token, 422 a rule above.
 
@@ -841,6 +841,7 @@ takes no photo).
 | Method | Path | Description |
 |---|---|---|
 | POST | `/v1/media` | upload one image |
+| GET | `/v1/media/{id}` | open an image: 302 redirect to a signed S3 link |
 
 The body is form data with one field, `file`, in any of these forms:
 
@@ -867,7 +868,7 @@ The object is stored as `<S3_KEY_PREFIX>media/<id>.<ext>`. Response `data`:
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID string | the media id; put it in `photo_id` |
-| `url` | string | where clients load the image, `<S3_PUBLIC_BASE_URL>/<key>` |
+| `url` | string | `/v1/media/{id}`: the path on this API to load the image from |
 | `content_type` | string | `image/jpeg`, `image/png` or `image/webp` |
 | `size` | integer | bytes |
 
@@ -891,12 +892,25 @@ curl -X POST localhost:8080/v1/media --data-urlencode "file=$(base64 -i photo.jp
   "error_note": "",
   "data": {
     "id": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
-    "url": "https://birga-staging.s3.ap-southeast-2.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg",
+    "url": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
     "content_type": "image/jpeg",
     "size": 183244
   }
 }
 ```
+
+#### Showing an image
+
+The bucket is private, so S3 links without a signature answer 403. Load an image from
+`GET /v1/media/{id}` on this API (the `url` above, and `photo_url` on users and children,
+already hold this path; put the API's base URL in front, e.g.
+`http://159.195.86.66/v1/media/<id>`). It needs no token, so `<img src>` and Flutter's
+`Image.network` work as they are. It answers 302 with `Location` set to a signed S3 link that
+works for `MEDIA_LINK_TTL` (default 1 hour), and `Cache-Control: private, max-age=300`; image
+clients follow the redirect on their own. An id that is not an uploaded media id is 404
+`media not found`; S3 not configured is 503. Media ids are random UUIDs, so only someone who was
+given an id can open the photo.
+
 
 ### Users (admin)
 
@@ -965,6 +979,7 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `username` | string or `null` | lowercase |
 | `phone_number` | string or `null` | E.164; always set for users created through the API |
 | `photo_id` | UUID string or `null` | profile photo, a media id from `POST /v1/media` |
+| `photo_url` | string or `null` | `/v1/media/{photo_id}`, the path to load the photo from on this API (see [Media](#media-public)); `null` without a photo |
 | `relationship` | string or `null` | `father`, `mother`, `educator` or `nanny`; `null` for users created before sign-up asked for it, or by an admin |
 | `agreed_on_conditions` | bool | consent given at sign-up (or later through `PATCH /v1/me`); `false` for older users and users created by an admin |
 | `reminder_enabled` | bool | daily reminder on or off, `false` by default |

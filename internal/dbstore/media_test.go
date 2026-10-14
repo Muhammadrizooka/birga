@@ -24,6 +24,14 @@ func TestMediaRepo_CreateAndUserPhoto(t *testing.T) {
 			t.Fatalf("unexpected media: %+v", m)
 		}
 
+		if got, err := s.Media().Get(ctx, id); err != nil || got.Key != m.Key {
+			t.Fatalf("Get: %+v, %v", got, err)
+		}
+
+		if _, err := s.Media().Get(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, errs.ErrMediaNotFound) {
+			t.Fatalf("Get unknown: %v", err)
+		}
+
 		u, err := s.User().Create(ctx, domain.User{PhoneNumber: strPtr("+998900000009"), PhotoID: &id})
 		if err != nil || *u.PhotoID != id {
 			t.Fatalf("user with photo: %+v, %v", u, err)

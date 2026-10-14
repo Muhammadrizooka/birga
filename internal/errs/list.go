@@ -41,4 +41,5 @@ var (
 
 	ErrMediaUnsupportedType = Errf(ErrValidation, "unsupported file type, upload a JPEG, PNG or WebP image")
 	ErrMediaEmpty           = Errf(ErrValidation, "file is empty")
+	ErrMediaNotFound        = Errf(ErrNotFound, "media not found")
 )

@@ -115,4 +115,6 @@ type S3Config struct {
 type MediaConfig struct {
 	// MaxSize is the largest accepted file, in bytes, after base64 decoding.
 	MaxSize int64 `env:"MAX_SIZE, default=104857600"`
+	// LinkTTL is how long a signed link from GET /v1/media/{id} works.
+	LinkTTL time.Duration `env:"LINK_TTL, default=1h"`
 }
