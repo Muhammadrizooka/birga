@@ -84,12 +84,15 @@ Middleware order on every request (`gateways/rest/server.go`):
 
 1. `ginlog.RequestID` reads `X-Request-Id` or generates one, stores it in the context and
    echoes it in the response.
-2. `ginlog.Recovery` turns panics into a 500 and logs the stack.
+2. `ginlog.Recovery` turns panics into a 500 with the JSON error envelope and logs the stack.
 3. `ginlog.LogExcept` writes one access log line per request (skips `/ping`, `/health`,
-   `/swagger/*`).
+   `/swagger/*`), including the JSON response body (`response`, at most 16 KiB).
 4. `metrics.Gin` records duration and in-flight counters, labelled with the application
    error code.
 5. CORS: allows any origin, answers `OPTIONS` with 204.
+
+Unknown routes (`NoRoute`, 404) and wrong methods (`NoMethod`, 405) also answer with the
+envelope, so every error a client sees has `error_code` and `error_note`.
 
 `/v1/admin/*` additionally runs `adminAuth` (see [api.md](api.md#admin-authentication)).
 

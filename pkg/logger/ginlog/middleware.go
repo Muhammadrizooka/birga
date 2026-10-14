@@ -58,8 +58,44 @@ func RequestID() gin.HandlerFunc {
 	}
 }
 
+// MaxLoggedBody is how much of a response body the access log keeps, in bytes.
+const MaxLoggedBody = 16 << 10
+
+// bodyWriter copies the first MaxLoggedBody bytes of a response for the access log.
+type bodyWriter struct {
+	gin.ResponseWriter
+	body []byte
+}
+
+func (w *bodyWriter) Write(b []byte) (int, error) {
+	if room := MaxLoggedBody - len(w.body); room > 0 {
+		w.body = append(w.body, b[:min(room, len(b))]...)
+	}
+
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *bodyWriter) WriteString(s string) (int, error) {
+	return w.Write([]byte(s))
+}
+
+// loggedBody is the response body for the log: JSON only (not Swagger pages or images),
+// marked when it was cut at MaxLoggedBody.
+func (w *bodyWriter) loggedBody() (string, bool) {
+	if !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") || len(w.body) == 0 {
+		return "", false
+	}
+
+	if w.Size() > len(w.body) {
+		return string(w.body) + "...(cut)", true
+	}
+
+	return string(w.body), true
+}
+
 // LogExcept writes one access log line per request, except for routes whose
-// template matches one of skipPaths (e.g. "/swagger/*any").
+// template matches one of skipPaths (e.g. "/swagger/*any"). The line carries the
+// JSON response body (at most MaxLoggedBody bytes) as "response".
 func LogExcept(skipPaths []string, resolvers ...Resolver) gin.HandlerFunc {
 	skip := make(map[string]struct{}, len(skipPaths))
 	for _, p := range skipPaths {
@@ -68,6 +104,9 @@ func LogExcept(skipPaths []string, resolvers ...Resolver) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		start := time.Now()
+
+		bw := &bodyWriter{ResponseWriter: c.Writer}
+		c.Writer = bw
 
 		c.Next()
 
@@ -92,6 +131,10 @@ func LogExcept(skipPaths []string, resolvers ...Resolver) gin.HandlerFunc {
 			fields = append(fields, r(c)...)
 		}
 
+		if body, ok := bw.loggedBody(); ok {
+			fields = append(fields, zap.String("response", body))
+		}
+
 		if len(c.Errors) > 0 {
 			fields = append(fields, zap.String("gin_errors", strings.TrimSpace(c.Errors.String())))
 		}
@@ -109,8 +152,9 @@ func LogExcept(skipPaths []string, resolvers ...Resolver) gin.HandlerFunc {
 	}
 }
 
-// Recovery turns panics into a 500 response and logs them with the stack.
-func Recovery(stack bool) gin.HandlerFunc {
+// Recovery turns panics into a 500 response and logs them with the stack. respond, when
+// given, writes that response (e.g. a JSON error envelope); otherwise the body is empty.
+func Recovery(stack bool, respond ...func(c *gin.Context)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			rec := recover()
@@ -128,6 +172,12 @@ func Recovery(stack bool) gin.HandlerFunc {
 			}
 
 			logger.FromCtx(c.Request.Context(), "http.recovery").Error("panic recovered", fields...)
+
+			if len(respond) > 0 {
+				respond[0](c)
+
+				return
+			}
 
 			c.AbortWithStatus(http.StatusInternalServerError)
 		}()

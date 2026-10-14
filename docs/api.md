@@ -36,6 +36,17 @@ Every response, success or failure, has the same shape:
 For 500s the client only sees `"internal error"`. Find the real message in the logs by the
 request id.
 
+Every error answers with this JSON envelope (`status`, `error_code`, `error_note`, `data: null`),
+including the ones no handler produces:
+
+- an unknown path: 404, `-30`, `no such endpoint: GET /v1/...`;
+- a known path with the wrong method: 405, `-11`, `method DELETE is not allowed on /v1/...`;
+- a panic in the server: 500, `-50`, `internal error`;
+- nginx on the server: a body over 140 MB is 413, `-10`, `request body is too large, ...`; the
+  API process down or not answering is 503, `-60`, `the API is not reachable right now, ...`.
+
+The one exception is `GET /v1/media/{id}`, whose success is a 302 redirect.
+
 ## Common headers
 
 | Header | Direction | Meaning |

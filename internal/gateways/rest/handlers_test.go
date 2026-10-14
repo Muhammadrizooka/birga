@@ -353,3 +353,15 @@ func TestDeleteActivity(t *testing.T) {
 		t.Fatalf("delete without key: %d", code)
 	}
 }
+
+func TestUnknownRouteAndMethodUseEnvelope(t *testing.T) {
+	s, _ := newTestServer("")
+
+	if code, r := do(t, s, http.MethodGet, "/v1/nope", "", nil); code != http.StatusNotFound || r.ErrorCode != _errCodeNotFound || r.ErrorNote == "" {
+		t.Fatalf("unknown route: %d %+v", code, r)
+	}
+
+	if code, r := do(t, s, http.MethodDelete, "/v1/goals", "", nil); code != http.StatusMethodNotAllowed || r.ErrorCode != _errCodeBadRequest {
+		t.Fatalf("wrong method: %d %+v", code, r)
+	}
+}
