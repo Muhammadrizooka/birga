@@ -2726,7 +2726,7 @@
         },
         "/v1/media": {
             "post": {
-                "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from\n- 503 when S3 is not configured (S3_BUCKET empty)",
+                "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from: GET /v1/media/{id} on this API\n- 503 when S3 is not configured (S3_BUCKET empty)",
                 "consumes": [
                     "multipart/form-data",
                     "application/x-www-form-urlencoded"
@@ -2776,6 +2776,47 @@
                         "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ServiceUnavailableResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/media/{id}": {
+            "get": {
+                "description": "- redirects (302) to a short-lived signed link to the image in the private S3 bucket\n(valid MEDIA_LINK_TTL, default 1 hour); image widgets follow it on their own\n- needs no token, so \u003cimg\u003e and Image.network work; ids are random UUIDs\n- unknown id: 404; S3 not configured: 503",
+                "tags": [
+                    "media"
+                ],
+                "summary": "opens an uploaded image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "media id (photo_id)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "500": {
@@ -3806,6 +3847,11 @@
                     "type": "string",
                     "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
+                "photo_url": {
+                    "description": "PhotoURL is where the app loads the photo from (GET, no token); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
                 "updated_at": {
                     "type": "string"
                 }
@@ -3982,7 +4028,7 @@
                 },
                 "url": {
                     "type": "string",
-                    "example": "https://birga-staging.s3.ap-southeast-2.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg"
+                    "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 }
             }
         },
@@ -4074,6 +4120,11 @@
                 "photo_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "photo_url": {
+                    "description": "PhotoURL is where clients load the photo from (GET, no token); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 },
                 "relationship": {
                     "description": "Relationship is null for users created before sign-up asked for it, or by an admin.",
@@ -4280,6 +4331,11 @@
                 "photo_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "photo_url": {
+                    "description": "PhotoURL is where clients load the photo from (GET, no token); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 },
                 "relationship": {
                     "description": "Relationship is null for users created before sign-up asked for it, or by an admin.",

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,21 @@ func TestPublicURL(t *testing.T) {
 		want := tc.want[:len(tc.want)-len("a b.png")] + "a%20b.png"
 		if got := c.URL("media/a b.png"); got != want {
 			t.Errorf("URL = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestPresign(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) { t.Error("presigning must not call S3") })
+
+	link, err := c.Presign(context.Background(), "media/a.png", time.Hour)
+	if err != nil {
+		t.Fatalf("Presign: %v", err)
+	}
+
+	for _, want := range []string{"/birga-test/media/a.png?", "X-Amz-Expires=3600", "X-Amz-Signature="} {
+		if !strings.Contains(link, want) {
+			t.Errorf("link %q lacks %q", link, want)
 		}
 	}
 }

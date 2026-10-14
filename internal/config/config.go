@@ -108,11 +108,13 @@ type S3Config struct {
 	PublicBaseURL string `env:"PUBLIC_BASE_URL"`
 	// KeyPrefix is put in front of every object key, e.g. "staging/".
 	KeyPrefix string        `env:"KEY_PREFIX"`
-	Timeout   time.Duration `env:"TIMEOUT, default=30s"`
+	Timeout   time.Duration `env:"TIMEOUT, default=5m"`
 }
 
 // MediaConfig limits uploaded media.
 type MediaConfig struct {
 	// MaxSize is the largest accepted file, in bytes, after base64 decoding.
-	MaxSize int64 `env:"MAX_SIZE, default=5242880"`
+	MaxSize int64 `env:"MAX_SIZE, default=104857600"`
+	// LinkTTL is how long a signed link from GET /v1/media/{id} works.
+	LinkTTL time.Duration `env:"LINK_TTL, default=1h"`
 }

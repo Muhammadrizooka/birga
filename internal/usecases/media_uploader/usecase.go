@@ -3,6 +3,7 @@ package mediauploader
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -17,6 +18,7 @@ const keyFolder = "media/"
 
 type mediaRepo interface {
 	Create(ctx context.Context, m domain.Media) (domain.Media, error)
+	Get(ctx context.Context, id string) (domain.Media, error)
 }
 
 // objectStorage stores files (S3).
@@ -24,6 +26,7 @@ type objectStorage interface {
 	Put(ctx context.Context, key, contentType string, data []byte) error
 	Delete(ctx context.Context, key string) error
 	URL(key string) string
+	Presign(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
 
 // UseCase validates an image, uploads it to object storage and records it in the media table.
@@ -33,17 +36,19 @@ type UseCase struct {
 	storage   objectStorage
 	maxSize   int64
 	keyPrefix string
+	linkTTL   time.Duration
 }
 
 // New creates a new media uploader use case. maxSize is the largest accepted file in bytes;
-// keyPrefix is put in front of every object key.
-func New(l logger.Logger, repo mediaRepo, storage objectStorage, maxSize int64, keyPrefix string) *UseCase {
+// keyPrefix is put in front of every object key; linkTTL is how long a Link works.
+func New(l logger.Logger, repo mediaRepo, storage objectStorage, maxSize int64, keyPrefix string, linkTTL time.Duration) *UseCase {
 	return &UseCase{
 		l:         l,
 		repo:      repo,
 		storage:   storage,
 		maxSize:   maxSize,
 		keyPrefix: keyPrefix,
+		linkTTL:   linkTTL,
 	}
 }
 
@@ -91,4 +96,19 @@ func (uc *UseCase) Execute(ctx context.Context, up domain.MediaUpload) (domain.M
 	m.URL = uc.storage.URL(m.Key)
 
 	return m, nil
+}
+
+// Link returns a signed link to the media with this id that works for linkTTL; the bucket is
+// private, so this is how clients read a photo. An id that is not a UUID or not uploaded: not found.
+func (uc *UseCase) Link(ctx context.Context, id string) (string, error) {
+	if uuid.Validate(id) != nil {
+		return "", errs.ErrMediaNotFound
+	}
+
+	m, err := uc.repo.Get(ctx, id)
+	if err != nil {
+		return "", err
+	}
+
+	return uc.storage.Presign(ctx, m.Key, uc.linkTTL)
 }

@@ -21,7 +21,7 @@ const (
 
 type mediaView struct {
 	ID          string `json:"id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
-	URL         string `json:"url" example:"https://birga-staging.s3.ap-southeast-2.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg"`
+	URL         string `json:"url" example:"/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	ContentType string `json:"content_type" example:"image/jpeg"`
 	Size        int64  `json:"size" example:"183244"` // bytes
 }
@@ -32,9 +32,9 @@ type mediaView struct {
 // @Description   either the file itself (multipart file part) or the file as a base64 string; a data URL
 // @Description   prefix such as "data:image/png;base64," is allowed
 // @Description - accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)
-// @Description - at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)
+// @Description - at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)
 // @Description - the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {"photo_id": id});
-// @Description   url is where clients load the image from
+// @Description   url is where clients load the image from: GET /v1/media/{id} on this API
 // @Description - 503 when S3 is not configured (S3_BUCKET empty)
 // @Tags media
 // @Accept multipart/form-data
@@ -73,7 +73,7 @@ func (s *Server) UploadMedia() gin.HandlerFunc {
 			return
 		}
 
-		Return(c, mediaView{ID: m.ID, URL: m.URL, ContentType: m.ContentType, Size: m.Size}, nil)
+		Return(c, mediaView{ID: m.ID, URL: mediaPath(m.ID), ContentType: m.ContentType, Size: m.Size}, nil)
 	}
 }
 
@@ -158,4 +158,54 @@ func decodeBase64(s string) ([]byte, error) {
 	}
 
 	return nil, err
+}
+
+// mediaPath is the API path that serves the media with this id (GET /v1/media/{id}).
+func mediaPath(id string) string {
+	return "/v1/media/" + id
+}
+
+// photoURL is mediaPath for a photo id, or nil without a photo.
+func photoURL(id *string) *string {
+	if id == nil || *id == "" {
+		return nil
+	}
+
+	p := mediaPath(*id)
+
+	return &p
+}
+
+// GetMedia godoc swagger
+// @Summary opens an uploaded image
+// @Description - redirects (302) to a short-lived signed link to the image in the private S3 bucket
+// @Description   (valid MEDIA_LINK_TTL, default 1 hour); image widgets follow it on their own
+// @Description - needs no token, so <img> and Image.network work; ids are random UUIDs
+// @Description - unknown id: 404; S3 not configured: 503
+// @Tags media
+// @Param id path string true "media id (photo_id)"
+// @Success 302
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Failure 503 {object} rest.ServiceUnavailableResponse
+// @Router /v1/media/{id} [GET]
+func (s *Server) GetMedia() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if s.mediaLinker == nil {
+			fail(c, http.StatusServiceUnavailable, _errCodeUnavailable, "media is disabled")
+
+			return
+		}
+
+		link, err := s.mediaLinker.Link(c.Request.Context(), c.Param("id"))
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		// The signed link expires, so clients must not cache the redirect longer than it lives.
+		c.Header("Cache-Control", "private, max-age=300")
+		c.Redirect(http.StatusFound, link)
+	}
 }

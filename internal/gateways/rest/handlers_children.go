@@ -433,11 +433,13 @@ func (s *Server) GetChild() gin.HandlerFunc {
 }
 
 type childView struct {
-	ID        string    `json:"id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
-	Name      string    `json:"name" example:"Amir"`
-	Age       int       `json:"age" example:"4"`
-	Gender    string    `json:"gender" example:"male"`
-	PhotoID   *string   `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	ID      string  `json:"id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	Name    string  `json:"name" example:"Amir"`
+	Age     int     `json:"age" example:"4"`
+	Gender  string  `json:"gender" example:"male"`
+	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	// PhotoURL is where the app loads the photo from (GET, no token); null without a photo.
+	PhotoURL  *string   `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	GoalIDs   []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -450,6 +452,7 @@ func toChildView(c domain.Child) childView {
 		Age:       c.Age,
 		Gender:    c.Gender,
 		PhotoID:   c.PhotoID,
+		PhotoURL:  photoURL(c.PhotoID),
 		GoalIDs:   c.GoalIDs,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,

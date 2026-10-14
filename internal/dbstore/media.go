@@ -2,6 +2,7 @@ package dbstore
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	pgx "github.com/jackc/pgx/v5"
@@ -51,6 +52,31 @@ func (r *mediaRepo) Create(ctx context.Context, m domain.Media) (domain.Media, e
 	}
 
 	return created.toDomain(), nil
+}
+
+// Get returns the media row with this id, or ErrMediaNotFound.
+func (r *mediaRepo) Get(ctx context.Context, id string) (domain.Media, error) {
+	l := logger.FromCtx(ctx, "mediaRepo.Get")
+
+	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, `SELECT `+mediaColumns+` FROM media WHERE id = $1`, id)
+	if err != nil {
+		l.Error("sqlClient.Query", zap.Error(err))
+
+		return domain.Media{}, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	m, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[dbMedia])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Media{}, errs.ErrMediaNotFound
+	}
+
+	if err != nil {
+		l.Error("pgx.CollectExactlyOneRow", zap.Error(err))
+
+		return domain.Media{}, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return m.toDomain(), nil
 }
 
 func (m dbMedia) toDomain() domain.Media {

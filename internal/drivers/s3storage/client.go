@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -28,6 +29,7 @@ const cacheControl = "public, max-age=31536000, immutable"
 
 type Client struct {
 	api     *s3.Client
+	presign *s3.PresignClient
 	l       logger.Logger
 	bucket  string
 	baseURL string
@@ -59,7 +61,7 @@ func New(ctx context.Context, l logger.Logger, cfg *config.S3Config) (*Client, e
 		}
 	})
 
-	return &Client{api: api, l: l, bucket: cfg.Bucket, baseURL: publicBaseURL(cfg)}, nil
+	return &Client{api: api, presign: s3.NewPresignClient(api), l: l, bucket: cfg.Bucket, baseURL: publicBaseURL(cfg)}, nil
 }
 
 // publicBaseURL is where clients read objects from, without a trailing slash.
@@ -103,6 +105,19 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+// Presign returns a link that reads the object under key without credentials for ttl.
+func (c *Client) Presign(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	req, err := c.presign.PresignGetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(key)},
+		s3.WithPresignExpires(ttl))
+	if err != nil {
+		c.l.Error("s3.PresignGetObject", zap.Error(err), zap.String("key", key))
+
+		return "", errs.Errf(errs.ErrInternal, "signing the storage link failed: %s", err.Error())
+	}
+
+	return req.URL, nil
 }
 
 // URL returns the public URL of the object under key.

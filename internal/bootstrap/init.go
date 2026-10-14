@@ -267,7 +267,7 @@ type useCases struct {
 func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, cache *redisstore.Store, drv *drivers) *useCases {
 	var mediaUploader *mediauploader.UseCase
 	if drv.s3 != nil {
-		mediaUploader = mediauploader.New(l.Named("usecase.media_uploader"), store.Media(), drv.s3, cfg.Media.MaxSize, cfg.S3.KeyPrefix)
+		mediaUploader = mediauploader.New(l.Named("usecase.media_uploader"), store.Media(), drv.s3, cfg.Media.MaxSize, cfg.S3.KeyPrefix, cfg.Media.LinkTTL)
 	}
 
 	jwt, err := tokens.New(*cfg.JWT)
@@ -332,6 +332,7 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 	var media interface {
 		Execute(ctx context.Context, up domain.MediaUpload) (domain.Media, error)
 		MaxSize() int64
+		Link(ctx context.Context, id string) (string, error)
 	}
 	if ucs.mediaUploader != nil {
 		media = ucs.mediaUploader

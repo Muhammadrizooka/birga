@@ -31,6 +31,34 @@ func (f *fakeMedia) Execute(_ context.Context, up domain.MediaUpload) (domain.Me
 
 func (f *fakeMedia) MaxSize() int64 { return testMaxSize }
 
+func (f *fakeMedia) Link(_ context.Context, id string) (string, error) {
+	if id != testID {
+		return "", errs.ErrMediaNotFound
+	}
+
+	return "https://signed.test/" + id, nil
+}
+
+func TestGetMedia(t *testing.T) {
+	s, _ := newTestServer("")
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/media/"+testID, nil)
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+
+	if w.Code != http.StatusFound || w.Header().Get("Location") != "https://signed.test/"+testID {
+		t.Fatalf("code %d location %q", w.Code, w.Header().Get("Location"))
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/media/other", nil)
+	w = httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("unknown id: %d", w.Code)
+	}
+}
+
 func doRaw(t *testing.T, s http.Handler, contentType string, body []byte) (int, R) {
 	t.Helper()
 

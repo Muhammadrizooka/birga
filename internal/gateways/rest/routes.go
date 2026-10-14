@@ -31,6 +31,7 @@ func (s *Server) endpoints() {
 		v1.POST("/auth/forgot-password", s.ForgotPassword())
 
 		v1.POST("/media", s.UploadMedia())
+		v1.GET("/media/:id", s.GetMedia())
 	}
 
 	v1.POST("/auth/logout", s.userAuth(), s.Logout())

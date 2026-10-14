@@ -226,11 +226,14 @@ message id (a fresh UUID per send).
 
 - `internal/drivers/s3storage` stores files in S3 with the AWS SDK for Go v2 (the SDK, not
   `pkg/remote`, because S3 needs SigV4 signing). Its HTTP client still goes through
-  `metrics.RoundTripper` (service `s3`). It offers `Put`, `Delete` and `URL(key)`; failures
+  `metrics.RoundTripper` (service `s3`). It offers `Put`, `Delete`, `URL(key)` and `Presign(key, ttl)` (a signed GET link,
+  computed locally without calling S3); failures
   become `ErrConnection`. Objects are written with `Cache-Control: public, max-age=31536000,
   immutable`, since a key is never reused. `S3_ENDPOINT` points it at MinIO or LocalStack.
   With `S3_BUCKET` empty, bootstrap builds no S3 client and no `media_uploader`, and the REST
-  server answers `POST /v1/media` with 503.
+  server answers `POST /v1/media` and `GET /v1/media/{id}` with 503. The bucket is private:
+  `media_uploader.Link` looks up the media row and presigns its key, and `GET /v1/media/{id}`
+  redirects to that link. User and child views carry `photo_url` = `/v1/media/{photo_id}`.
 
 Request and response bodies of outgoing calls are not logged (`httplog` without
 `WithBodies`), so OTP codes never reach the logs when Play Mobile is used.
