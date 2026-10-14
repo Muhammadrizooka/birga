@@ -26,8 +26,8 @@ log() { printf '\n==> %s\n' "$*"; }
 
 log "Installing packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -q
-apt-get install -y -q postgresql redis-server nginx certbot python3-certbot-nginx \
+apt-get -o DPkg::Lock::Timeout=600 update -q
+apt-get -o DPkg::Lock::Timeout=600 install -y -q postgresql redis-server nginx certbot python3-certbot-nginx \
 	ufw curl rsync openssl gnupg unattended-upgrades
 
 log "Swap"
