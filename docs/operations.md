@@ -66,7 +66,7 @@ Workflows in `.github/workflows/`:
 |---|---|---|
 | `ci.yml` | every pull request and push to `main` | golangci-lint (non-blocking: v2.12.2 cannot analyse Go 1.27 yet); tests against PostgreSQL 17 after migrations |
 | `ci.yml`, job `deploy` | push to `main` after tests pass (or run by hand on `main`) | builds the binary for the server's CPU, uploads it with `migrations/` and `seeds/`, then runs `deploy/server/release.sh`: migrate up, load `seeds/activities.sql` if `activities` is empty, swap the binary, restart, check `/health`, roll back to the previous binary if the check fails |
-| `server-diagnostics.yml` | by hand (inputs: text to search, how far back) | runs `deploy/server/diagnostics.sh`: service states, which backend settings are set (values hidden), nginx upload limits, and matching API and nginx log lines with phone numbers and IPs masked; safe for this public repository's logs |
+| `server-diagnostics.yml` | by hand (inputs: text to search, how far back) | runs `deploy/server/diagnostics.sh`: service states, which backend settings are set (values hidden), nginx upload limits, and matching API and nginx log lines with phone numbers, IPs and device ids masked; safe for this public repository's logs |
 | `server-setup.yml` | by hand (Actions tab, inputs: API domain, dashboard domain, certificate e-mail) | uploads `deploy/server/` and runs `bootstrap.sh` |
 
 The deploy job skips itself (with a notice) until the secrets exist and the server has been
