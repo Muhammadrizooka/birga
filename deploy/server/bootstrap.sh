@@ -28,7 +28,7 @@ log "Installing packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
 apt-get install -y -q postgresql redis-server nginx certbot python3-certbot-nginx \
-	ufw curl rsync openssl unattended-upgrades
+	ufw curl rsync openssl gnupg unattended-upgrades
 
 log "Swap"
 if ! swapon --show | grep -q .; then
@@ -164,6 +164,9 @@ ln -sf /etc/nginx/sites-available/birga-ip.conf /etc/nginx/sites-enabled/birga-i
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
+
+log "Logs: Loki, Alloy, Grafana on port 3000"
+bash "$HERE/monitoring.sh"
 
 log "HTTPS certificates"
 server_ip="$(curl -fsS -4 https://api.ipify.org || true)"

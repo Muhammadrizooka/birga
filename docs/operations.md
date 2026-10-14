@@ -21,6 +21,7 @@ One Debian 13 server runs everything, installed from Debian packages rather than
 | nginx | `api.<domain>` proxies to the API; `admin.<domain>` serves the dashboard and proxies `/v1/` to the API (same origin, no CORS); the bare IP serves the dashboard at `/` and the API under `/birga/` (Swagger: `http://<ip>/birga/swagger/index.html`) and `/v1/` for Swagger's "Try it out" |
 | HTTPS | Let's Encrypt via certbot, renewed automatically |
 | Firewall | ufw: SSH, HTTP and HTTPS only |
+| Logs | Loki (local, 30 days) fed by Alloy from the API journal and nginx logs; Grafana on port 3000 (see [Logs](#logs)) |
 | Backups | `pg_dump` nightly at 03:30 into `/var/backups/birga`, kept 14 days |
 
 `deploy/server/bootstrap.sh` builds all of this and is safe to run again. On its first run it
@@ -36,6 +37,26 @@ systemctl status birga-backend
 journalctl -u birga-backend -f
 nano /etc/birga/backend.env && systemctl restart birga-backend
 ```
+
+## Logs
+
+`deploy/server/monitoring.sh` (run by `bootstrap.sh`) installs Grafana, Loki and Alloy from
+Grafana's apt repository:
+
+- **Alloy** reads the `birga-backend` journal (labels `service="api"`, `level` from the JSON
+  line) and `/var/log/nginx/{access,error}.log` (`service="nginx"`, `log="access|error"`) and
+  pushes them to Loki.
+- **Loki** listens on `127.0.0.1:3100` only and keeps 30 days.
+- **Grafana** listens on port 3000 (`http://<server-ip>:3000`), user `admin`. Sign-up and
+  anonymous access are off. The password is generated once on the server and kept in
+  `/root/grafana-admin-password`; read it with
+  `ssh root@<server> cat /root/grafana-admin-password`. The home dashboard *Birga logs*
+  (folder Birga) shows log volume by level, API errors and warnings, all API lines and nginx
+  lines, with a search box. In Explore, `{service="api"} | json | request_id="<id>"` follows
+  one request.
+
+Config files live in `deploy/server/monitoring/`. Grafana is plain HTTP on the IP until the
+domains have HTTPS.
 
 ## GitHub Actions
 
