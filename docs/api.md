@@ -915,7 +915,7 @@ curl -X POST localhost:8080/v1/media --data-urlencode "file=$(base64 -i photo.jp
 The bucket is private, so S3 links without a signature answer 403. Load an image from
 `GET /v1/media/{id}` on this API (the `url` above, and `photo_url` on users and children,
 already hold this path; put the API's base URL in front, e.g.
-`http://159.195.86.66/v1/media/<id>`). It needs no token, so `<img src>` and Flutter's
+`https://api.birga-oila.com/v1/media/<id>`). It needs no token, so `<img src>` and Flutter's
 `Image.network` work as they are. It answers 302 with `Location` set to a signed S3 link that
 works for `MEDIA_LINK_TTL` (default 1 hour), and `Cache-Control: private, max-age=300`; image
 clients follow the redirect on their own. An id that is not an uploaded media id is 404
