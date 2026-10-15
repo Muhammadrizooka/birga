@@ -13,6 +13,7 @@ One Debian 13 server runs everything, installed from Debian packages rather than
 
 Public addresses (HTTPS from Let's Encrypt, renewed by certbot's timer):
 
+- Website: https://birga-oila.com (`www.` redirects to it; static Astro build from birga-dashboard `website/`, deployed by that repo's CI to `/var/www/birga-website`)
 - Dashboard: https://admin.birga-oila.com
 - API and Swagger: https://api.birga-oila.com (`/` opens `/swagger/index.html`)
 - The bare IP keeps working over plain HTTP.
@@ -25,6 +26,7 @@ Public addresses (HTTPS from Let's Encrypt, renewed by certbot's timer):
 | Backend API | systemd service `birga-backend`, binary `/opt/birga/backend/birga_backend`, listens on `127.0.0.1:8080` (metrics `127.0.0.1:9090`) |
 | Backend settings | `/etc/birga/backend.env` (root:birga, 640) |
 | Dashboard | static files in `/var/www/birga-dashboard` |
+| Website | static files in `/var/www/birga-website`, nginx `birga-site.conf` (only when Server setup gets `site_domain`); `/_astro/` cached a year, HTML `no-cache`, 404 page `/404.html` |
 | nginx | `api.<domain>` proxies to the API and its bare `/` redirects to Swagger; `admin.<domain>` serves the dashboard and proxies `/v1/` to the API (same origin, no CORS); the bare IP serves the dashboard at `/` and the API under `/birga/` (Swagger: `http://<ip>/birga/swagger/index.html`) and `/v1/` for Swagger's "Try it out". Request bodies up to 140 MB (100 MiB photos, also as base64) and 360 s proxy timeouts. The configs are installed by the Server setup workflow, not by a deploy |
 | HTTPS | Let's Encrypt via certbot, renewed automatically |
 | Firewall | ufw: SSH, HTTP and HTTPS only |
