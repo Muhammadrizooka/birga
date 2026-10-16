@@ -12,6 +12,9 @@ on:
       admin_domain:
         description: Dashboard host name, e.g. admin.example.uz
         required: true
+      site_domain:
+        description: Public website domain, e.g. example.uz (www. redirects to it; empty skips the website)
+        required: false
       cert_email:
         description: E-mail for Let's Encrypt expiry notices (empty skips HTTPS)
         required: false
@@ -43,12 +46,13 @@ jobs:
         env:
           API_DOMAIN: ${{ inputs.api_domain }}
           ADMIN_DOMAIN: ${{ inputs.admin_domain }}
+          SITE_DOMAIN: ${{ inputs.site_domain }}
           CERT_EMAIL: ${{ inputs.cert_email }}
           S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
           S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
         run: |
           umask 077
-          for k in API_DOMAIN ADMIN_DOMAIN CERT_EMAIL S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+          for k in API_DOMAIN ADMIN_DOMAIN SITE_DOMAIN CERT_EMAIL S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
             printf '%s=%q\n' "$k" "${!k}"
           done >setup.env
           ssh "$SSH_USER@$SSH_HOST" 'rm -rf /root/birga-setup && install -d -m 700 /root/birga-setup'

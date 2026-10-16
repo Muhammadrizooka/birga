@@ -6,6 +6,7 @@
 # Run as root from this directory. The "Server setup" GitHub Actions workflow does that.
 # Inputs (environment variables):
 #   API_DOMAIN, ADMIN_DOMAIN  host names served by nginx (required)
+#   SITE_DOMAIN               public website domain, e.g. birga-oila.com (optional; www. redirects to it)
 #   CERT_EMAIL                Let's Encrypt account e-mail (required for HTTPS)
 #   S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY  optional; written to the backend env file
 set -euo pipefail
@@ -13,12 +14,14 @@ set -euo pipefail
 : "${API_DOMAIN:?API_DOMAIN is required}"
 : "${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}"
 CERT_EMAIL="${CERT_EMAIL:-}"
+SITE_DOMAIN="${SITE_DOMAIN:-}"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 APP_USER=birga
 APP_DIR=/opt/birga/backend
 ENV_FILE=/etc/birga/backend.env
 WEB_ROOT=/var/www/birga-dashboard
+SITE_ROOT=/var/www/birga-website
 BACKUP_DIR=/var/backups/birga
 MIGRATE_VERSION=v4.18.3
 
@@ -54,7 +57,7 @@ redis-cli ping
 
 log "Service user and folders"
 id "$APP_USER" >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin "$APP_USER"
-install -d -m 755 "$APP_DIR" "$APP_DIR/migrations" "$WEB_ROOT"
+install -d -m 755 "$APP_DIR" "$APP_DIR/migrations" "$WEB_ROOT" "$SITE_ROOT"
 install -d -m 750 -o root -g "$APP_USER" /etc/birga
 install -d -m 700 -o postgres -g postgres "$BACKUP_DIR"
 
@@ -159,6 +162,12 @@ sed "s/{{API_DOMAIN}}/$API_DOMAIN/g" "$HERE/nginx-api.conf" >/etc/nginx/sites-av
 sed "s/{{ADMIN_DOMAIN}}/$ADMIN_DOMAIN/g" "$HERE/nginx-admin.conf" >/etc/nginx/sites-available/birga-admin.conf
 ln -sf /etc/nginx/sites-available/birga-api.conf /etc/nginx/sites-enabled/birga-api.conf
 ln -sf /etc/nginx/sites-available/birga-admin.conf /etc/nginx/sites-enabled/birga-admin.conf
+if [[ -n "$SITE_DOMAIN" ]]; then
+	[[ -f "$SITE_ROOT/index.html" ]] ||
+		echo '<!doctype html><title>Birga</title><p>The website has not been deployed yet.' >"$SITE_ROOT/index.html"
+	sed "s/{{SITE_DOMAIN}}/$SITE_DOMAIN/g" "$HERE/nginx-site.conf" >/etc/nginx/sites-available/birga-site.conf
+	ln -sf /etc/nginx/sites-available/birga-site.conf /etc/nginx/sites-enabled/birga-site.conf
+fi
 install -m 644 "$HERE/nginx-ip.conf" /etc/nginx/sites-available/birga-ip.conf
 ln -sf /etc/nginx/sites-available/birga-ip.conf /etc/nginx/sites-enabled/birga-ip.conf
 rm -f /etc/nginx/sites-enabled/default
@@ -170,14 +179,25 @@ bash "$HERE/monitoring.sh"
 
 log "HTTPS certificates"
 server_ip="$(curl -fsS -4 https://api.ipify.org || true)"
-for domain in "$API_DOMAIN" "$ADMIN_DOMAIN"; do
-	resolved="$(getent ahostsv4 "$domain" | awk 'NR == 1 { print $1 }')"
+# One certificate per entry; a space-separated entry shares one certificate (site + www).
+cert_sets=("$API_DOMAIN" "$ADMIN_DOMAIN")
+if [[ -n "$SITE_DOMAIN" ]]; then cert_sets+=("$SITE_DOMAIN www.$SITE_DOMAIN"); fi
+for names in "${cert_sets[@]}"; do
+	read -ra domains <<<"$names"
+	domain="${domains[0]}"
+	resolved=""
+	for d in "${domains[@]}"; do
+		r="$(getent ahostsv4 "$d" | awk 'NR == 1 { print $1 }')"
+		[[ "$r" == "$server_ip" ]] || { resolved="${r:-nothing}"; domain="$d"; break; }
+		resolved="$r"
+	done
 	if [[ -z "$CERT_EMAIL" ]]; then
 		echo "$domain: CERT_EMAIL not set, skipping HTTPS"
 	elif [[ -z "$resolved" || "$resolved" != "$server_ip" ]]; then
 		echo "$domain: DNS points to '${resolved:-nothing}', not this server ($server_ip); skipping HTTPS for now"
 	else
-		certbot --nginx --non-interactive --agree-tos --redirect -m "$CERT_EMAIL" -d "$domain" --keep-until-expiring
+		certbot --nginx --non-interactive --agree-tos --redirect -m "$CERT_EMAIL" \
+			"${domains[@]/#/--domains=}" --keep-until-expiring --expand
 	fi
 done
 
