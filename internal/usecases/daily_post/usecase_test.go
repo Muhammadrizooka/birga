@@ -45,7 +45,9 @@ func (f *fakeRepo) SetDailyPost(_ context.Context, _ string, day time.Time, id s
 	return nil
 }
 
-func (f *fakeRepo) Get(_ context.Context, id string) (domain.Post, error) { return domain.Post{ID: id}, nil }
+func (f *fakeRepo) Get(_ context.Context, id string) (domain.Post, error) {
+	return domain.Post{ID: id}, nil
+}
 
 func (f *fakeRepo) DailyHistory(context.Context, string, time.Time, int, int) ([]domain.DailyPost, int, error) {
 	return nil, 0, nil
