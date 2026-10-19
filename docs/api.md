@@ -26,8 +26,8 @@ Every response, success or failure, has the same shape:
 | -10 | 422 | validation error | business rule broken, e.g. `duration_minutes must be between 1 and 60`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification |
-| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification; a free-plan user opening a video that was not their daily video |
+| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity or article on an app endpoint, no published article or video for the daily article or video, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken`; starting the next plan before the current one is done |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
 | -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
@@ -211,6 +211,195 @@ curl -X PATCH localhost:8080/v1/admin/activities/$ID \
 Delete sets `deleted_at`. The activity then disappears from every list, get and
 recommendation, and a second delete is 404. Completions that point at it are kept, so a
 child's history and streak do not change. There is no undelete endpoint.
+
+### Articles (admin)
+
+Short texts for parents, managed from the dashboard. Same auth as the other admin endpoints.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/admin/articles` | create an article |
+| GET | `/v1/admin/articles` | list articles in every status |
+| GET | `/v1/admin/articles/{id}` | one article in any status |
+| PATCH | `/v1/admin/articles/{id}` | change some fields, including the status |
+| DELETE | `/v1/admin/articles/{id}` | soft-delete an article |
+
+List query parameters: `q` (title search in any language, ignoring case, at most 100
+characters), `status` (`published`, `in_review` or `unpublished`; omitted lists all),
+`goal_id`, `age` (2..6, matches `min_age <= age <= max_age`), `limit`, `offset`. Newest first.
+
+Create body:
+
+```json
+{
+  "title_uz": "Nega bola «yo‘q» deydi?",
+  "title_ru": "Почему ребёнок говорит «нет»?",
+  "title_en": "Why does a child say \"no\"?",
+  "article_body_uz": "2–5 yoshda «yo‘q» deyish rivojlanishning odatiy bosqichi. ...",
+  "article_body_ru": "В 2–5 лет «нет» — обычный этап развития. ...",
+  "article_body_en": "Saying \"no\" at 2–5 is a normal stage of development. ...",
+  "tip_uz": "Bugun kamida 3 marta bolaga ikki variantli tanlov bering.",
+  "tip_ru": "Сегодня хотя бы 3 раза дайте ребёнку выбор из двух вариантов.",
+  "tip_en": "Today, offer your child a choice of two options at least 3 times.",
+  "photo_id": null,
+  "expected_read_time": 3,
+  "min_age": 2,
+  "max_age": 5,
+  "goal_id": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00",
+  "status": "in_review"
+}
+```
+
+Validation (`usecases/article_creator`), all returning 422:
+
+- `title_*` and `article_body_*` are required in Uzbek, Russian and English (trimmed first);
+  `tip_*` is optional, `""` means the app shows no tip box ("Bugun sinab ko‘ring");
+- `goal_id` must be an active goal from [`GET /v1/goals`](#goals);
+- `photo_id` is optional, an id from [`POST /v1/media`](#media-public);
+- `1 <= expected_read_time <= 60` (minutes);
+- `2 <= min_age <= max_age <= 6`;
+- `status` is `published`, `in_review` or `unpublished`; omitted means `in_review`. Only
+  `published` articles reach the app.
+
+Update (`PATCH`) takes the same fields, all optional; omitted or `null` fields are kept. Titles
+and bodies cannot be emptied, `tip_*: ""` removes the tip and `photo_id: ""` removes the photo.
+An age valid alone but not with the stored one is 422. An empty body is 422 (`nothing to update`).
+
+```bash
+# publish
+curl -X PATCH localhost:8080/v1/admin/articles/$ID \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"status": "published"}'
+```
+
+Delete sets `deleted_at`: the article disappears from every list, get, daily article and article
+history. A second delete is 404.
+
+### Articles (signed in)
+
+All need `Authorization: Bearer <access token>` (any role) and only show `published` articles.
+Every article here carries `is_read` for the signed-in user.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/me/articles/daily` | today's article for this user and tomorrow's ("Kun maqolasi" card on the home screen) |
+| GET | `/v1/me/articles` | this user's daily articles up to today, newest first (`limit`, `offset`) |
+| GET | `/v1/articles` | published articles: `q`, `goal_id`, `age`, `limit`, `offset` |
+| GET | `/v1/articles/{id}` | one published article; others are 404 |
+| POST | `/v1/articles/{id}/read` | mark it read ("O‘qib chiqdim"); calling it again changes nothing |
+
+#### Daily article
+
+```json
+{
+  "day": "2026-10-19",
+  "article": { "...article object...": "", "is_read": false },
+  "tomorrow": { "id": "...", "title_uz": "Uyqudan oldingi tinch tartib", "title_ru": "...", "title_en": "...", "expected_read_time": 4 }
+}
+```
+
+`day` is today in Uzbekistan time. `tomorrow` is the article that will be today's article
+tomorrow ("Ertangi maqola: ..."), or `null` when no other article is published. 404 (`no
+published article yet`) when no article is published at all.
+
+How it is picked (`usecases/daily_article`, `articleRepo.PickDaily`): the first time a day is
+asked for, one article is chosen and stored in `user_daily_articles`, so it stays the same all
+day and the stored rows are the user's history (one user gets many articles over time). The
+next day's article is chosen and stored at the same time. Among published articles it prefers,
+in this order:
+
+1. an article whose `goal_id` is one of the goals of the user's children;
+2. whose age range fits at least one of the user's children;
+3. not shown to this user as a daily article before and not marked read;
+4. then the one shown longest ago, so once every matching article was shown they repeat;
+5. then the goal shown longest ago, so the days rotate through the children's goals;
+6. then the oldest article.
+
+So articles that fit a goal and an age always come first, even when they repeat; only when none
+exists does it fall back to a goal fit with another age, then to any published article. A stored
+pick that was unpublished or deleted since is replaced on the next call. A user with no children
+or no goals gets articles in the order of rules 3 to 6.
+
+### Daily videos: posts (admin)
+
+"Kun videosi": short videos for parents and children, managed from the dashboard. A post holds
+an uploaded video. Same auth as the other admin endpoints.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/admin/media` | upload the video (or an image): same form as [`POST /v1/media`](#media-public), also accepts MP4 and WebM |
+| POST | `/v1/admin/posts` | create a post |
+| GET | `/v1/admin/posts` | list posts in every status (`q`, `status`, `goal_id`, `age`, `limit`, `offset`, like articles) |
+| GET | `/v1/admin/posts/{id}` | one post in any status |
+| PATCH | `/v1/admin/posts/{id}` | change some fields, including the status |
+| DELETE | `/v1/admin/posts/{id}` | soft-delete a post (the video file is kept) |
+
+Create body:
+
+```json
+{
+  "title_uz": "Ranglar qo‘shig‘i",
+  "title_ru": "Песня о цветах",
+  "title_en": "The colours song",
+  "video_id": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
+  "goal_id": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00",
+  "min_age": 3,
+  "max_age": 5,
+  "duration": 4.2,
+  "suggestion_uz": "2–4 yoshda ekran oldida kuniga 1 soatdan kam vaqt. Videoni birga ko‘ring.",
+  "suggestion_ru": "...", "suggestion_en": "...",
+  "questions_uz": "«Qaysi rang senga eng ko‘p yoqdi?»\n«Uyimizda qizil rangli nima bor?»",
+  "questions_ru": "...", "questions_en": "...",
+  "status": "in_review"
+}
+```
+
+Validation (`usecases/post_creator`), all returning 422:
+
+- `title_*` is required in Uzbek, Russian and English; `suggestion_*` (the "Tavsiya" line) and
+  `questions_*` (the "Ko‘rgandan keyin so‘rang" box, one question per line) are optional, `""`
+  hides them;
+- `video_id` must be an MP4 or WebM video uploaded with `POST /v1/admin/media` (an image or an
+  unknown id is `video_id is not an uploaded video, ...`);
+- `goal_id` must be an active goal;
+- `duration` is in minutes, a decimal (`4.2` is 4:12), more than 0 and at most 600;
+- `2 <= min_age <= max_age <= 6`;
+- `status` as for articles; omitted means `in_review`.
+
+Update (`PATCH`) takes the same fields, all optional, with the same rules; titles cannot be
+emptied, `suggestion_*`/`questions_*: ""` removes them. Delete sets `deleted_at`: the post
+disappears from every list, get, daily video and history.
+
+### Daily videos: posts (signed in)
+
+All need `Authorization: Bearer <access token>` and only show `published` posts.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/me/posts/daily` | today's video for this user ("Kun videosi" card) and the next ones, locked |
+| GET | `/v1/me/posts` | this user's daily videos up to today, newest first (`limit`, `offset`) |
+| GET | `/v1/posts` | published posts as previews without the video (`q`, `goal_id`, `age`, `limit`, `offset`) |
+| GET | `/v1/posts/{id}` | one published post with its video, see the rule below |
+
+```json
+{
+  "day": "2026-10-19",
+  "post": { "...post object...": "" },
+  "next": [ { "id": "...", "title_uz": "Hayvonlar ovozi", "title_ru": "...", "title_en": "...", "goal_id": "...", "min_age": 3, "max_age": 5, "duration": 3.67 } ]
+}
+```
+
+The daily video is picked once per day (Uzbekistan time), stored in `user_daily_posts` and
+stays the same all day, by the same order as the [daily article](#daily-article) (goal of the
+user's children, age fit, not shown before, the one shown longest ago, goal rotation, oldest
+first). `next` lists up to 2 videos that would come next; they are a preview, not stored, and
+have no video, for the locked "Keyingi videolar" list. 404 (`no published video yet`) when no
+post is published.
+
+One video a day on the free plan: users with role `user` or `unverified_user` can open with
+`GET /v1/posts/{id}` only posts that were their daily video, today or earlier; any other post is
+403 (`this video was not your daily video, ...`). Roles `paid_user` and `admin` can open every
+published post. The video plays from `video_url` (`/v1/media/{video_id}`, a 302 to a signed S3
+link, no token needed; video players follow the redirect and can seek).
 
 ### Goals
 
@@ -852,6 +1041,7 @@ takes no photo).
 | Method | Path | Description |
 |---|---|---|
 | POST | `/v1/media` | upload one image |
+| POST | `/v1/admin/media` | admin only: upload an image or an MP4/WebM video (for [daily videos](#daily-videos-posts-admin)) |
 | GET | `/v1/media/{id}` | open an image: 302 redirect to a signed S3 link |
 
 The body is form data with one field, `file`, in any of these forms:
@@ -1023,6 +1213,43 @@ Deleted goals are never returned, so `deleted_at` is not part of the object.
 | `created_at`, `updated_at` | RFC 3339 timestamp | |
 
 Soft-deleted activities are never returned, so `deleted_at` is not part of the object.
+
+### Article object
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID string | generated by the database |
+| `title_uz`, `title_ru`, `title_en` | string | |
+| `article_body_uz`, `article_body_ru`, `article_body_en` | string | plain text; paragraphs separated by blank lines |
+| `tip_uz`, `tip_ru`, `tip_en` | string | the "try it today" box; `""` when there is none |
+| `photo_id` | UUID string or `null` | id from `POST /v1/media` |
+| `photo_url` | string or `null` | `/v1/media/{photo_id}`, see [Showing an image](#showing-an-image) |
+| `expected_read_time` | int | minutes |
+| `min_age`, `max_age` | int | years, inclusive (the "2–5 yosh" tag) |
+| `goal_id` | UUID string | the [goal](#goals) the article serves (the tag, e.g. "Xulq-atvor") |
+| `status` | string | `published`, `in_review` or `unpublished` |
+| `created_at`, `updated_at` | RFC 3339 timestamp | |
+| `is_read` | bool | only on the signed-in endpoints: whether this user marked it read |
+
+Soft-deleted articles are never returned, so `deleted_at` is not part of the object.
+
+### Post object
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID string | generated by the database |
+| `title_uz`, `title_ru`, `title_en` | string | |
+| `video_id` | UUID string | the uploaded video |
+| `video_url` | string | `/v1/media/{video_id}`; play it from the API base address |
+| `goal_id` | UUID string | the [goal](#goals) the video serves (the tag, e.g. "Nutq") |
+| `min_age`, `max_age` | int | years, inclusive ("3–5 yosh") |
+| `duration` | number | minutes, a decimal (`4.2` is 4:12) |
+| `suggestion_uz`, `suggestion_ru`, `suggestion_en` | string | the "Tavsiya" line; `""` when there is none |
+| `questions_uz`, `questions_ru`, `questions_en` | string | questions to ask after watching, one per line; `""` when there are none |
+| `status` | string | `published`, `in_review` or `unpublished` |
+| `created_at`, `updated_at` | RFC 3339 timestamp | |
+
+Soft-deleted posts are never returned.
 
 ### Completion object
 

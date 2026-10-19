@@ -176,6 +176,82 @@ type MeUseCases struct {
 	Children childLister
 }
 
+type articleCreator interface {
+	Execute(ctx context.Context, a domain.Article) (domain.Article, error)
+}
+
+type articleLister interface {
+	Execute(ctx context.Context, f domain.ArticleFilter) ([]domain.Article, int, error)
+}
+
+type articleGetter interface {
+	Execute(ctx context.Context, id, readerID string) (domain.Article, error)
+}
+
+type articleUpdater interface {
+	Execute(ctx context.Context, id string, upd domain.ArticleUpdate) (domain.Article, error)
+}
+
+type articleDeleter interface {
+	Execute(ctx context.Context, id string) error
+}
+
+type articleReader interface {
+	Execute(ctx context.Context, userID, articleID string) error
+}
+
+type dailyArticle interface {
+	Execute(ctx context.Context, userID string) (domain.DailyArticles, error)
+	History(ctx context.Context, userID string, limit, offset int) ([]domain.DailyArticle, int, error)
+}
+
+// ArticleUseCases groups the use cases behind /v1/articles, /v1/me/articles and /v1/admin/articles.
+type ArticleUseCases struct {
+	Creator articleCreator
+	Lister  articleLister
+	Getter  articleGetter
+	Updater articleUpdater
+	Deleter articleDeleter
+	Reader  articleReader
+	Daily   dailyArticle
+}
+
+type postCreator interface {
+	Execute(ctx context.Context, p domain.Post) (domain.Post, error)
+}
+
+type postLister interface {
+	Execute(ctx context.Context, f domain.PostFilter) ([]domain.Post, int, error)
+}
+
+type postGetter interface {
+	Execute(ctx context.Context, id string) (domain.Post, error)
+	ForUser(ctx context.Context, userID string, role domain.UserRole, id string) (domain.Post, error)
+}
+
+type postUpdater interface {
+	Execute(ctx context.Context, id string, upd domain.PostUpdate) (domain.Post, error)
+}
+
+type postDeleter interface {
+	Execute(ctx context.Context, id string) error
+}
+
+type dailyPost interface {
+	Execute(ctx context.Context, userID string) (domain.DailyPosts, error)
+	History(ctx context.Context, userID string, limit, offset int) ([]domain.DailyPost, int, error)
+}
+
+// PostUseCases groups the use cases behind /v1/posts, /v1/me/posts and /v1/admin/posts.
+type PostUseCases struct {
+	Creator postCreator
+	Lister  postLister
+	Getter  postGetter
+	Updater postUpdater
+	Deleter postDeleter
+	Daily   dailyPost
+}
+
 type otpSender interface {
 	Execute(ctx context.Context, req domain.OTPSendRequest) (domain.OTPSendResult, error)
 }
@@ -270,6 +346,21 @@ type Server struct {
 	userUpdater userUpdater
 	userDeleter userDeleter
 
+	articleCreator articleCreator
+	articleLister  articleLister
+	articleGetter  articleGetter
+	articleUpdater articleUpdater
+	articleDeleter articleDeleter
+	articleReader  articleReader
+	dailyArticle   dailyArticle
+
+	postCreator postCreator
+	postLister  postLister
+	postGetter  postGetter
+	postUpdater postUpdater
+	postDeleter postDeleter
+	dailyPost   dailyPost
+
 	profileUpdater   profileUpdater
 	passwordResetter passwordResetter
 	childLister      childLister
@@ -303,6 +394,8 @@ func New(cfg config.Application,
 	me MeUseCases,
 	otp OTPUseCases,
 	auth AuthUseCases,
+	articles ArticleUseCases,
+	posts PostUseCases,
 	media mediaUploader,
 ) *Server {
 	if cfg.IsProduction() {
@@ -358,6 +451,21 @@ func New(cfg config.Application,
 		userGetter:  users.Getter,
 		userUpdater: users.Updater,
 		userDeleter: users.Deleter,
+
+		articleCreator: articles.Creator,
+		articleLister:  articles.Lister,
+		articleGetter:  articles.Getter,
+		articleUpdater: articles.Updater,
+		articleDeleter: articles.Deleter,
+		articleReader:  articles.Reader,
+		dailyArticle:   articles.Daily,
+
+		postCreator: posts.Creator,
+		postLister:  posts.Lister,
+		postGetter:  posts.Getter,
+		postUpdater: posts.Updater,
+		postDeleter: posts.Deleter,
+		dailyPost:   posts.Daily,
 
 		profileUpdater:   me.Updater,
 		passwordResetter: me.Password,

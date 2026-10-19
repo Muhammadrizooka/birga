@@ -48,6 +48,31 @@ type mediaView struct {
 // @Failure 503 {object} rest.ServiceUnavailableResponse
 // @Router /v1/media [POST]
 func (s *Server) UploadMedia() gin.HandlerFunc {
+	return s.uploadMedia(false)
+}
+
+// AdminUploadMedia godoc swagger
+// @Summary uploads an image or a video (a daily video) to S3
+// @Description - same form and limits as POST /v1/media; also accepts MP4 and WebM videos, detected from the bytes
+// @Description - the answer's id goes into posts.video_id; GET /v1/media/{id} redirects to the file, video players follow it
+// @Tags admin
+// @Security AdminKey
+// @Accept multipart/form-data
+// @Accept x-www-form-urlencoded
+// @Produce json
+// @Param file formData file true "the image or video: a file part, or a base64 string in the same field"
+// @Success 200 {object} rest.R{data=rest.mediaView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 422 {object} rest.UnprocessableContentResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Failure 503 {object} rest.ServiceUnavailableResponse
+// @Router /v1/admin/media [POST]
+func (s *Server) AdminUploadMedia() gin.HandlerFunc {
+	return s.uploadMedia(true)
+}
+
+func (s *Server) uploadMedia(allowVideo bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if s.mediaUploader == nil {
 			fail(c, http.StatusServiceUnavailable, _errCodeUnavailable, "media uploads are disabled")
@@ -66,7 +91,7 @@ func (s *Server) UploadMedia() gin.HandlerFunc {
 			return
 		}
 
-		m, err := s.mediaUploader.Execute(c.Request.Context(), domain.MediaUpload{Data: data})
+		m, err := s.mediaUploader.Execute(c.Request.Context(), domain.MediaUpload{Data: data, AllowVideo: allowVideo})
 		if err != nil {
 			Return(c, nil, err)
 

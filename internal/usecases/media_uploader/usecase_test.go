@@ -139,3 +139,25 @@ func TestLink(t *testing.T) {
 		t.Fatalf("bad id: %v", err)
 	}
 }
+
+// mp4Header is the start of an MP4 file: an ftyp box with the "mp42" brand.
+var mp4Header = []byte("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
+
+func TestExecute_Video(t *testing.T) {
+	st := &mockStorage{}
+
+	if _, err := New(zap.NewNop(), &mockRepo{}, st, 1024, "", time.Hour).Execute(context.Background(),
+		domain.MediaUpload{Data: mp4Header}); !errors.Is(err, errs.ErrMediaUnsupportedType) || st.putKey != "" {
+		t.Fatalf("a video without AllowVideo must be refused: %v", err)
+	}
+
+	if _, err := New(zap.NewNop(), &mockRepo{}, st, 1024, "", time.Hour).Execute(context.Background(),
+		domain.MediaUpload{Data: mp4Header, AllowVideo: true}); err != nil || st.putType != "video/mp4" || !strings.HasSuffix(st.putKey, ".mp4") {
+		t.Fatalf("video upload: %v, type %q, key %q", err, st.putType, st.putKey)
+	}
+
+	if _, err := New(zap.NewNop(), &mockRepo{}, &mockStorage{}, 1024, "", time.Hour).Execute(context.Background(),
+		domain.MediaUpload{Data: []byte("GIF89a......"), AllowVideo: true}); !errors.Is(err, errs.ErrMediaUnsupportedTypeOrVideo) {
+		t.Fatalf("gif with AllowVideo: %v", err)
+	}
+}

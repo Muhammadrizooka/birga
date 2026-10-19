@@ -585,6 +585,393 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/admin/articles": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "lists articles in every status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the title (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "in_review",
+                            "unpublished"
+                        ],
+                        "type": "string",
+                        "description": "published, in_review or unpublished; omitted lists all",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.articleListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- title and article_body are required in Uzbek, Russian and English; tip_* is optional (\"\" = no tip box)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- photo_id is an optional id from POST /v1/media (422 if unknown)\n- expected_read_time is in minutes (1..60); min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published articles reach the app",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "creates an article",
+                "parameters": [
+                    {
+                        "description": "article",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.CreateArticleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.articleView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/articles/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "returns an article in any status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "article id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.articleView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Sets deleted_at; the article disappears from every list, get, daily article and article history.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "soft-deletes an article",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "article id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles and bodies cannot be emptied; tip_* \"\" removes the tip; photo_id \"\" removes the photo\n- the resulting age range must stay valid (422)\n- send {\"status\": \"published\"} to show it in the app, \"in_review\" or \"unpublished\" to hide it",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "updates an article partially, including its status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "article id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.UpdateArticleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.articleView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/goals": {
             "post": {
                 "security": [
@@ -826,6 +1213,473 @@ const docTemplate = `{
                         "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/media": {
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- same form and limits as POST /v1/media; also accepts MP4 and WebM videos, detected from the bytes\n- the answer's id goes into posts.video_id; GET /v1/media/{id} redirects to the file, video players follow it",
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "uploads an image or a video (a daily video) to S3",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "the image or video: a file part, or a base64 string in the same field",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.mediaView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ServiceUnavailableResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/posts": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "lists video posts in every status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the title (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "in_review",
+                            "unpublished"
+                        ],
+                        "type": "string",
+                        "description": "published, in_review or unpublished; omitted lists all",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- title is required in Uzbek, Russian and English; suggestion_* (\"Tavsiya\" line) and\nquestions_* (\"ask after watching\" box, one question per line) are optional, \"\" hides them\n- video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "creates a video post (\"Kun videosi\")",
+                "parameters": [
+                    {
+                        "description": "post",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.CreatePostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/posts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "returns a video post in any status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Sets deleted_at; the post disappears from every list, get, daily video and video history.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "soft-deletes a video post",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles cannot be emptied; suggestion_*/questions_* \"\" removes them\n- the resulting age range must stay valid (422)\n- send {\"status\": \"published\"} to show it in the app, \"in_review\" or \"unpublished\" to hide it",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "updates a video post partially, including its status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.UpdatePostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "422": {
@@ -1196,6 +2050,226 @@ const docTemplate = `{
                         "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/articles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Each item says whether the signed-in user marked it read (is_read).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "articles"
+                ],
+                "summary": "lists published articles",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the title (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.userArticleListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/articles/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "articles"
+                ],
+                "summary": "returns a published article",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "article id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.userArticleView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/articles/{id}/read": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Calling it again is fine and changes nothing. The article then has is_read=true for this user,\nand the daily article prefers articles the user has not read.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "articles"
+                ],
+                "summary": "marks a published article read (\"O‘qib chiqdim\")",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "article id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "500": {
@@ -2581,6 +3655,130 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/me/articles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One item per day the user opened the daily article. Deleted articles are left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "articles"
+                ],
+                "summary": "lists the signed-in user's daily articles of earlier days and today, newest first",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.dailyArticleListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/articles/daily": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The article is picked once per day (Uzbekistan time) and stays the same all day.\nIt prefers, in order: an article for one of the goals of the user's children, whose age range\nfits one of the children, not shown or read before, then rotates through the goals.\ntomorrow is the article that will show tomorrow (\"Ertangi maqola\"); null when there is no other article.\n404 when no article is published.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "articles"
+                ],
+                "summary": "returns the signed-in user's article of the day, and tomorrow's",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.dailyArticleView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/me/children": {
             "get": {
                 "security": [
@@ -2720,6 +3918,130 @@ const docTemplate = `{
                         "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/posts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One item per day the user opened the daily video. Deleted posts are left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "lists the signed-in user's daily videos of earlier days and today, newest first",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.dailyPostListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/posts/daily": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The video is picked once per day (Uzbekistan time) and stays the same all day, the same way as the\ndaily article: a goal of the user's children first, an age that fits a child, not shown before, then\nrotating through the goals. next lists up to 2 videos that would come next, without the video, for\nthe locked \"Keyingi videolar\" list. 404 when no video is published.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "returns the signed-in user's video of the day (\"Kun videosi\")",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.dailyPostView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "500": {
@@ -2986,6 +4308,175 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/posts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every signed-in user may browse the titles; opening a video follows the rules of GET /v1/posts/{id}.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "lists published video posts as previews, without the video",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the title (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postTeaserListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/posts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Roles user and unverified_user (the free plan) may open only posts that were their daily video,\ntoday or earlier (403 otherwise); paid_user and admin may open every published post.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "returns a published video post with its video",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -3130,6 +4621,83 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.CreateArticleRequest": {
+            "type": "object",
+            "properties": {
+                "article_body_en": {
+                    "type": "string",
+                    "example": "Saying \"no\" at 2–5 is a normal stage of development."
+                },
+                "article_body_ru": {
+                    "type": "string",
+                    "example": "В 2–5 лет «нет» — обычный этап развития."
+                },
+                "article_body_uz": {
+                    "type": "string",
+                    "example": "2–5 yoshda «yo‘q» deyish rivojlanishning odatiy bosqichi."
+                },
+                "expected_read_time": {
+                    "description": "ExpectedReadTime is in minutes.",
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 1,
+                    "example": 3
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 2
+                },
+                "photo_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "in_review"
+                },
+                "tip_en": {
+                    "type": "string",
+                    "example": "Today, offer your child a choice of two options at least 3 times."
+                },
+                "tip_ru": {
+                    "type": "string",
+                    "example": "Сегодня хотя бы 3 раза дайте ребёнку выбор из двух вариантов."
+                },
+                "tip_uz": {
+                    "type": "string",
+                    "example": "Bugun kamida 3 marta bolaga ikki variantli tanlov bering."
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Why does a child say \"no\"?"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Почему ребёнок говорит «нет»?"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Nega bola «yo‘q» deydi?"
+                }
+            }
+        },
         "rest.CreateChildRequest": {
             "type": "object",
             "properties": {
@@ -3179,6 +4747,81 @@ const docTemplate = `{
                 "name_uz": {
                     "type": "string",
                     "example": "Nutqni rivojlantirish"
+                }
+            }
+        },
+        "rest.CreatePostRequest": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "description": "Duration is in minutes, a decimal: 4.2 is 4:12.",
+                    "type": "number",
+                    "example": 4.2
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 3
+                },
+                "questions_en": {
+                    "type": "string",
+                    "example": "\"Which colour did you like most?\"\n\"What is red in our home?\""
+                },
+                "questions_ru": {
+                    "type": "string",
+                    "example": "«Какой цвет тебе понравился больше всего?»\n«Что у нас дома красное?»"
+                },
+                "questions_uz": {
+                    "type": "string",
+                    "example": "«Qaysi rang senga eng ko‘p yoqdi?»\n«Uyimizda qizil rangli nima bor?»"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "in_review"
+                },
+                "suggestion_en": {
+                    "type": "string",
+                    "example": "At 2–4, less than an hour of screen time a day. Watch the video together."
+                },
+                "suggestion_ru": {
+                    "type": "string",
+                    "example": "В 2–4 года меньше часа у экрана в день. Смотрите видео вместе."
+                },
+                "suggestion_uz": {
+                    "type": "string",
+                    "example": "2–4 yoshda ekran oldida kuniga 1 soatdan kam vaqt. Videoni birga ko‘ring."
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "The colours song"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Песня о цветах"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Ranglar qo‘shig‘i"
+                },
+                "video_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 }
             }
         },
@@ -3568,6 +5211,77 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.UpdateArticleRequest": {
+            "type": "object",
+            "properties": {
+                "article_body_en": {
+                    "type": "string"
+                },
+                "article_body_ru": {
+                    "type": "string"
+                },
+                "article_body_uz": {
+                    "type": "string"
+                },
+                "expected_read_time": {
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 1,
+                    "example": 3
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 2
+                },
+                "photo_id": {
+                    "description": "PhotoID \"\" removes the photo.",
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "tip_en": {
+                    "type": "string"
+                },
+                "tip_ru": {
+                    "type": "string"
+                },
+                "tip_uz": {
+                    "type": "string"
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Why does a child say \"no\"?"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Почему ребёнок говорит «нет»?"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Nega bola «yo‘q» deydi?"
+                }
+            }
+        },
         "rest.UpdateChildRequest": {
             "type": "object",
             "properties": {
@@ -3617,6 +5331,74 @@ const docTemplate = `{
                 "name_uz": {
                     "type": "string",
                     "example": "Nutqni rivojlantirish"
+                }
+            }
+        },
+        "rest.UpdatePostRequest": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "type": "number",
+                    "example": 4.2
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 3
+                },
+                "questions_en": {
+                    "type": "string"
+                },
+                "questions_ru": {
+                    "type": "string"
+                },
+                "questions_uz": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "suggestion_en": {
+                    "type": "string"
+                },
+                "suggestion_ru": {
+                    "type": "string"
+                },
+                "suggestion_uz": {
+                    "type": "string"
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "The colours song"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Песня о цветах"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Ranglar qo‘shig‘i"
+                },
+                "video_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 }
             }
         },
@@ -3796,6 +5578,134 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.articleListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.articleView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "rest.articleTeaserView": {
+            "type": "object",
+            "properties": {
+                "expected_read_time": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "A calm bedtime routine"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Спокойный ритуал перед сном"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Uyqudan oldingi tinch tartib"
+                }
+            }
+        },
+        "rest.articleView": {
+            "type": "object",
+            "properties": {
+                "article_body_en": {
+                    "type": "string"
+                },
+                "article_body_ru": {
+                    "type": "string"
+                },
+                "article_body_uz": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "expected_read_time": {
+                    "description": "ExpectedReadTime is in minutes.",
+                    "type": "integer",
+                    "example": 3
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "photo_id": {
+                    "type": "string",
+                    "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "photo_url": {
+                    "description": "PhotoURL is where the app loads the photo from (GET, no token); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "tip_en": {
+                    "type": "string"
+                },
+                "tip_ru": {
+                    "type": "string"
+                },
+                "tip_uz": {
+                    "type": "string"
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Why does a child say \"no\"?"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Почему ребёнок говорит «нет»?"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Nega bola «yo‘q» deydi?"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "rest.childListView": {
             "type": "object",
             "properties": {
@@ -3921,6 +5831,111 @@ const docTemplate = `{
                 "user_id": {
                     "type": "string",
                     "example": "9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d"
+                }
+            }
+        },
+        "rest.dailyArticleItemView": {
+            "type": "object",
+            "properties": {
+                "article": {
+                    "$ref": "#/definitions/rest.userArticleView"
+                },
+                "day": {
+                    "type": "string",
+                    "example": "2026-10-19"
+                }
+            }
+        },
+        "rest.dailyArticleListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.dailyArticleItemView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 12
+                }
+            }
+        },
+        "rest.dailyArticleView": {
+            "type": "object",
+            "properties": {
+                "article": {
+                    "$ref": "#/definitions/rest.userArticleView"
+                },
+                "day": {
+                    "description": "Day is today's date in Uzbekistan time.",
+                    "type": "string",
+                    "example": "2026-10-19"
+                },
+                "tomorrow": {
+                    "$ref": "#/definitions/rest.articleTeaserView"
+                }
+            }
+        },
+        "rest.dailyPostItemView": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "type": "string",
+                    "example": "2026-10-19"
+                },
+                "post": {
+                    "$ref": "#/definitions/rest.postView"
+                }
+            }
+        },
+        "rest.dailyPostListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.dailyPostItemView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 12
+                }
+            }
+        },
+        "rest.dailyPostView": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "description": "Day is today's date in Uzbekistan time.",
+                    "type": "string",
+                    "example": "2026-10-19"
+                },
+                "next": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.postTeaserView"
+                    }
+                },
+                "post": {
+                    "$ref": "#/definitions/rest.postView"
                 }
             }
         },
@@ -4098,6 +6113,169 @@ const docTemplate = `{
                 "started_on": {
                     "type": "string",
                     "example": "2026-10-11"
+                }
+            }
+        },
+        "rest.postListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.postView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "rest.postTeaserListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.postTeaserView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "rest.postTeaserView": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "type": "number",
+                    "example": 3.67
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Animal sounds"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Голоса животных"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Hayvonlar ovozi"
+                }
+            }
+        },
+        "rest.postView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "duration": {
+                    "description": "Duration is in minutes, a decimal: 4.2 is 4:12.",
+                    "type": "number",
+                    "example": 4.2
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "questions_en": {
+                    "type": "string"
+                },
+                "questions_ru": {
+                    "type": "string"
+                },
+                "questions_uz": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "suggestion_en": {
+                    "type": "string"
+                },
+                "suggestion_ru": {
+                    "type": "string"
+                },
+                "suggestion_uz": {
+                    "type": "string"
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "The colours song"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Песня о цветах"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Ranglar qo‘shig‘i"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "video_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "video_url": {
+                    "description": "VideoURL plays the video without a token: it redirects (302) to a short-lived link.",
+                    "type": "string",
+                    "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 }
             }
         },
@@ -4286,6 +6464,114 @@ const docTemplate = `{
                 "refresh_token": {
                     "type": "string",
                     "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
+        "rest.userArticleListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.userArticleView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "rest.userArticleView": {
+            "type": "object",
+            "properties": {
+                "article_body_en": {
+                    "type": "string"
+                },
+                "article_body_ru": {
+                    "type": "string"
+                },
+                "article_body_uz": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "expected_read_time": {
+                    "description": "ExpectedReadTime is in minutes.",
+                    "type": "integer",
+                    "example": 3
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "is_read": {
+                    "description": "IsRead tells whether the signed-in user marked the article read.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "photo_id": {
+                    "type": "string",
+                    "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "photo_url": {
+                    "description": "PhotoURL is where the app loads the photo from (GET, no token); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "tip_en": {
+                    "type": "string"
+                },
+                "tip_ru": {
+                    "type": "string"
+                },
+                "tip_uz": {
+                    "type": "string"
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Why does a child say \"no\"?"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Почему ребёнок говорит «нет»?"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Nega bola «yo‘q» deydi?"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
