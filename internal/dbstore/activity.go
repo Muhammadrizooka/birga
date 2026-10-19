@@ -29,6 +29,9 @@ type dbActivity struct {
 	DescriptionUz   string    `db:"description_uz"`
 	DescriptionRu   string    `db:"description_ru"`
 	DescriptionEn   string    `db:"description_en"`
+	MainIdeaUz      string    `db:"main_idea_uz"`
+	MainIdeaRu      string    `db:"main_idea_ru"`
+	MainIdeaEn      string    `db:"main_idea_en"`
 	GoalIDs         []string  `db:"goal_ids"`
 	MinAge          int16     `db:"min_age"`
 	MaxAge          int16     `db:"max_age"`
@@ -39,8 +42,8 @@ type dbActivity struct {
 }
 
 const activityColumns = `
-	id, title_uz, title_ru, title_en, description_uz, description_ru, description_en, goal_ids,
-	min_age, max_age, duration_minutes, is_published, created_at, updated_at`
+	id, title_uz, title_ru, title_en, description_uz, description_ru, description_en, main_idea_uz, main_idea_ru, main_idea_en,
+	goal_ids, min_age, max_age, duration_minutes, is_published, created_at, updated_at`
 
 func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Activity, error) {
 	l := logger.FromCtx(ctx, "activityRepo.Create")
@@ -49,14 +52,15 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 		sqlClient = r.store.sqlClientByCtx(ctx)
 		q         = `
 		INSERT INTO activities (
-			title_uz, title_ru, title_en, description_uz, description_ru, description_en, goal_ids,
-			min_age, max_age, duration_minutes, is_published
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			title_uz, title_ru, title_en, description_uz, description_ru, description_en,
+			main_idea_uz, main_idea_ru, main_idea_en, goal_ids, min_age, max_age, duration_minutes, is_published
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING ` + activityColumns
 	)
 
 	rows, err := sqlClient.Query(ctx, q,
-		a.TitleUz, a.TitleRu, a.TitleEn, a.DescriptionUz, a.DescriptionRu, a.DescriptionEn, a.GoalIDs,
+		a.TitleUz, a.TitleRu, a.TitleEn, a.DescriptionUz, a.DescriptionRu, a.DescriptionEn,
+		a.MainIdeaUz, a.MainIdeaRu, a.MainIdeaEn, a.GoalIDs,
 		a.MinAge, a.MaxAge, a.DurationMinutes, a.IsPublished,
 	)
 	if err != nil {
@@ -264,6 +268,18 @@ func activitySet(upd domain.ActivityUpdate) (string, []any) {
 		add("description_en", *upd.DescriptionEn)
 	}
 
+	if upd.MainIdeaUz != nil {
+		add("main_idea_uz", *upd.MainIdeaUz)
+	}
+
+	if upd.MainIdeaRu != nil {
+		add("main_idea_ru", *upd.MainIdeaRu)
+	}
+
+	if upd.MainIdeaEn != nil {
+		add("main_idea_en", *upd.MainIdeaEn)
+	}
+
 	if upd.GoalIDs != nil {
 		add("goal_ids", upd.GoalIDs)
 	}
@@ -296,6 +312,9 @@ func (a dbActivity) toDomain() domain.Activity {
 		DescriptionUz:   a.DescriptionUz,
 		DescriptionRu:   a.DescriptionRu,
 		DescriptionEn:   a.DescriptionEn,
+		MainIdeaUz:      a.MainIdeaUz,
+		MainIdeaRu:      a.MainIdeaRu,
+		MainIdeaEn:      a.MainIdeaEn,
 		GoalIDs:         nonNil(a.GoalIDs),
 		MinAge:          int(a.MinAge),
 		MaxAge:          int(a.MaxAge),

@@ -77,6 +77,15 @@ definitions:
       is_published:
         example: true
         type: boolean
+      main_idea_en:
+        example: Naming colours helps the child tell them apart.
+        type: string
+      main_idea_ru:
+        example: Называя цвета, ребёнок учится их различать.
+        type: string
+      main_idea_uz:
+        example: Bola ranglarni nomlab, ularni farqlashni o'rganadi.
+        type: string
       max_age:
         example: 5
         maximum: 6
@@ -493,6 +502,15 @@ definitions:
       is_published:
         example: true
         type: boolean
+      main_idea_en:
+        example: Naming colours helps the child tell them apart.
+        type: string
+      main_idea_ru:
+        example: Называя цвета, ребёнок учится их различать.
+        type: string
+      main_idea_uz:
+        example: Bola ranglarni nomlab, ularni farqlashni o'rganadi.
+        type: string
       max_age:
         example: 5
         maximum: 6
@@ -764,6 +782,12 @@ definitions:
       is_published:
         example: true
         type: boolean
+      main_idea_en:
+        type: string
+      main_idea_ru:
+        type: string
+      main_idea_uz:
+        type: string
       max_age:
         example: 5
         type: integer
@@ -1772,6 +1796,7 @@ paths:
         - goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an
         active goal (422), repeats are stored once
         - min_age/max_age are child ages in years, within 2..6
+        - main_idea_uz/ru/en are optional (the "Katta g'oya" box); empty hides the box in the app
       parameters:
       - description: activity
         in: body
@@ -1896,7 +1921,7 @@ paths:
       - application/json
       description: |-
         - only the fields present in the body change; omitted or null fields are kept
-        - same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)
+        - same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)
         - goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids
         - send {"is_published": true} to publish, false to hide it from the app
       parameters:

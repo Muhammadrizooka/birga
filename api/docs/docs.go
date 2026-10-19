@@ -306,7 +306,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6",
+                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6\n- main_idea_uz/ru/en are optional (the \"Katta g'oya\" box); empty hides the box in the app",
                 "consumes": [
                     "application/json"
                 ],
@@ -504,7 +504,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)\n- goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids\n- send {\"is_published\": true} to publish, false to hide it from the app",
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)\n- goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids\n- send {\"is_published\": true} to publish, false to hide it from the app",
                 "consumes": [
                     "application/json"
                 ],
@@ -4595,6 +4595,18 @@ const docTemplate = `{
                     "type": "boolean",
                     "example": true
                 },
+                "main_idea_en": {
+                    "type": "string",
+                    "example": "Naming colours helps the child tell them apart."
+                },
+                "main_idea_ru": {
+                    "type": "string",
+                    "example": "Называя цвета, ребёнок учится их различать."
+                },
+                "main_idea_uz": {
+                    "type": "string",
+                    "example": "Bola ranglarni nomlab, ularni farqlashni o'rganadi."
+                },
                 "max_age": {
                     "type": "integer",
                     "maximum": 6,
@@ -5185,6 +5197,18 @@ const docTemplate = `{
                     "type": "boolean",
                     "example": true
                 },
+                "main_idea_en": {
+                    "type": "string",
+                    "example": "Naming colours helps the child tell them apart."
+                },
+                "main_idea_ru": {
+                    "type": "string",
+                    "example": "Называя цвета, ребёнок учится их различать."
+                },
+                "main_idea_uz": {
+                    "type": "string",
+                    "example": "Bola ranglarni nomlab, ularni farqlashni o'rganadi."
+                },
                 "max_age": {
                     "type": "integer",
                     "maximum": 6,
@@ -5552,6 +5576,15 @@ const docTemplate = `{
                 "is_published": {
                     "type": "boolean",
                     "example": true
+                },
+                "main_idea_en": {
+                    "type": "string"
+                },
+                "main_idea_ru": {
+                    "type": "string"
+                },
+                "main_idea_uz": {
+                    "type": "string"
                 },
                 "max_age": {
                     "type": "integer",

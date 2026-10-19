@@ -47,6 +47,9 @@ func (uc *UseCase) Execute(ctx context.Context, a domain.Activity) (domain.Activ
 	a.DescriptionUz = strings.TrimSpace(a.DescriptionUz)
 	a.DescriptionRu = strings.TrimSpace(a.DescriptionRu)
 	a.DescriptionEn = strings.TrimSpace(a.DescriptionEn)
+	a.MainIdeaUz = strings.TrimSpace(a.MainIdeaUz)
+	a.MainIdeaRu = strings.TrimSpace(a.MainIdeaRu)
+	a.MainIdeaEn = strings.TrimSpace(a.MainIdeaEn)
 	a.GoalIDs = domain.NormalizeIDs(a.GoalIDs)
 
 	if err := validate(a); err != nil {

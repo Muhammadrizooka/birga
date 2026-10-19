@@ -53,6 +53,7 @@ func inRollbackTx(t *testing.T, s *DBStore, fn func(ctx context.Context)) {
 func activity(goalID string, minAge, maxAge int, published bool) domain.Activity {
 	return domain.Activity{
 		TitleUz: "t", TitleRu: "т", TitleEn: "t", DescriptionUz: "d", DescriptionRu: "д", DescriptionEn: "d",
+		MainIdeaUz: "g", MainIdeaRu: "г", MainIdeaEn: "i",
 		GoalIDs: []string{goalID}, MinAge: minAge, MaxAge: maxAge, DurationMinutes: 10, IsPublished: published,
 	}
 }
@@ -85,7 +86,7 @@ func TestActivityRepo_CreateGet(t *testing.T) {
 		}
 
 		got, err := s.Activity().Get(ctx, created.ID)
-		if err != nil || got.ID != created.ID || got.MaxAge != 4 || len(got.GoalIDs) != 1 || got.GoalIDs[0] != motor {
+		if err != nil || got.ID != created.ID || got.MaxAge != 4 || got.MainIdeaRu != "г" || len(got.GoalIDs) != 1 || got.GoalIDs[0] != motor {
 			t.Fatalf("Get: %+v, %v", got, err)
 		}
 

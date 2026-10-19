@@ -242,12 +242,13 @@ func TestCreateActivity(t *testing.T) {
 	s, d := newTestServer(testAdminKey)
 	auth := adminJSON
 
-	body := `{"title_uz":"T","title_ru":"Т","title_en":"T","description_uz":"D","description_ru":"Д","description_en":"D","goal_ids":["` + testID + `"],"min_age":2,"max_age":4,"duration_minutes":5}`
+	body := `{"title_uz":"T","title_ru":"Т","title_en":"T","description_uz":"D","description_ru":"Д","description_en":"D","main_idea_uz":" G ","main_idea_ru":"Г","main_idea_en":"I","goal_ids":["` + testID + `"],"min_age":2,"max_age":4,"duration_minutes":5}`
 	if code, r := do(t, s, http.MethodPost, "/v1/admin/activities", body, auth); code != http.StatusOK || r.Status != _statusSuccess {
 		t.Fatalf("create: %d %+v", code, r)
 	}
 
-	if len(d.creator.got.GoalIDs) != 1 || d.creator.got.GoalIDs[0] != testID || d.creator.got.MaxAge != 4 {
+	if len(d.creator.got.GoalIDs) != 1 || d.creator.got.GoalIDs[0] != testID || d.creator.got.MaxAge != 4 ||
+		d.creator.got.MainIdeaUz != " G " || d.creator.got.MainIdeaEn != "I" {
 		t.Fatalf("request not mapped: %+v", d.creator.got)
 	}
 

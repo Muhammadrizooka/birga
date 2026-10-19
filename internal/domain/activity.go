@@ -17,6 +17,9 @@ type Activity struct {
 	DescriptionUz   string
 	DescriptionRu   string
 	DescriptionEn   string
+	MainIdeaUz      string // optional "Katta g'oya" text; empty means the app hides the box
+	MainIdeaRu      string
+	MainIdeaEn      string
 	GoalIDs         []string // ids of the goals table rows the activity serves, at least one
 	MinAge          int
 	MaxAge          int
@@ -62,6 +65,9 @@ type ActivityUpdate struct {
 	DescriptionUz   *string
 	DescriptionRu   *string
 	DescriptionEn   *string
+	MainIdeaUz      *string
+	MainIdeaRu      *string
+	MainIdeaEn      *string
 	GoalIDs         []string // nil keeps the goals; a non-nil list replaces them
 	MinAge          *int
 	MaxAge          *int
@@ -72,6 +78,6 @@ type ActivityUpdate struct {
 // IsEmpty reports whether the update changes nothing.
 func (u ActivityUpdate) IsEmpty() bool {
 	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.DescriptionUz == nil && u.DescriptionRu == nil &&
-		u.DescriptionEn == nil &&
+		u.DescriptionEn == nil && u.MainIdeaUz == nil && u.MainIdeaRu == nil && u.MainIdeaEn == nil &&
 		u.GoalIDs == nil && u.MinAge == nil && u.MaxAge == nil && u.DurationMinutes == nil && u.IsPublished == nil
 }
