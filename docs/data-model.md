@@ -22,6 +22,9 @@ Rows are soft-deleted by setting `deleted_at`.
 | `description_uz` | `TEXT` | no | | Uzbek instructions |
 | `description_ru` | `TEXT` | no | | Russian instructions |
 | `description_en` | `TEXT` | no | `''` | English instructions (added by `000015_add_activity_english`) |
+| `main_idea_uz` | `TEXT` | no | `''` | Uzbek "Katta g'oya" text, optional (added by `000018_add_activity_main_idea`) |
+| `main_idea_ru` | `TEXT` | no | `''` | Russian main idea, optional (`000018`) |
+| `main_idea_en` | `TEXT` | no | `''` | English main idea, optional (`000018`) |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) the activity serves; no foreign key, see below |
 | `min_age` | `SMALLINT` | no | | youngest suitable age, years |
 | `max_age` | `SMALLINT` | no | | oldest suitable age, years |

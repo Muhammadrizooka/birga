@@ -40,11 +40,13 @@ func TestExecute_Success(t *testing.T) {
 
 	if _, err := New(nil, repo, fakeGoals{active: -1}).Execute(context.Background(), "id", domain.ActivityUpdate{
 		TitleUz: ptr("  Yangi nom "), IsPublished: ptr(true), GoalIDs: []string{goalID, goalID},
+		MainIdeaRu: ptr(" Идея "), MainIdeaEn: ptr(""),
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if *repo.got.TitleUz != "Yangi nom" || !*repo.got.IsPublished || len(repo.got.GoalIDs) != 1 {
+	if *repo.got.TitleUz != "Yangi nom" || !*repo.got.IsPublished || len(repo.got.GoalIDs) != 1 ||
+		*repo.got.MainIdeaRu != "Идея" || *repo.got.MainIdeaEn != "" {
 		t.Fatalf("update not passed through: %+v", repo.got)
 	}
 }

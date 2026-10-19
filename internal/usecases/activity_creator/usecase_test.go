@@ -61,6 +61,7 @@ func TestExecute_Success(t *testing.T) {
 
 	a := validActivity()
 	a.GoalIDs = []string{goalID, strings.ToUpper(goalID)}
+	a.MainIdeaUz = " Katta g'oya "
 
 	got, err := New(nil, repo, &fakeGoals{active: -1}).Execute(context.Background(), a)
 	if err != nil {
@@ -73,6 +74,10 @@ func TestExecute_Success(t *testing.T) {
 
 	if repo.got.TitleUz != "Rangli tosh" {
 		t.Fatalf("title should be trimmed, got %q", repo.got.TitleUz)
+	}
+
+	if repo.got.MainIdeaUz != "Katta g'oya" || repo.got.MainIdeaRu != "" {
+		t.Fatalf("main idea should be trimmed and stay optional, got %q/%q", repo.got.MainIdeaUz, repo.got.MainIdeaRu)
 	}
 
 	if len(repo.got.GoalIDs) != 1 || repo.got.GoalIDs[0] != goalID {

@@ -59,6 +59,9 @@ type CreateActivityRequest struct {
 	DescriptionUz   string   `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
 	DescriptionRu   string   `json:"description_ru" example:"Сортируйте камни по цвету"`
 	DescriptionEn   string   `json:"description_en" example:"Sort the stones by colour"`
+	MainIdeaUz      string   `json:"main_idea_uz" example:"Bola ranglarni nomlab, ularni farqlashni o'rganadi."`
+	MainIdeaRu      string   `json:"main_idea_ru" example:"Называя цвета, ребёнок учится их различать."`
+	MainIdeaEn      string   `json:"main_idea_en" example:"Naming colours helps the child tell them apart."`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int      `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          int      `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -72,6 +75,7 @@ type CreateActivityRequest struct {
 // @Description - goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an
 // @Description   active goal (422), repeats are stored once
 // @Description - min_age/max_age are child ages in years, within 2..6
+// @Description - main_idea_uz/ru/en are optional (the "Katta g'oya" box); empty hides the box in the app
 // @Tags admin
 // @Security AdminKey
 // @Accept json
@@ -99,6 +103,9 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 			DescriptionUz:   req.DescriptionUz,
 			DescriptionRu:   req.DescriptionRu,
 			DescriptionEn:   req.DescriptionEn,
+			MainIdeaUz:      req.MainIdeaUz,
+			MainIdeaRu:      req.MainIdeaRu,
+			MainIdeaEn:      req.MainIdeaEn,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -257,6 +264,9 @@ type UpdateActivityRequest struct {
 	DescriptionUz   *string  `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
 	DescriptionRu   *string  `json:"description_ru" example:"Сортируйте камни по цвету"`
 	DescriptionEn   *string  `json:"description_en" example:"Sort the stones by colour"`
+	MainIdeaUz      *string  `json:"main_idea_uz" example:"Bola ranglarni nomlab, ularni farqlashni o'rganadi."`
+	MainIdeaRu      *string  `json:"main_idea_ru" example:"Называя цвета, ребёнок учится их различать."`
+	MainIdeaEn      *string  `json:"main_idea_en" example:"Naming colours helps the child tell them apart."`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          *int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          *int     `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -267,7 +277,7 @@ type UpdateActivityRequest struct {
 // UpdateActivity godoc swagger
 // @Summary updates an activity partially, including publishing or unpublishing it
 // @Description - only the fields present in the body change; omitted or null fields are kept
-// @Description - same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)
+// @Description - same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)
 // @Description - goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids
 // @Description - send {"is_published": true} to publish, false to hide it from the app
 // @Tags admin
@@ -306,6 +316,9 @@ func (s *Server) UpdateActivity() gin.HandlerFunc {
 			DescriptionUz:   req.DescriptionUz,
 			DescriptionRu:   req.DescriptionRu,
 			DescriptionEn:   req.DescriptionEn,
+			MainIdeaUz:      req.MainIdeaUz,
+			MainIdeaRu:      req.MainIdeaRu,
+			MainIdeaEn:      req.MainIdeaEn,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -357,6 +370,9 @@ type activityView struct {
 	DescriptionUz   string    `json:"description_uz"`
 	DescriptionRu   string    `json:"description_ru"`
 	DescriptionEn   string    `json:"description_en"`
+	MainIdeaUz      string    `json:"main_idea_uz"`
+	MainIdeaRu      string    `json:"main_idea_ru"`
+	MainIdeaEn      string    `json:"main_idea_en"`
 	GoalIDs         []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int       `json:"min_age" example:"3"`
 	MaxAge          int       `json:"max_age" example:"5"`
@@ -382,6 +398,9 @@ func toActivityView(a domain.Activity) activityView {
 		DescriptionUz:   a.DescriptionUz,
 		DescriptionRu:   a.DescriptionRu,
 		DescriptionEn:   a.DescriptionEn,
+		MainIdeaUz:      a.MainIdeaUz,
+		MainIdeaRu:      a.MainIdeaRu,
+		MainIdeaEn:      a.MainIdeaEn,
 		GoalIDs:         a.GoalIDs,
 		MinAge:          a.MinAge,
 		MaxAge:          a.MaxAge,
