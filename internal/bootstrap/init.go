@@ -23,12 +23,19 @@ import (
 	activitygetter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_getter"
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
 	activityupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_updater"
+	articlecreator "gitlab.com/loyihalar/birga/backend/internal/usecases/article_creator"
+	articledeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/article_deleter"
+	articlegetter "gitlab.com/loyihalar/birga/backend/internal/usecases/article_getter"
+	articlelister "gitlab.com/loyihalar/birga/backend/internal/usecases/article_lister"
+	articlereader "gitlab.com/loyihalar/birga/backend/internal/usecases/article_reader"
+	articleupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/article_updater"
 	childcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/child_creator"
 	childgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/child_getter"
 	childlister "gitlab.com/loyihalar/birga/backend/internal/usecases/child_lister"
 	childupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/child_updater"
 	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
+	dailyarticle "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_article"
 	goalcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_creator"
 	goaldeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_deleter"
 	goalgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_getter"
@@ -251,6 +258,14 @@ type useCases struct {
 	profileUpdater   *profileupdater.UseCase
 	passwordResetter *passwordresetter.UseCase
 
+	articleCreator *articlecreator.UseCase
+	articleLister  *articlelister.UseCase
+	articleGetter  *articlegetter.UseCase
+	articleUpdater *articleupdater.UseCase
+	articleDeleter *articledeleter.UseCase
+	articleReader  *articlereader.UseCase
+	dailyArticle   *dailyarticle.UseCase
+
 	otpSender   *otpsender.UseCase
 	otpVerifier *otpverifier.UseCase
 
@@ -311,6 +326,14 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		userDeleter: userdeleter.New(l.Named("usecase.user_deleter"), store.User()),
 
 		profileUpdater: profileupdater.New(l.Named("usecase.profile_updater"), cache.OTP(), userGetter, userUpdater),
+
+		articleCreator: articlecreator.New(l.Named("usecase.article_creator"), store.Article(), store.Goal()),
+		articleLister:  articlelister.New(l.Named("usecase.article_lister"), store.Article()),
+		articleGetter:  articlegetter.New(l.Named("usecase.article_getter"), store.Article()),
+		articleUpdater: articleupdater.New(l.Named("usecase.article_updater"), store.Article(), store.Goal()),
+		articleDeleter: articledeleter.New(l.Named("usecase.article_deleter"), store.Article()),
+		articleReader:  articlereader.New(l.Named("usecase.article_reader"), store.Article()),
+		dailyArticle:   dailyarticle.New(l.Named("usecase.daily_article"), store, store.Article()),
 
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
 		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), checkOTPDefaultCode(l, cfg), cache.OTP()),
@@ -389,6 +412,15 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Logout:    ucs.logout,
 			// The same use case serves PUT /v1/me/password (signed in) and forgot password (signed out).
 			ForgotPassword: ucs.passwordResetter,
+		},
+		rest.ArticleUseCases{
+			Creator: ucs.articleCreator,
+			Lister:  ucs.articleLister,
+			Getter:  ucs.articleGetter,
+			Updater: ucs.articleUpdater,
+			Deleter: ucs.articleDeleter,
+			Reader:  ucs.articleReader,
+			Daily:   ucs.dailyArticle,
 		},
 		media,
 	)

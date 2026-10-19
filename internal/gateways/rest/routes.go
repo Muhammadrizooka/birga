@@ -49,6 +49,15 @@ func (s *Server) endpoints() {
 		me.DELETE("", s.DeleteAccount())
 		me.PUT("/password", s.ResetPassword())
 		me.GET("/children", s.ListMyChildren())
+		me.GET("/articles", s.ListMyArticles())
+		me.GET("/articles/daily", s.GetDailyArticle())
+	}
+
+	articles := v1.Group("/articles", s.userAuth())
+	{
+		articles.GET("", s.ListArticles())
+		articles.GET("/:id", s.GetArticle())
+		articles.POST("/:id/read", s.MarkArticleRead())
 	}
 
 	child := v1.Group("/children/:id", s.userAuth())
@@ -71,6 +80,12 @@ func (s *Server) endpoints() {
 		admin.GET("/activities/:id", s.AdminGetActivity())
 		admin.PATCH("/activities/:id", s.UpdateActivity())
 		admin.DELETE("/activities/:id", s.DeleteActivity())
+
+		admin.POST("/articles", s.CreateArticle())
+		admin.GET("/articles", s.AdminListArticles())
+		admin.GET("/articles/:id", s.AdminGetArticle())
+		admin.PATCH("/articles/:id", s.UpdateArticle())
+		admin.DELETE("/articles/:id", s.DeleteArticle())
 
 		admin.POST("/goals", s.CreateGoal())
 		admin.PATCH("/goals/:id", s.UpdateGoal())

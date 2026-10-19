@@ -27,7 +27,7 @@ Every response, success or failure, has the same shape:
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
 | -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification |
-| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
+| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity or article on an app endpoint, no published article for the daily article, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken`; starting the next plan before the current one is done |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
 | -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
@@ -211,6 +211,113 @@ curl -X PATCH localhost:8080/v1/admin/activities/$ID \
 Delete sets `deleted_at`. The activity then disappears from every list, get and
 recommendation, and a second delete is 404. Completions that point at it are kept, so a
 child's history and streak do not change. There is no undelete endpoint.
+
+### Articles (admin)
+
+Short texts for parents, managed from the dashboard. Same auth as the other admin endpoints.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/admin/articles` | create an article |
+| GET | `/v1/admin/articles` | list articles in every status |
+| GET | `/v1/admin/articles/{id}` | one article in any status |
+| PATCH | `/v1/admin/articles/{id}` | change some fields, including the status |
+| DELETE | `/v1/admin/articles/{id}` | soft-delete an article |
+
+List query parameters: `q` (title search in any language, ignoring case, at most 100
+characters), `status` (`published`, `in_review` or `unpublished`; omitted lists all),
+`goal_id`, `age` (2..6, matches `min_age <= age <= max_age`), `limit`, `offset`. Newest first.
+
+Create body:
+
+```json
+{
+  "title_uz": "Nega bola «yo‘q» deydi?",
+  "title_ru": "Почему ребёнок говорит «нет»?",
+  "title_en": "Why does a child say \"no\"?",
+  "article_body_uz": "2–5 yoshda «yo‘q» deyish rivojlanishning odatiy bosqichi. ...",
+  "article_body_ru": "В 2–5 лет «нет» — обычный этап развития. ...",
+  "article_body_en": "Saying \"no\" at 2–5 is a normal stage of development. ...",
+  "tip_uz": "Bugun kamida 3 marta bolaga ikki variantli tanlov bering.",
+  "tip_ru": "Сегодня хотя бы 3 раза дайте ребёнку выбор из двух вариантов.",
+  "tip_en": "Today, offer your child a choice of two options at least 3 times.",
+  "photo_id": null,
+  "expected_read_time": 3,
+  "min_age": 2,
+  "max_age": 5,
+  "goal_id": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00",
+  "status": "in_review"
+}
+```
+
+Validation (`usecases/article_creator`), all returning 422:
+
+- `title_*` and `article_body_*` are required in Uzbek, Russian and English (trimmed first);
+  `tip_*` is optional, `""` means the app shows no tip box ("Bugun sinab ko‘ring");
+- `goal_id` must be an active goal from [`GET /v1/goals`](#goals);
+- `photo_id` is optional, an id from [`POST /v1/media`](#media-public);
+- `1 <= expected_read_time <= 60` (minutes);
+- `2 <= min_age <= max_age <= 6`;
+- `status` is `published`, `in_review` or `unpublished`; omitted means `in_review`. Only
+  `published` articles reach the app.
+
+Update (`PATCH`) takes the same fields, all optional; omitted or `null` fields are kept. Titles
+and bodies cannot be emptied, `tip_*: ""` removes the tip and `photo_id: ""` removes the photo.
+An age valid alone but not with the stored one is 422. An empty body is 422 (`nothing to update`).
+
+```bash
+# publish
+curl -X PATCH localhost:8080/v1/admin/articles/$ID \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"status": "published"}'
+```
+
+Delete sets `deleted_at`: the article disappears from every list, get, daily article and article
+history. A second delete is 404.
+
+### Articles (signed in)
+
+All need `Authorization: Bearer <access token>` (any role) and only show `published` articles.
+Every article here carries `is_read` for the signed-in user.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/me/articles/daily` | today's article for this user and tomorrow's ("Kun maqolasi" card on the home screen) |
+| GET | `/v1/me/articles` | this user's daily articles up to today, newest first (`limit`, `offset`) |
+| GET | `/v1/articles` | published articles: `q`, `goal_id`, `age`, `limit`, `offset` |
+| GET | `/v1/articles/{id}` | one published article; others are 404 |
+| POST | `/v1/articles/{id}/read` | mark it read ("O‘qib chiqdim"); calling it again changes nothing |
+
+#### Daily article
+
+```json
+{
+  "day": "2026-10-19",
+  "article": { "...article object...": "", "is_read": false },
+  "tomorrow": { "id": "...", "title_uz": "Uyqudan oldingi tinch tartib", "title_ru": "...", "title_en": "...", "expected_read_time": 4 }
+}
+```
+
+`day` is today in Uzbekistan time. `tomorrow` is the article that will be today's article
+tomorrow ("Ertangi maqola: ..."), or `null` when no other article is published. 404 (`no
+published article yet`) when no article is published at all.
+
+How it is picked (`usecases/daily_article`, `articleRepo.PickDaily`): the first time a day is
+asked for, one article is chosen and stored in `user_daily_articles`, so it stays the same all
+day and the stored rows are the user's history (one user gets many articles over time). The
+next day's article is chosen and stored at the same time. Among published articles it prefers,
+in this order:
+
+1. an article whose `goal_id` is one of the goals of the user's children;
+2. whose age range fits at least one of the user's children;
+3. not shown to this user as a daily article before and not marked read;
+4. then the one shown longest ago, so once every matching article was shown they repeat;
+5. then the goal shown longest ago, so the days rotate through the children's goals;
+6. then the oldest article.
+
+So articles that fit a goal and an age always come first, even when they repeat; only when none
+exists does it fall back to a goal fit with another age, then to any published article. A stored
+pick that was unpublished or deleted since is replaced on the next call. A user with no children
+or no goals gets articles in the order of rules 3 to 6.
 
 ### Goals
 
@@ -1023,6 +1130,25 @@ Deleted goals are never returned, so `deleted_at` is not part of the object.
 | `created_at`, `updated_at` | RFC 3339 timestamp | |
 
 Soft-deleted activities are never returned, so `deleted_at` is not part of the object.
+
+### Article object
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID string | generated by the database |
+| `title_uz`, `title_ru`, `title_en` | string | |
+| `article_body_uz`, `article_body_ru`, `article_body_en` | string | plain text; paragraphs separated by blank lines |
+| `tip_uz`, `tip_ru`, `tip_en` | string | the "try it today" box; `""` when there is none |
+| `photo_id` | UUID string or `null` | id from `POST /v1/media` |
+| `photo_url` | string or `null` | `/v1/media/{photo_id}`, see [Showing an image](#showing-an-image) |
+| `expected_read_time` | int | minutes |
+| `min_age`, `max_age` | int | years, inclusive (the "2–5 yosh" tag) |
+| `goal_id` | UUID string | the [goal](#goals) the article serves (the tag, e.g. "Xulq-atvor") |
+| `status` | string | `published`, `in_review` or `unpublished` |
+| `created_at`, `updated_at` | RFC 3339 timestamp | |
+| `is_read` | bool | only on the signed-in endpoints: whether this user marked it read |
+
+Soft-deleted articles are never returned, so `deleted_at` is not part of the object.
 
 ### Completion object
 

@@ -14,6 +14,9 @@ var (
 	ErrActivityNotFound = Errf(ErrNotFound, "activity not found")
 	ErrNoRecommendation = Errf(ErrNotFound, "no published activity matches this child's age and the filters")
 
+	ErrArticleNotFound = Errf(ErrNotFound, "article not found")
+	ErrNoArticle       = Errf(ErrNotFound, "no published article yet")
+
 	ErrUserNotFound     = Errf(ErrNotFound, "user not found")
 	ErrUsernameTaken    = Errf(ErrConflict, "username is already taken")
 	ErrPhoneNumberTaken = Errf(ErrConflict, "phone number is already taken")

@@ -1,0 +1,101 @@
+package domain
+
+import "time"
+
+// Article publication states, stored as text and checked by articles_status_chk. Only published
+// articles reach the app.
+const (
+	ArticleStatusPublished   = "published"
+	ArticleStatusInReview    = "in_review"
+	ArticleStatusUnpublished = "unpublished"
+)
+
+// MaxArticleReadMinutes is the longest expected_read_time the application accepts.
+const MaxArticleReadMinutes = 60
+
+// MaxArticleSearchLength caps the title search text, counted in characters.
+const MaxArticleSearchLength = 100
+
+// IsKnownArticleStatus reports whether status is one of the stored values.
+func IsKnownArticleStatus(status string) bool {
+	return status == ArticleStatusPublished || status == ArticleStatusInReview || status == ArticleStatusUnpublished
+}
+
+// Article is a short text for parents. It serves one goal and an age range.
+type Article struct {
+	ID          string
+	TitleUz     string
+	TitleRu     string
+	TitleEn     string
+	BodyUz      string
+	BodyRu      string
+	BodyEn      string
+	TipUz       string // the optional "try it today" box; "" means none
+	TipRu       string
+	TipEn       string
+	PhotoID     *string
+	ReadMinutes int // expected_read_time
+	MinAge      int
+	MaxAge      int
+	GoalID      string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	// IsRead tells whether the signed-in user marked the article read. It is only filled on
+	// user-scoped reads.
+	IsRead bool
+}
+
+// ArticleUpdate is a partial update. A nil field is left unchanged; PhotoID pointing to "" clears
+// the photo, and a tip pointing to "" removes it.
+type ArticleUpdate struct {
+	TitleUz     *string
+	TitleRu     *string
+	TitleEn     *string
+	BodyUz      *string
+	BodyRu      *string
+	BodyEn      *string
+	TipUz       *string
+	TipRu       *string
+	TipEn       *string
+	PhotoID     *string
+	ReadMinutes *int
+	MinAge      *int
+	MaxAge      *int
+	GoalID      *string
+	Status      *string
+}
+
+// IsEmpty reports whether the update changes nothing.
+func (u ArticleUpdate) IsEmpty() bool {
+	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.BodyUz == nil && u.BodyRu == nil &&
+		u.BodyEn == nil && u.TipUz == nil && u.TipRu == nil && u.TipEn == nil && u.PhotoID == nil &&
+		u.ReadMinutes == nil && u.MinAge == nil && u.MaxAge == nil && u.GoalID == nil && u.Status == nil
+}
+
+// ArticleFilter narrows an article listing. Zero values mean "no filter".
+type ArticleFilter struct {
+	Age    int
+	GoalID string
+	// Search matches articles whose title in any language contains it, ignoring case.
+	Search string
+	// Status is one of the article statuses; empty lists all.
+	Status string
+	// ReaderID, when set, fills Article.IsRead for that user.
+	ReaderID string
+	Limit    int
+	Offset   int
+}
+
+// DailyArticle is the article a user gets for one local day.
+type DailyArticle struct {
+	Day     time.Time // a date: midnight UTC of the local day
+	Article Article
+}
+
+// DailyArticles is the answer of the daily article endpoint: today's article and, when one is
+// available, the one prepared for tomorrow.
+type DailyArticles struct {
+	Today    DailyArticle
+	Tomorrow *Article
+}

@@ -2,8 +2,8 @@
 
 Birga is a mobile app for caregivers in Uzbekistan with children aged 2 to 6. Each day it
 suggests one short, adult-led offline activity, chosen by simple rules (child age, the
-goals the caregiver picked at sign-up, available time), and tracks completions and streaks. Content is in Uzbek
-and Russian.
+goals the caregiver picked at sign-up, available time), and tracks completions and streaks. Content is in Uzbek,
+Russian and English.
 
 This repository is the Go API behind the app. Today it serves the activity catalogue and a
 small admin API for managing activities and users (create, read, update, publish, soft
@@ -12,7 +12,9 @@ changes (sign-up skips OTP for now and gives the role `unverified_user`; it asks
 relationship to the children), serves the list of goals (admins manage it),
 and uploads profile photos to AWS S3. A signed-in parent adds children with their own goals;
 each child gets a 7-day plan rotating through its goals, records completions with an optional
-reflection, and has its own streak and calendar of done and missed plan days.
+reflection, and has its own streak and calendar of done and missed plan days. Each parent also
+gets a daily article picked from the goals and ages of their children (admins write and publish
+the articles), can mark articles read and see the articles of earlier days.
 
 ## Start here
 
