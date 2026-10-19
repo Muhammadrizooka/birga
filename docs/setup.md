@@ -212,8 +212,8 @@ make seed
 ```
 
 It runs `seeds/activities.sql` through `psql` inside the `postgres` container and skips goals
-and titles that already exist, so it is safe to repeat. It also fills the English title and description of those
-activities where they are still empty. For another database, run the same file
+and titles that already exist, so it is safe to repeat. It also fills the English title and description and the
+main idea (`main_idea_uz/ru/en`) of those activities where they are still empty. For another database, run the same file
 with `psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f seeds/activities.sql`. The texts are drafts
 for development; the content team should review them before they reach real users.
 

@@ -75,7 +75,13 @@ Repository (`store.Activity()`): `Create`, `Get`, `List` (filters and paging), `
 A starter set of the five goals above and 20 published activities (Uzbek and Russian, at least
 seven for every age 2 to 6) is in `seeds/activities.sql`; load it with `make seed`
 ([setup.md](setup.md#starter-activities)). It is data, not a migration, and skips goals whose
-English name and activities whose title already exist.
+English name and activities whose title already exist. It also fills the English texts and the
+main idea (`main_idea_*`) of those activities where they are still empty.
+
+Migration `000019_fill_activity_main_idea` writes the same main idea texts into databases that
+were seeded before `000018` added the columns (the server's), matched by `title_uz`. It only
+changes rows whose three `main_idea_*` fields are all empty, so texts an admin wrote are kept, and
+it does not touch activities added through the dashboard. Its down migration does nothing.
 
 ### `users`
 
