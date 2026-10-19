@@ -19,12 +19,13 @@ import (
 const testMaxSize = 1024
 
 type fakeMedia struct {
-	got []byte
-	err error
+	got        []byte
+	allowVideo bool
+	err        error
 }
 
 func (f *fakeMedia) Execute(_ context.Context, up domain.MediaUpload) (domain.Media, error) {
-	f.got = up.Data
+	f.got, f.allowVideo = up.Data, up.AllowVideo
 
 	return domain.Media{ID: testID, URL: "https://cdn.test/media/" + testID + ".png", ContentType: "image/png", Size: int64(len(up.Data))}, f.err
 }
@@ -159,10 +160,41 @@ func TestUploadMedia_Errors(t *testing.T) {
 }
 
 func TestUploadMedia_Disabled(t *testing.T) {
-	s := New(config.Application{}, nil, &fakeHealth{}, &fakeCreator{}, &fakeLister{}, &fakeGetter{}, ActivityEditUseCases{}, GoalUseCases{}, ChildActivityUseCases{}, UserUseCases{}, MeUseCases{}, OTPUseCases{}, AuthUseCases{}, ArticleUseCases{}, nil)
+	s := New(config.Application{}, nil, &fakeHealth{}, &fakeCreator{}, &fakeLister{}, &fakeGetter{}, ActivityEditUseCases{}, GoalUseCases{}, ChildActivityUseCases{}, UserUseCases{}, MeUseCases{}, OTPUseCases{}, AuthUseCases{}, ArticleUseCases{}, PostUseCases{}, nil)
 
 	ct, b := multipartBody(t, []byte("x"), "")
 	if code, r := doRaw(t, s, ct, b); code != http.StatusServiceUnavailable || r.ErrorCode != _errCodeUnavailable {
 		t.Fatalf("disabled: %d %+v", code, r)
+	}
+}
+
+func TestAdminUploadMedia_AllowsVideo(t *testing.T) {
+	s, d := newTestServer(testAdminKey)
+	ct, b := multipartBody(t, []byte("video"), "")
+
+	upload := func(headers map[string]string) int {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/media", bytes.NewReader(b))
+		req.Header.Set("Content-Type", ct)
+
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, req)
+
+		return w.Code
+	}
+
+	if code := upload(nil); code != http.StatusUnauthorized {
+		t.Fatalf("without admin auth: %d", code)
+	}
+
+	if code := upload(map[string]string{adminKeyHeader: testAdminKey}); code != http.StatusOK || !d.media.allowVideo {
+		t.Fatalf("admin upload: %d allowVideo=%v", code, d.media.allowVideo)
+	}
+
+	if code, _ := doRaw(t, s, ct, b); code != http.StatusOK || d.media.allowVideo {
+		t.Fatalf("public upload must stay images only: %d allowVideo=%v", code, d.media.allowVideo)
 	}
 }

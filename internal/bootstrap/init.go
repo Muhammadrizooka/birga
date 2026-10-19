@@ -36,6 +36,7 @@ import (
 	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	dailyarticle "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_article"
+	dailypost "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_post"
 	goalcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_creator"
 	goaldeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_deleter"
 	goalgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_getter"
@@ -46,6 +47,11 @@ import (
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
 	passwordresetter "gitlab.com/loyihalar/birga/backend/internal/usecases/password_resetter"
 	plangetter "gitlab.com/loyihalar/birga/backend/internal/usecases/plan_getter"
+	postcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/post_creator"
+	postdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/post_deleter"
+	postgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/post_getter"
+	postlister "gitlab.com/loyihalar/birga/backend/internal/usecases/post_lister"
+	postupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/post_updater"
 	profileupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/profile_updater"
 	streakgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/streak_getter"
 	tokenchecker "gitlab.com/loyihalar/birga/backend/internal/usecases/token_checker"
@@ -266,6 +272,13 @@ type useCases struct {
 	articleReader  *articlereader.UseCase
 	dailyArticle   *dailyarticle.UseCase
 
+	postCreator *postcreator.UseCase
+	postLister  *postlister.UseCase
+	postGetter  *postgetter.UseCase
+	postUpdater *postupdater.UseCase
+	postDeleter *postdeleter.UseCase
+	dailyPost   *dailypost.UseCase
+
 	otpSender   *otpsender.UseCase
 	otpVerifier *otpverifier.UseCase
 
@@ -334,6 +347,13 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		articleDeleter: articledeleter.New(l.Named("usecase.article_deleter"), store.Article()),
 		articleReader:  articlereader.New(l.Named("usecase.article_reader"), store.Article()),
 		dailyArticle:   dailyarticle.New(l.Named("usecase.daily_article"), store, store.Article()),
+
+		postCreator: postcreator.New(l.Named("usecase.post_creator"), store.Post(), store.Goal(), store.Media()),
+		postLister:  postlister.New(l.Named("usecase.post_lister"), store.Post()),
+		postGetter:  postgetter.New(l.Named("usecase.post_getter"), store.Post()),
+		postUpdater: postupdater.New(l.Named("usecase.post_updater"), store.Post(), store.Goal(), store.Media()),
+		postDeleter: postdeleter.New(l.Named("usecase.post_deleter"), store.Post()),
+		dailyPost:   dailypost.New(l.Named("usecase.daily_post"), store, store.Post()),
 
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
 		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), checkOTPDefaultCode(l, cfg), cache.OTP()),
@@ -421,6 +441,14 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Deleter: ucs.articleDeleter,
 			Reader:  ucs.articleReader,
 			Daily:   ucs.dailyArticle,
+		},
+		rest.PostUseCases{
+			Creator: ucs.postCreator,
+			Lister:  ucs.postLister,
+			Getter:  ucs.postGetter,
+			Updater: ucs.postUpdater,
+			Deleter: ucs.postDeleter,
+			Daily:   ucs.dailyPost,
 		},
 		media,
 	)

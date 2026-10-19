@@ -219,113 +219,32 @@ func (r *articleRepo) MarkRead(ctx context.Context, userID, articleID string) er
 	return nil
 }
 
+func (r *articleRepo) daily() dailyPicks {
+	return dailyPicks{
+		store: r.store, content: "articles", daily: "user_daily_articles", idColumn: "article_id", reads: "article_reads",
+	}
+}
+
 // DailyArticleID returns the article stored for the user's day, if it is still published.
 func (r *articleRepo) DailyArticleID(ctx context.Context, userID string, day time.Time) (string, bool, error) {
-	l := logger.FromCtx(ctx, "articleRepo.DailyArticleID")
-
-	q := `
-		SELECT d.article_id FROM user_daily_articles d
-		JOIN articles a ON a.id = d.article_id AND a.status = 'published' AND a.deleted_at IS NULL
-		WHERE d.user_id = $1 AND d.day = $2`
-
-	var id string
-
-	err := r.store.sqlClientByCtx(ctx).QueryRow(ctx, q, userID, day).Scan(&id)
-	switch {
-	case err == nil:
-		return id, true, nil
-	case errors.Is(err, pgx.ErrNoRows):
-		return "", false, nil
-	default:
-		l.Error("sqlClient.QueryRow", zap.Error(err))
-
-		return "", false, errs.Errf(errs.ErrInternal, "%s", err.Error())
-	}
+	return r.daily().storedID(ctx, userID, day)
 }
 
 // SetDailyArticle stores articleID as the user's article for day, replacing an earlier pick.
 func (r *articleRepo) SetDailyArticle(ctx context.Context, userID string, day time.Time, articleID string) error {
-	l := logger.FromCtx(ctx, "articleRepo.SetDailyArticle")
-
-	q := `
-		INSERT INTO user_daily_articles (user_id, day, article_id) VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, day) DO UPDATE SET article_id = EXCLUDED.article_id, created_at = NOW()`
-
-	if _, err := r.store.sqlClientByCtx(ctx).Exec(ctx, q, userID, day, articleID); err != nil {
-		l.Error("sqlClient.Exec", zap.Error(err))
-
-		return errs.Errf(errs.ErrInternal, "%s", err.Error())
-	}
-
-	return nil
+	return r.daily().set(ctx, userID, day, articleID)
 }
 
-// LockDaily serializes daily picks of one user until the surrounding transaction ends.
+// LockDaily serializes daily article picks of one user until the surrounding transaction ends.
 func (r *articleRepo) LockDaily(ctx context.Context, userID string) error {
-	if _, err := r.store.sqlClientByCtx(ctx).Exec(ctx,
-		`SELECT pg_advisory_xact_lock(hashtext('daily_article:' || $1::text))`, userID); err != nil {
-		logger.FromCtx(ctx, "articleRepo.LockDaily").Error("sqlClient.Exec", zap.Error(err))
-
-		return errs.Errf(errs.ErrInternal, "%s", err.Error())
-	}
-
-	return nil
+	return r.daily().lock(ctx, userID)
 }
 
-// PickDaily chooses the next daily article for the user among published articles, leaving out
-// the ids in exclude. Preference, in order: the goal is one of the goals of the user's children;
-// the age range fits one of the children; not shown as a daily article before and not read; the
-// article shown longest ago; the goal shown longest ago; the oldest article. ok is false when no
-// published article is left.
+// PickDaily chooses the next daily article for the user, leaving out the ids in exclude; see
+// dailyPicks.pick for the order. Read articles count as shown. ok is false when no published
+// article is left.
 func (r *articleRepo) PickDaily(ctx context.Context, userID string, exclude []string) (string, bool, error) {
-	l := logger.FromCtx(ctx, "articleRepo.PickDaily")
-
-	if exclude == nil {
-		exclude = []string{}
-	}
-
-	q := `
-		WITH kids AS (
-			SELECT c.age, c.goal_ids FROM children c
-			JOIN user_children uc ON uc.child_id = c.id
-			WHERE uc.user_id = $1 AND c.deleted_at IS NULL
-		),
-		kid_goals AS (SELECT DISTINCT UNNEST(goal_ids) AS goal_id FROM kids),
-		shown AS (
-			SELECT article_id, MAX(day) AS last_day FROM user_daily_articles WHERE user_id = $1 GROUP BY article_id
-		),
-		goal_shown AS (
-			SELECT a.goal_id, MAX(d.day) AS last_day
-			FROM user_daily_articles d JOIN articles a ON a.id = d.article_id
-			WHERE d.user_id = $1 GROUP BY a.goal_id
-		)
-		SELECT a.id FROM articles a
-		LEFT JOIN shown s ON s.article_id = a.id
-		LEFT JOIN goal_shown gs ON gs.goal_id = a.goal_id
-		LEFT JOIN article_reads rd ON rd.article_id = a.id AND rd.user_id = $1
-		WHERE a.status = 'published' AND a.deleted_at IS NULL AND a.id <> ALL($2::uuid[])
-		ORDER BY
-			(a.goal_id IN (SELECT goal_id FROM kid_goals)) DESC,
-			EXISTS (SELECT 1 FROM kids k WHERE k.age BETWEEN a.min_age AND a.max_age) DESC,
-			(s.article_id IS NOT NULL OR rd.article_id IS NOT NULL),
-			s.last_day NULLS FIRST,
-			gs.last_day NULLS FIRST,
-			a.created_at, a.id
-		LIMIT 1`
-
-	var id string
-
-	err := r.store.sqlClientByCtx(ctx).QueryRow(ctx, q, userID, exclude).Scan(&id)
-	switch {
-	case err == nil:
-		return id, true, nil
-	case errors.Is(err, pgx.ErrNoRows):
-		return "", false, nil
-	default:
-		l.Error("sqlClient.QueryRow", zap.Error(err))
-
-		return "", false, errs.Errf(errs.ErrInternal, "%s", err.Error())
-	}
+	return r.daily().pick(ctx, userID, exclude)
 }
 
 // DailyHistory returns one page of the user's daily articles up to and including day, newest

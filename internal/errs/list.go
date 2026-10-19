@@ -15,6 +15,10 @@ var (
 	ErrNoRecommendation = Errf(ErrNotFound, "no published activity matches this child's age and the filters")
 
 	ErrArticleNotFound = Errf(ErrNotFound, "article not found")
+	ErrPostNotFound    = Errf(ErrNotFound, "post not found")
+	ErrNoPost          = Errf(ErrNotFound, "no published video yet")
+	ErrPostNotOpened   = Errf(ErrForbidden, "this video was not your daily video, the free plan opens one video a day")
+	ErrVideoNotFound   = Errf(ErrValidation, "video_id is not an uploaded video, upload it to /v1/admin/media first")
 	ErrNoArticle       = Errf(ErrNotFound, "no published article yet")
 
 	ErrUserNotFound     = Errf(ErrNotFound, "user not found")
@@ -42,7 +46,8 @@ var (
 	ErrNewPhoneNotVerified = Errf(ErrForbidden, "new phone number is not verified, verify an update_user code for it first")
 	ErrResetNotVerified    = Errf(ErrForbidden, "phone number is not verified, verify a reset_password code with /v1/otp/verify first")
 
-	ErrMediaUnsupportedType = Errf(ErrValidation, "unsupported file type, upload a JPEG, PNG or WebP image")
-	ErrMediaEmpty           = Errf(ErrValidation, "file is empty")
-	ErrMediaNotFound        = Errf(ErrNotFound, "media not found")
+	ErrMediaUnsupportedType        = Errf(ErrValidation, "unsupported file type, upload a JPEG, PNG or WebP image")
+	ErrMediaUnsupportedTypeOrVideo = Errf(ErrValidation, "unsupported file type, upload a JPEG, PNG or WebP image or an MP4 or WebM video")
+	ErrMediaEmpty                  = Errf(ErrValidation, "file is empty")
+	ErrMediaNotFound               = Errf(ErrNotFound, "media not found")
 )

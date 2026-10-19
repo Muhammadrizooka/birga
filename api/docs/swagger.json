@@ -1223,6 +1223,473 @@
                 }
             }
         },
+        "/v1/admin/media": {
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- same form and limits as POST /v1/media; also accepts MP4 and WebM videos, detected from the bytes\n- the answer's id goes into posts.video_id; GET /v1/media/{id} redirects to the file, video players follow it",
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "uploads an image or a video (a daily video) to S3",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "the image or video: a file part, or a base64 string in the same field",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.mediaView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ServiceUnavailableResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/posts": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "lists video posts in every status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the title (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "in_review",
+                            "unpublished"
+                        ],
+                        "type": "string",
+                        "description": "published, in_review or unpublished; omitted lists all",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- title is required in Uzbek, Russian and English; suggestion_* (\"Tavsiya\" line) and\nquestions_* (\"ask after watching\" box, one question per line) are optional, \"\" hides them\n- video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "creates a video post (\"Kun videosi\")",
+                "parameters": [
+                    {
+                        "description": "post",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.CreatePostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/posts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "returns a video post in any status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Sets deleted_at; the post disappears from every list, get, daily video and video history.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "soft-deletes a video post",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles cannot be emptied; suggestion_*/questions_* \"\" removes them\n- the resulting age range must stay valid (422)\n- send {\"status\": \"published\"} to show it in the app, \"in_review\" or \"unpublished\" to hide it",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "updates a video post partially, including its status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.UpdatePostRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/users": {
             "get": {
                 "security": [
@@ -3455,6 +3922,130 @@
                 }
             }
         },
+        "/v1/me/posts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One item per day the user opened the daily video. Deleted posts are left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "lists the signed-in user's daily videos of earlier days and today, newest first",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.dailyPostListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/posts/daily": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The video is picked once per day (Uzbekistan time) and stays the same all day, the same way as the\ndaily article: a goal of the user's children first, an age that fits a child, not shown before, then\nrotating through the goals. next lists up to 2 videos that would come next, without the video, for\nthe locked \"Keyingi videolar\" list. 404 when no video is published.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "returns the signed-in user's video of the day (\"Kun videosi\")",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.dailyPostView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/media": {
             "post": {
                 "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from: GET /v1/media/{id} on this API\n- 503 when S3 is not configured (S3_BUCKET empty)",
@@ -3700,6 +4291,175 @@
                         "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/rest.TooManyRequestsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/posts": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every signed-in user may browse the titles; opening a video follows the rules of GET /v1/posts/{id}.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "lists published video posts as previews, without the video",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the title (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postTeaserListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/posts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Roles user and unverified_user (the free plan) may open only posts that were their daily video,\ntoday or earlier (403 otherwise); paid_user and admin may open every published post.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "posts"
+                ],
+                "summary": "returns a published video post with its video",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "post id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.postView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "500": {
@@ -3980,6 +4740,81 @@
                 "name_uz": {
                     "type": "string",
                     "example": "Nutqni rivojlantirish"
+                }
+            }
+        },
+        "rest.CreatePostRequest": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "description": "Duration is in minutes, a decimal: 4.2 is 4:12.",
+                    "type": "number",
+                    "example": 4.2
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 3
+                },
+                "questions_en": {
+                    "type": "string",
+                    "example": "\"Which colour did you like most?\"\n\"What is red in our home?\""
+                },
+                "questions_ru": {
+                    "type": "string",
+                    "example": "«Какой цвет тебе понравился больше всего?»\n«Что у нас дома красное?»"
+                },
+                "questions_uz": {
+                    "type": "string",
+                    "example": "«Qaysi rang senga eng ko‘p yoqdi?»\n«Uyimizda qizil rangli nima bor?»"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "in_review"
+                },
+                "suggestion_en": {
+                    "type": "string",
+                    "example": "At 2–4, less than an hour of screen time a day. Watch the video together."
+                },
+                "suggestion_ru": {
+                    "type": "string",
+                    "example": "В 2–4 года меньше часа у экрана в день. Смотрите видео вместе."
+                },
+                "suggestion_uz": {
+                    "type": "string",
+                    "example": "2–4 yoshda ekran oldida kuniga 1 soatdan kam vaqt. Videoni birga ko‘ring."
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "The colours song"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Песня о цветах"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Ranglar qo‘shig‘i"
+                },
+                "video_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 }
             }
         },
@@ -4492,6 +5327,74 @@
                 }
             }
         },
+        "rest.UpdatePostRequest": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "type": "number",
+                    "example": 4.2
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 3
+                },
+                "questions_en": {
+                    "type": "string"
+                },
+                "questions_ru": {
+                    "type": "string"
+                },
+                "questions_uz": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "suggestion_en": {
+                    "type": "string"
+                },
+                "suggestion_ru": {
+                    "type": "string"
+                },
+                "suggestion_uz": {
+                    "type": "string"
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "The colours song"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Песня о цветах"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Ranglar qo‘shig‘i"
+                },
+                "video_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                }
+            }
+        },
         "rest.UpdateProfileRequest": {
             "type": "object",
             "properties": {
@@ -4975,6 +5878,60 @@
                 }
             }
         },
+        "rest.dailyPostItemView": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "type": "string",
+                    "example": "2026-10-19"
+                },
+                "post": {
+                    "$ref": "#/definitions/rest.postView"
+                }
+            }
+        },
+        "rest.dailyPostListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.dailyPostItemView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 12
+                }
+            }
+        },
+        "rest.dailyPostView": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "description": "Day is today's date in Uzbekistan time.",
+                    "type": "string",
+                    "example": "2026-10-19"
+                },
+                "next": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.postTeaserView"
+                    }
+                },
+                "post": {
+                    "$ref": "#/definitions/rest.postView"
+                }
+            }
+        },
         "rest.errCode": {
             "type": "integer",
             "enum": [
@@ -5149,6 +6106,169 @@
                 "started_on": {
                     "type": "string",
                     "example": "2026-10-11"
+                }
+            }
+        },
+        "rest.postListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.postView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "rest.postTeaserListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.postTeaserView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "rest.postTeaserView": {
+            "type": "object",
+            "properties": {
+                "duration": {
+                    "type": "number",
+                    "example": 3.67
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "Animal sounds"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Голоса животных"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Hayvonlar ovozi"
+                }
+            }
+        },
+        "rest.postView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "duration": {
+                    "description": "Duration is in minutes, a decimal: 4.2 is 4:12.",
+                    "type": "number",
+                    "example": 4.2
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "questions_en": {
+                    "type": "string"
+                },
+                "questions_ru": {
+                    "type": "string"
+                },
+                "questions_uz": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "suggestion_en": {
+                    "type": "string"
+                },
+                "suggestion_ru": {
+                    "type": "string"
+                },
+                "suggestion_uz": {
+                    "type": "string"
+                },
+                "title_en": {
+                    "type": "string",
+                    "example": "The colours song"
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Песня о цветах"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Ranglar qo‘shig‘i"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "video_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "video_url": {
+                    "description": "VideoURL plays the video without a token: it redirects (302) to a short-lived link.",
+                    "type": "string",
+                    "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 }
             }
         },

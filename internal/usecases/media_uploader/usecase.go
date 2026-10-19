@@ -58,7 +58,8 @@ func (uc *UseCase) MaxSize() int64 {
 }
 
 // Execute checks the file (size, and a JPEG, PNG or WebP image judged by its content, not by
-// what the client claims), uploads it under a new random key and stores the media row.
+// what the client claims; with AllowVideo also an MP4 or WebM video), uploads it under a new
+// random key and stores the media row.
 func (uc *UseCase) Execute(ctx context.Context, up domain.MediaUpload) (domain.Media, error) {
 	size := int64(len(up.Data))
 
@@ -72,7 +73,14 @@ func (uc *UseCase) Execute(ctx context.Context, up domain.MediaUpload) (domain.M
 	contentType := http.DetectContentType(up.Data)
 
 	ext, ok := domain.ImageExtension(contentType)
-	if !ok {
+	if !ok && up.AllowVideo {
+		ext, ok = domain.VideoExtension(contentType)
+	}
+
+	switch {
+	case !ok && up.AllowVideo:
+		return domain.Media{}, errs.ErrMediaUnsupportedTypeOrVideo
+	case !ok:
 		return domain.Media{}, errs.ErrMediaUnsupportedType
 	}
 

@@ -190,14 +190,14 @@ Triggers:
 
 ### `media`
 
-Files uploaded through `POST /v1/media` (today: profile photos). The bytes live in S3; this
+Files uploaded through `POST /v1/media` (profile photos) and `POST /v1/admin/media` (also daily videos). The bytes live in S3; this
 table records what was uploaded. Created by `000003_create_media_table`.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
 | `id` | `UUID` | no | `gen_random_uuid()` | primary key. The API generates it before uploading, because it is part of the object key |
-| `object_key` | `TEXT` | no | | S3 key, `<S3_KEY_PREFIX>media/<id>.<jpg\|png\|webp>`; unique |
-| `content_type` | `TEXT` | no | | `image/jpeg`, `image/png` or `image/webp`, detected from the bytes |
+| `object_key` | `TEXT` | no | | S3 key, `<S3_KEY_PREFIX>media/<id>.<jpg\|png\|webp\|mp4\|webm>`; unique |
+| `content_type` | `TEXT` | no | | `image/jpeg`, `image/png` or `image/webp`, or (admin uploads) `video/mp4` or `video/webm`, detected from the bytes |
 | `size_bytes` | `BIGINT` | no | | file size; `CHECK (size_bytes > 0)` |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 
@@ -411,6 +411,40 @@ pick order is in [api.md](api.md#daily-article).
 
 Repository (`store.Article()`): `Create`, `Get`, `Update`, `Delete`, `List`, `MarkRead`,
 `LockDaily`, `DailyArticleID`, `PickDaily`, `SetDailyArticle`, `DailyHistory`.
+
+### `posts`
+
+Daily videos ("Kun videosi"). Created by `000017_create_posts`. Rows are soft-deleted by
+setting `deleted_at`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | `UUID` | no | `gen_random_uuid()` | primary key |
+| `title_uz`, `title_ru`, `title_en` | `TEXT` | no | | required by the API |
+| `video_id` | `UUID` | no | | references `media(id)`; the API accepts only `video/*` media |
+| `goal_id` | `UUID` | no | | references `goals(id)` |
+| `min_age`, `max_age` | `SMALLINT` | no | | `2 <= min_age <= max_age <= 6` (`posts_age_range_chk`) |
+| `duration` | `NUMERIC(6,2)` | no | | minutes, `> 0` (`posts_duration_chk`); the API caps it at 600 |
+| `suggestion_uz`, `suggestion_ru`, `suggestion_en` | `TEXT` | no | `''` | optional "Tavsiya" line |
+| `questions_uz`, `questions_ru`, `questions_en` | `TEXT` | no | `''` | optional questions to ask after watching, one per line |
+| `status` | `TEXT` | no | `'in_review'` | `published`, `in_review` or `unpublished` (`posts_status_chk`) |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+| `deleted_at` | `TIMESTAMPTZ` | yes | | soft delete |
+
+Partial index `posts_published_goal_idx` on `goal_id WHERE status = 'published' AND deleted_at IS NULL`.
+
+### `user_daily_posts`
+
+The daily video of each user, one row per local day. Created by `000017_create_posts`. Same
+shape and rules as [`user_daily_articles`](#user_daily_articles), with `post_id` referencing
+`posts(id)` `ON DELETE CASCADE`; index `user_daily_posts_post_idx` on `(user_id, post_id)`. Only
+today's row is written (the next videos are a preview). The rows are the user's video history
+and decide which posts a free-plan user may open (`postRepo.WasDaily`).
+
+The daily pick of articles and posts shares one query (`dbstore/daily.go`, `dailyPicks`).
+
+Repository (`store.Post()`): `Create`, `Get`, `Update`, `Delete`, `List`, `WasDaily`,
+`LockDaily`, `DailyPostID`, `PickDaily`, `SetDailyPost`, `DailyHistory`.
 
 ## Conventions
 

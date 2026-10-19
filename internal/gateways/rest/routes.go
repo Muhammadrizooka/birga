@@ -51,6 +51,8 @@ func (s *Server) endpoints() {
 		me.GET("/children", s.ListMyChildren())
 		me.GET("/articles", s.ListMyArticles())
 		me.GET("/articles/daily", s.GetDailyArticle())
+		me.GET("/posts", s.ListMyPosts())
+		me.GET("/posts/daily", s.GetDailyPost())
 	}
 
 	articles := v1.Group("/articles", s.userAuth())
@@ -58,6 +60,12 @@ func (s *Server) endpoints() {
 		articles.GET("", s.ListArticles())
 		articles.GET("/:id", s.GetArticle())
 		articles.POST("/:id/read", s.MarkArticleRead())
+	}
+
+	posts := v1.Group("/posts", s.userAuth())
+	{
+		posts.GET("", s.ListPosts())
+		posts.GET("/:id", s.GetPost())
 	}
 
 	child := v1.Group("/children/:id", s.userAuth())
@@ -86,6 +94,14 @@ func (s *Server) endpoints() {
 		admin.GET("/articles/:id", s.AdminGetArticle())
 		admin.PATCH("/articles/:id", s.UpdateArticle())
 		admin.DELETE("/articles/:id", s.DeleteArticle())
+
+		admin.POST("/posts", s.CreatePost())
+		admin.GET("/posts", s.AdminListPosts())
+		admin.GET("/posts/:id", s.AdminGetPost())
+		admin.PATCH("/posts/:id", s.UpdatePost())
+		admin.DELETE("/posts/:id", s.DeletePost())
+
+		admin.POST("/media", s.AdminUploadMedia())
 
 		admin.POST("/goals", s.CreateGoal())
 		admin.PATCH("/goals/:id", s.UpdateGoal())

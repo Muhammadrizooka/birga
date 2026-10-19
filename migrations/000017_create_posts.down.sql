@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS user_daily_posts;
+DROP TABLE IF EXISTS posts;

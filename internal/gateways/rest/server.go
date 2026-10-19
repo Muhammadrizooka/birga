@@ -216,6 +216,42 @@ type ArticleUseCases struct {
 	Daily   dailyArticle
 }
 
+type postCreator interface {
+	Execute(ctx context.Context, p domain.Post) (domain.Post, error)
+}
+
+type postLister interface {
+	Execute(ctx context.Context, f domain.PostFilter) ([]domain.Post, int, error)
+}
+
+type postGetter interface {
+	Execute(ctx context.Context, id string) (domain.Post, error)
+	ForUser(ctx context.Context, userID string, role domain.UserRole, id string) (domain.Post, error)
+}
+
+type postUpdater interface {
+	Execute(ctx context.Context, id string, upd domain.PostUpdate) (domain.Post, error)
+}
+
+type postDeleter interface {
+	Execute(ctx context.Context, id string) error
+}
+
+type dailyPost interface {
+	Execute(ctx context.Context, userID string) (domain.DailyPosts, error)
+	History(ctx context.Context, userID string, limit, offset int) ([]domain.DailyPost, int, error)
+}
+
+// PostUseCases groups the use cases behind /v1/posts, /v1/me/posts and /v1/admin/posts.
+type PostUseCases struct {
+	Creator postCreator
+	Lister  postLister
+	Getter  postGetter
+	Updater postUpdater
+	Deleter postDeleter
+	Daily   dailyPost
+}
+
 type otpSender interface {
 	Execute(ctx context.Context, req domain.OTPSendRequest) (domain.OTPSendResult, error)
 }
@@ -318,6 +354,13 @@ type Server struct {
 	articleReader  articleReader
 	dailyArticle   dailyArticle
 
+	postCreator postCreator
+	postLister  postLister
+	postGetter  postGetter
+	postUpdater postUpdater
+	postDeleter postDeleter
+	dailyPost   dailyPost
+
 	profileUpdater   profileUpdater
 	passwordResetter passwordResetter
 	childLister      childLister
@@ -352,6 +395,7 @@ func New(cfg config.Application,
 	otp OTPUseCases,
 	auth AuthUseCases,
 	articles ArticleUseCases,
+	posts PostUseCases,
 	media mediaUploader,
 ) *Server {
 	if cfg.IsProduction() {
@@ -415,6 +459,13 @@ func New(cfg config.Application,
 		articleDeleter: articles.Deleter,
 		articleReader:  articles.Reader,
 		dailyArticle:   articles.Daily,
+
+		postCreator: posts.Creator,
+		postLister:  posts.Lister,
+		postGetter:  posts.Getter,
+		postUpdater: posts.Updater,
+		postDeleter: posts.Deleter,
+		dailyPost:   posts.Daily,
 
 		profileUpdater:   me.Updater,
 		passwordResetter: me.Password,

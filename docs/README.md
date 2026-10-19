@@ -14,7 +14,8 @@ and uploads profile photos to AWS S3. A signed-in parent adds children with thei
 each child gets a 7-day plan rotating through its goals, records completions with an optional
 reflection, and has its own streak and calendar of done and missed plan days. Each parent also
 gets a daily article picked from the goals and ages of their children (admins write and publish
-the articles), can mark articles read and see the articles of earlier days.
+the articles), can mark articles read and see the articles of earlier days. The same way each parent gets one
+video a day ("Kun videosi"); on the free plan only their daily videos open, paid users open all.
 
 ## Start here
 

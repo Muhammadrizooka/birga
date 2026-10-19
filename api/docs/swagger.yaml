@@ -193,6 +193,70 @@ definitions:
         example: Nutqni rivojlantirish
         type: string
     type: object
+  rest.CreatePostRequest:
+    properties:
+      duration:
+        description: 'Duration is in minutes, a decimal: 4.2 is 4:12.'
+        example: 4.2
+        type: number
+      goal_id:
+        example: 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        type: string
+      max_age:
+        example: 5
+        maximum: 6
+        minimum: 2
+        type: integer
+      min_age:
+        example: 3
+        maximum: 6
+        minimum: 2
+        type: integer
+      questions_en:
+        example: |-
+          "Which colour did you like most?"
+          "What is red in our home?"
+        type: string
+      questions_ru:
+        example: |-
+          «Какой цвет тебе понравился больше всего?»
+          «Что у нас дома красное?»
+        type: string
+      questions_uz:
+        example: |-
+          «Qaysi rang senga eng ko‘p yoqdi?»
+          «Uyimizda qizil rangli nima bor?»
+        type: string
+      status:
+        enum:
+        - published
+        - in_review
+        - unpublished
+        example: in_review
+        type: string
+      suggestion_en:
+        example: At 2–4, less than an hour of screen time a day. Watch the video together.
+        type: string
+      suggestion_ru:
+        example: В 2–4 года меньше часа у экрана в день. Смотрите видео вместе.
+        type: string
+      suggestion_uz:
+        example: 2–4 yoshda ekran oldida kuniga 1 soatdan kam vaqt. Videoni birga
+          ko‘ring.
+        type: string
+      title_en:
+        example: The colours song
+        type: string
+      title_ru:
+        example: Песня о цветах
+        type: string
+      title_uz:
+        example: Ranglar qo‘shig‘i
+        type: string
+      video_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+    type: object
   rest.CreateUserRequest:
     properties:
       name:
@@ -538,6 +602,56 @@ definitions:
         type: string
       name_uz:
         example: Nutqni rivojlantirish
+        type: string
+    type: object
+  rest.UpdatePostRequest:
+    properties:
+      duration:
+        example: 4.2
+        type: number
+      goal_id:
+        example: 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        type: string
+      max_age:
+        example: 5
+        maximum: 6
+        minimum: 2
+        type: integer
+      min_age:
+        example: 3
+        maximum: 6
+        minimum: 2
+        type: integer
+      questions_en:
+        type: string
+      questions_ru:
+        type: string
+      questions_uz:
+        type: string
+      status:
+        enum:
+        - published
+        - in_review
+        - unpublished
+        example: published
+        type: string
+      suggestion_en:
+        type: string
+      suggestion_ru:
+        type: string
+      suggestion_uz:
+        type: string
+      title_en:
+        example: The colours song
+        type: string
+      title_ru:
+        example: Песня о цветах
+        type: string
+      title_uz:
+        example: Ranglar qo‘shig‘i
+        type: string
+      video_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
     type: object
   rest.UpdateProfileRequest:
@@ -890,6 +1004,43 @@ definitions:
       tomorrow:
         $ref: '#/definitions/rest.articleTeaserView'
     type: object
+  rest.dailyPostItemView:
+    properties:
+      day:
+        example: "2026-10-19"
+        type: string
+      post:
+        $ref: '#/definitions/rest.postView'
+    type: object
+  rest.dailyPostListView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/rest.dailyPostItemView'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 12
+        type: integer
+    type: object
+  rest.dailyPostView:
+    properties:
+      day:
+        description: Day is today's date in Uzbekistan time.
+        example: "2026-10-19"
+        type: string
+      next:
+        items:
+          $ref: '#/definitions/rest.postTeaserView'
+        type: array
+      post:
+        $ref: '#/definitions/rest.postView'
+    type: object
   rest.errCode:
     enum:
     - 0
@@ -1024,6 +1175,124 @@ definitions:
         type: integer
       started_on:
         example: "2026-10-11"
+        type: string
+    type: object
+  rest.postListView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/rest.postView'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 42
+        type: integer
+    type: object
+  rest.postTeaserListView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/rest.postTeaserView'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 42
+        type: integer
+    type: object
+  rest.postTeaserView:
+    properties:
+      duration:
+        example: 3.67
+        type: number
+      goal_id:
+        example: 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        type: string
+      id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      max_age:
+        example: 5
+        type: integer
+      min_age:
+        example: 3
+        type: integer
+      title_en:
+        example: Animal sounds
+        type: string
+      title_ru:
+        example: Голоса животных
+        type: string
+      title_uz:
+        example: Hayvonlar ovozi
+        type: string
+    type: object
+  rest.postView:
+    properties:
+      created_at:
+        type: string
+      duration:
+        description: 'Duration is in minutes, a decimal: 4.2 is 4:12.'
+        example: 4.2
+        type: number
+      goal_id:
+        example: 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        type: string
+      id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      max_age:
+        example: 5
+        type: integer
+      min_age:
+        example: 3
+        type: integer
+      questions_en:
+        type: string
+      questions_ru:
+        type: string
+      questions_uz:
+        type: string
+      status:
+        enum:
+        - published
+        - in_review
+        - unpublished
+        example: published
+        type: string
+      suggestion_en:
+        type: string
+      suggestion_ru:
+        type: string
+      suggestion_uz:
+        type: string
+      title_en:
+        example: The colours song
+        type: string
+      title_ru:
+        example: Песня о цветах
+        type: string
+      title_uz:
+        example: Ranglar qo‘shig‘i
+        type: string
+      updated_at:
+        type: string
+      video_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      video_url:
+        description: 'VideoURL plays the video without a token: it redirects (302)
+          to a short-lived link.'
+        example: /v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
     type: object
   rest.profileView:
@@ -2090,6 +2359,309 @@ paths:
       - AdminKey: []
       - BearerAuth: []
       summary: renames a goal
+      tags:
+      - admin
+  /v1/admin/media:
+    post:
+      consumes:
+      - multipart/form-data
+      - application/x-www-form-urlencoded
+      description: |-
+        - same form and limits as POST /v1/media; also accepts MP4 and WebM videos, detected from the bytes
+        - the answer's id goes into posts.video_id; GET /v1/media/{id} redirects to the file, video players follow it
+      parameters:
+      - description: 'the image or video: a file part, or a base64 string in the same
+          field'
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.mediaView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/rest.ServiceUnavailableResponse'
+      security:
+      - AdminKey: []
+      summary: uploads an image or a video (a daily video) to S3
+      tags:
+      - admin
+  /v1/admin/posts:
+    get:
+      parameters:
+      - description: text the title (any language) contains, ignoring case (at most
+          100 characters)
+        in: query
+        name: q
+        type: string
+      - description: published, in_review or unpublished; omitted lists all
+        enum:
+        - published
+        - in_review
+        - unpublished
+        in: query
+        name: status
+        type: string
+      - description: goal id (UUID) from GET /v1/goals
+        in: query
+        name: goal_id
+        type: string
+      - description: child age in years (2..6)
+        in: query
+        name: age
+        type: integer
+      - description: page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.postListView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: lists video posts in every status
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - title is required in Uzbek, Russian and English; suggestion_* ("Tavsiya" line) and
+        questions_* ("ask after watching" box, one question per line) are optional, "" hides them
+        - video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)
+        - goal_id is one active goal from GET /v1/goals (422 if unknown)
+        - duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600
+        - min_age/max_age are child ages within 2..6
+        - status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app
+      parameters:
+      - description: post
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.CreatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.postView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: creates a video post ("Kun videosi")
+      tags:
+      - admin
+  /v1/admin/posts/{id}:
+    delete:
+      description: Sets deleted_at; the post disappears from every list, get, daily
+        video and video history.
+      parameters:
+      - description: post id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: soft-deletes a video post
+      tags:
+      - admin
+    get:
+      parameters:
+      - description: post id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.postView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: returns a video post in any status
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        - only the fields present in the body change; omitted or null fields are kept
+        - same rules as create; titles cannot be emptied; suggestion_*/questions_* "" removes them
+        - the resulting age range must stay valid (422)
+        - send {"status": "published"} to show it in the app, "in_review" or "unpublished" to hide it
+      parameters:
+      - description: post id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: fields to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.UpdatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.postView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: updates a video post partially, including its status
       tags:
       - admin
   /v1/admin/users:
@@ -3569,6 +4141,85 @@ paths:
       summary: sets a new password for the signed-in user, confirmed by an SMS code
       tags:
       - me
+  /v1/me/posts:
+    get:
+      description: One item per day the user opened the daily video. Deleted posts
+        are left out.
+      parameters:
+      - description: page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.dailyPostListView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: lists the signed-in user's daily videos of earlier days and today,
+        newest first
+      tags:
+      - posts
+  /v1/me/posts/daily:
+    get:
+      description: |-
+        The video is picked once per day (Uzbekistan time) and stays the same all day, the same way as the
+        daily article: a goal of the user's children first, an age that fits a child, not shown before, then
+        rotating through the goals. next lists up to 2 videos that would come next, without the video, for
+        the locked "Keyingi videolar" list. 404 when no video is published.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.dailyPostView'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: returns the signed-in user's video of the day ("Kun videosi")
+      tags:
+      - posts
   /v1/media:
     post:
       consumes:
@@ -3762,6 +4413,113 @@ paths:
       summary: checks a one-time code
       tags:
       - otp
+  /v1/posts:
+    get:
+      description: Every signed-in user may browse the titles; opening a video follows
+        the rules of GET /v1/posts/{id}.
+      parameters:
+      - description: text the title (any language) contains, ignoring case (at most
+          100 characters)
+        in: query
+        name: q
+        type: string
+      - description: goal id (UUID) from GET /v1/goals
+        in: query
+        name: goal_id
+        type: string
+      - description: child age in years (2..6)
+        in: query
+        name: age
+        type: integer
+      - description: page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.postTeaserListView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: lists published video posts as previews, without the video
+      tags:
+      - posts
+  /v1/posts/{id}:
+    get:
+      description: |-
+        Roles user and unverified_user (the free plan) may open only posts that were their daily video,
+        today or earlier (403 otherwise); paid_user and admin may open every published post.
+      parameters:
+      - description: post id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.postView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: returns a published video post with its video
+      tags:
+      - posts
 securityDefinitions:
   AdminKey:
     in: header
