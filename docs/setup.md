@@ -145,7 +145,8 @@ Keep `SMS_PROVIDER=log` while developing: `POST /v1/otp/send` then logs a line
 `redis-cli --scan --pattern 'birga:otp:*' | xargs redis-cli del`. To send real SMS, get a Play Mobile
 (smsxabar.uz) account and set `SMS_PROVIDER=playmobile`, `PLAYMOBILE_USERNAME`,
 `PLAYMOBILE_PASSWORD` and `PLAYMOBILE_ORIGINATOR` from the contract. The API refuses to start
-if `playmobile` is chosen without credentials.
+if `playmobile` is chosen without credentials. On the server these come from GitHub secrets
+through the Server setup workflow; see `docs/operations.md`, "SMS".
 
 ### Media (S3) locally
 

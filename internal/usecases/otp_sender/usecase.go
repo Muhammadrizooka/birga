@@ -85,7 +85,8 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (doma
 		return domain.OTPSendResult{}, err
 	}
 
-	messageID := uuid.NewString()
+	// Play Mobile wants a short Latin-and-digits id, so the UUID goes without its dashes.
+	messageID := strings.ReplaceAll(uuid.NewString(), "-", "")
 	l := logger.WithContext(uc.l, ctx).With(zap.String("message_id", messageID), zap.String("purpose", string(req.Purpose)))
 
 	if err := uc.saveAndSend(ctx, req, messageID); err != nil {

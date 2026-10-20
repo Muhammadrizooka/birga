@@ -12,10 +12,11 @@ echo "== services"
 systemctl is-active birga-backend postgresql redis-server nginx loki alloy grafana-server 2>&1 | paste -sd' '
 
 echo "== backend settings (set or empty, values hidden)"
-for k in ENVIRONMENT S3_BUCKET S3_REGION S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_ENDPOINT S3_PUBLIC_BASE_URL MEDIA_MAX_SIZE SMS_PROVIDER; do
+for k in ENVIRONMENT S3_BUCKET S3_REGION S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_ENDPOINT S3_PUBLIC_BASE_URL MEDIA_MAX_SIZE SMS_PROVIDER \
+	PLAYMOBILE_BASE_URL PLAYMOBILE_USERNAME PLAYMOBILE_PASSWORD PLAYMOBILE_ORIGINATOR; do
 	v="$(grep -E "^${k}=" /etc/birga/backend.env | head -1 | cut -d= -f2-)"
 	case "$k" in
-	ENVIRONMENT | S3_BUCKET | S3_REGION | MEDIA_MAX_SIZE | SMS_PROVIDER) echo "$k=${v:-<empty>}" ;;
+	ENVIRONMENT | S3_BUCKET | S3_REGION | MEDIA_MAX_SIZE | SMS_PROVIDER | PLAYMOBILE_BASE_URL | PLAYMOBILE_ORIGINATOR) echo "$k=${v:-<empty>}" ;;
 	*) [[ -n "$v" ]] && echo "$k=<set>" || echo "$k=<empty>" ;;
 	esac
 done

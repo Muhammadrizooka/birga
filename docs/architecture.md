@@ -215,7 +215,7 @@ provider failures to `errs` values (4xx to `ErrBadRequest`, transport failures t
 `ErrConnection`).
 
 SMS drivers implement `Send(ctx, messageID, phone, text) error`; the use case passes its own
-message id (a fresh UUID per send).
+message id (a fresh UUID per send, without dashes: 32 hex characters, which Play Mobile accepts).
 
 - `internal/drivers/playmobile` calls Play Mobile (smsxabar.uz): `POST
   <PLAYMOBILE_BASE_URL>/broker-api/send` with HTTP Basic auth and

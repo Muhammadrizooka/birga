@@ -9,6 +9,9 @@
 #   SITE_DOMAIN               public website domain, e.g. birga-oila.com (optional; www. redirects to it)
 #   CERT_EMAIL                Let's Encrypt account e-mail (required for HTTPS)
 #   S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY  optional; written to the backend env file
+#   PLAYMOBILE_USERNAME, PLAYMOBILE_PASSWORD, PLAYMOBILE_ORIGINATOR  optional; when the login and
+#                             password are set they are written to the backend env file and
+#                             SMS_PROVIDER becomes playmobile (real SMS)
 set -euo pipefail
 
 : "${API_DOMAIN:?API_DOMAIN is required}"
@@ -104,7 +107,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 	install -m 640 -o root -g "$APP_USER" /dev/null "$ENV_FILE"
 	cat >"$ENV_FILE" <<EOF
 # Birga backend settings on this server. Written by deploy/server/bootstrap.sh on first run;
-# later runs keep it and only update the S3 keys. Edit by hand, then: systemctl restart birga-backend
+# later runs keep it and only update the S3 and Play Mobile keys. Edit by hand, then: systemctl restart birga-backend
 ENVIRONMENT=staging
 LOG_LEVEL=info
 HTTP_PORT=127.0.0.1:8080
@@ -134,6 +137,13 @@ if [[ -n "${S3_ACCESS_KEY_ID:-}" && -n "${S3_SECRET_ACCESS_KEY:-}" ]]; then
 	set_env S3_ACCESS_KEY_ID "$S3_ACCESS_KEY_ID"
 	set_env S3_SECRET_ACCESS_KEY "$S3_SECRET_ACCESS_KEY"
 	echo "S3 keys written"
+fi
+if [[ -n "${PLAYMOBILE_USERNAME:-}" && -n "${PLAYMOBILE_PASSWORD:-}" ]]; then
+	set_env PLAYMOBILE_USERNAME "$PLAYMOBILE_USERNAME"
+	set_env PLAYMOBILE_PASSWORD "$PLAYMOBILE_PASSWORD"
+	[[ -n "${PLAYMOBILE_ORIGINATOR:-}" ]] && set_env PLAYMOBILE_ORIGINATOR "$PLAYMOBILE_ORIGINATOR"
+	set_env SMS_PROVIDER playmobile
+	echo "Play Mobile keys written, SMS_PROVIDER=playmobile"
 fi
 chown root:"$APP_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"

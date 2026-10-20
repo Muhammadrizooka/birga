@@ -35,9 +35,27 @@ Public addresses (HTTPS from Let's Encrypt, renewed by certbot's timer):
 
 `deploy/server/bootstrap.sh` builds all of this and is safe to run again. On its first run it
 creates `/etc/birga/backend.env` with a random database password and `JWT_SECRET`; later runs
-keep that file and only update the S3 keys. The server starts as `ENVIRONMENT=staging` with
-`SMS_PROVIDER=log`, so one-time codes appear in `journalctl -u birga-backend`; switch to
-`playmobile` and `production` once the SMS contract is in place.
+keep that file and only update the S3 and Play Mobile keys. The server starts as
+`ENVIRONMENT=staging` with `SMS_PROVIDER=log`, so one-time codes appear in
+`journalctl -u birga-backend` until real SMS are turned on (see [SMS](#sms)).
+
+### SMS
+
+One-time codes (sign-up, forgot password, phone change) go out through Play Mobile
+(smsxabar.uz). To turn real SMS on:
+
+1. Add the repository secrets `PLAYMOBILE_USERNAME`, `PLAYMOBILE_PASSWORD` and
+   `PLAYMOBILE_ORIGINATOR` (values from the Play Mobile contract; never put them in git or chat).
+2. Make sure Play Mobile has approved the originator and the SMS text
+   (`Birga: tasdiqlash kodingiz 123456. Kodni hech kimga bermang.`); unapproved texts are rejected.
+3. Run the Server setup workflow. It writes the keys to `/etc/birga/backend.env`, sets
+   `SMS_PROVIDER=playmobile` and restarts the API.
+4. Run Server diagnostics with the search text `playmobile`: the settings block shows
+   `SMS_PROVIDER=playmobile` and the credentials as `<set>`; send a forgot-password code to a
+   test phone and look for `play mobile rejected message` lines if it does not arrive.
+
+To go back to logged codes, set `SMS_PROVIDER=log` in the env file by hand and restart the API
+(a later Server setup run with the secrets still present switches it to `playmobile` again).
 
 Useful commands on the server:
 
@@ -91,6 +109,8 @@ Repository secrets (Settings, Secrets and variables, Actions):
 | `SERVER_USER` | SSH user (`root`) |
 | `SERVER_SSH_KEY` | private half of the deploy key; its public half is in the server's `authorized_keys` |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | the `birga-backend-media` IAM key, the same values as in a local `.env`; written to the backend env file |
+| `PLAYMOBILE_USERNAME`, `PLAYMOBILE_PASSWORD` | Play Mobile (smsxabar.uz) login and password from the SMS contract; optional. When both are set, Server setup writes them to the backend env file and sets `SMS_PROVIDER=playmobile` (see [SMS](#sms)) |
+| `PLAYMOBILE_ORIGINATOR` | sender name or short number registered with Play Mobile, e.g. `Birga`; optional (the API defaults to `3700`) |
 
 `deploy/ci/ssh-setup.sh` only connects when the server's ED25519 host key matches
 `SERVER_HOST_FINGERPRINT` at the top of each workflow; update it there if the server is
