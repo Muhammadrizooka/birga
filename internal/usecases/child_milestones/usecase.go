@@ -54,7 +54,7 @@ func New(l logger.Logger, children childRepo, milestones milestoneRepo, activiti
 
 // List returns the published milestones of one stage for the child, grouped by domain, with the
 // child's ticks. ageMonths 0 means the child's stage: the highest stage at or below the child's
-// age (years * 12). Free-plan users (pro false) get them without advice.
+// age. Free-plan users (pro false) get them without advice.
 func (uc *UseCase) List(ctx context.Context, userID string, pro bool, childID string, ageMonths int) (domain.ChildMilestones, error) {
 	if ageMonths != 0 && (ageMonths < domain.MinMilestoneAgeMonths || ageMonths > domain.MaxMilestoneAgeMonths) {
 		return domain.ChildMilestones{}, errs.Errf(errs.ErrValidation, "age_months must be between %d and %d",
@@ -73,7 +73,7 @@ func (uc *UseCase) List(ctx context.Context, userID string, pro bool, childID st
 
 	out := domain.ChildMilestones{AgeMonths: ageMonths, Stages: stages, Domains: map[string][]domain.ChildMilestone{}}
 	if out.AgeMonths == 0 {
-		out.AgeMonths = domain.StageFor(stages, child.Age*12) //nolint:mnd // months in a year
+		out.AgeMonths = domain.StageFor(stages, child.AgeMonths)
 	}
 
 	if out.AgeMonths == 0 {

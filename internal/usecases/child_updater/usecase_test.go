@@ -43,13 +43,13 @@ func TestExecute_Normalizes(t *testing.T) {
 	repo := &fakeChildren{}
 
 	_, err := New(nil, repo, fakeGoals{active: -1}).Execute(context.Background(), "u1", "c1", domain.ChildUpdate{
-		Name: ptr(" Amir "), Age: ptr(5), Gender: ptr(" Male "), PhotoID: ptr(" "),
+		Name: ptr(" Amir "), AgeMonths: ptr(60), Gender: ptr(" Male "), PhotoID: ptr(" "),
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 
-	if *repo.got.Name != "Amir" || *repo.got.Age != 5 || *repo.got.Gender != "male" || *repo.got.PhotoID != "" {
+	if *repo.got.Name != "Amir" || *repo.got.AgeMonths != 60 || *repo.got.Gender != "male" || *repo.got.PhotoID != "" {
 		t.Fatalf("unexpected update: %+v", repo.got)
 	}
 }
@@ -58,8 +58,8 @@ func TestExecute_Validation(t *testing.T) {
 	for name, upd := range map[string]domain.ChildUpdate{
 		"empty":      {},
 		"blank name": {Name: ptr("  ")},
-		"old":        {Age: ptr(19)},
-		"negative":   {Age: ptr(-1)},
+		"old":        {AgeMonths: ptr(156)},
+		"negative":   {AgeMonths: ptr(-1)},
 		"gender":     {Gender: ptr("other")},
 		"photo":      {PhotoID: ptr("x")},
 		"no goals":   {GoalIDs: ptr([]string{})},
@@ -75,7 +75,7 @@ func TestExecute_Validation(t *testing.T) {
 func TestExecute_NotParent(t *testing.T) {
 	repo := &fakeChildren{getErr: errs.ErrChildNotFound}
 
-	if _, err := New(nil, repo, fakeGoals{active: -1}).Execute(context.Background(), "u1", "c1", domain.ChildUpdate{Age: ptr(4)}); !errors.Is(err, errs.ErrNotFound) || repo.updated {
+	if _, err := New(nil, repo, fakeGoals{active: -1}).Execute(context.Background(), "u1", "c1", domain.ChildUpdate{AgeMonths: ptr(48)}); !errors.Is(err, errs.ErrNotFound) || repo.updated {
 		t.Fatalf("expected not found without update, got %v", err)
 	}
 }

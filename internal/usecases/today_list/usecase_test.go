@@ -28,7 +28,7 @@ func (fakeChildren) GetForParent(_ context.Context, id, userID string) (domain.C
 		return domain.Child{}, errs.ErrChildNotFound
 	}
 
-	return domain.Child{ID: id, Age: 8}, nil
+	return domain.Child{ID: id, AgeMonths: 96}, nil
 }
 
 type fakePlans struct {

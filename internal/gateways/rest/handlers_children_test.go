@@ -74,7 +74,7 @@ func (f *fakeChildActivities) create(userID string, c domain.Child) (domain.Chil
 func (f *fakeChildActivities) update(userID, childID string, upd domain.ChildUpdate) (domain.Child, error) {
 	f.gotUserID, f.gotUpdate = userID, upd
 
-	return domain.Child{ID: childID, Name: "Amir", Age: 5, Gender: "male"}, f.err
+	return domain.Child{ID: childID, Name: "Amir", AgeMonths: 60, Gender: "male"}, f.err
 }
 
 func (f *fakeChildActivities) plan(userID, childID string, restart bool) (domain.Plan, error) {
@@ -264,19 +264,24 @@ func TestListCompletionsAndStreak(t *testing.T) {
 func TestCreateChild(t *testing.T) {
 	s, d := newTestServer("")
 
-	code, r := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","age":4,"gender":"male","goal_ids":["`+testID+`"]}`, bearer)
+	code, r := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","age_months":54,"age":9,"gender":"male","goal_ids":["`+testID+`"]}`, bearer)
 	if code != http.StatusOK {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
 	got := d.kids.gotCreate
-	if d.kids.gotUserID != testUserID || got.Name != "Amir" || got.Age != 4 || got.Gender != domain.GenderMale ||
+	if d.kids.gotUserID != testUserID || got.Name != "Amir" || got.AgeMonths != 54 || got.Gender != domain.GenderMale ||
 		len(got.GoalIDs) != 1 || got.GoalIDs[0] != testID {
 		t.Fatalf("user %q child %+v", d.kids.gotUserID, d.kids.gotCreate)
 	}
 
-	if data, _ := r.Data.(map[string]any); data["id"] != testChildID {
+	if data, _ := r.Data.(map[string]any); data["id"] != testChildID || data["age_months"] != float64(54) || data["age"] != float64(4) {
 		t.Fatalf("data = %+v", r.Data)
+	}
+
+	// The old age field in years still works when age_months is missing.
+	if code, _ := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","age":4,"gender":"male"}`, bearer); code != http.StatusOK || d.kids.gotCreate.AgeMonths != 48 {
+		t.Fatalf("old age: %d %+v", code, d.kids.gotCreate)
 	}
 
 	if code, r := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","gender":"male"}`, bearer); code != http.StatusUnprocessableEntity {
@@ -328,12 +333,12 @@ func TestAdminAuth_BearerToken(t *testing.T) {
 func TestUpdateChild(t *testing.T) {
 	s, d := newTestServer("")
 
-	code, r := do(t, s, http.MethodPatch, "/v1/children/"+testChildID, `{"age": 5, "photo_id": "", "goal_ids": ["`+testID+`"]}`, bearer)
+	code, r := do(t, s, http.MethodPatch, "/v1/children/"+testChildID, `{"age_months": 18, "photo_id": "", "goal_ids": ["`+testID+`"]}`, bearer)
 	if code != http.StatusOK || d.kids.gotUserID != testUserID {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
-	if u := d.kids.gotUpdate; u.Age == nil || *u.Age != 5 || u.PhotoID == nil || *u.PhotoID != "" || u.Name != nil || u.Gender != nil ||
+	if u := d.kids.gotUpdate; u.AgeMonths == nil || *u.AgeMonths != 18 || u.PhotoID == nil || *u.PhotoID != "" || u.Name != nil || u.Gender != nil ||
 		u.GoalIDs == nil || len(*u.GoalIDs) != 1 {
 		t.Fatalf("unexpected update: %+v", u)
 	}

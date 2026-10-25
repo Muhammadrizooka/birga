@@ -27,7 +27,7 @@ type childRepo struct {
 type dbChild struct {
 	ID        string    `db:"id"`
 	Name      string    `db:"name"`
-	Age       int16     `db:"age"`
+	Age       float64   `db:"age"` // years; the domain works in months
 	Gender    string    `db:"gender"`
 	PhotoID   *string   `db:"photo_id"`
 	GoalIDs   []string  `db:"goal_ids"`
@@ -45,7 +45,7 @@ func (r *childRepo) Create(ctx context.Context, c domain.Child) (domain.Child, e
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING ` + childColumns
 
-	return r.one(ctx, l, q, c.Name, c.Age, c.Gender, c.PhotoID, nonNil(c.GoalIDs))
+	return r.one(ctx, l, q, c.Name, domain.ChildAgeToDB(c.AgeMonths), c.Gender, c.PhotoID, nonNil(c.GoalIDs))
 }
 
 func (r *childRepo) Get(ctx context.Context, id string) (domain.Child, error) {
@@ -285,8 +285,8 @@ func childSet(upd domain.ChildUpdate) (string, []any) {
 		add("name", *upd.Name)
 	}
 
-	if upd.Age != nil {
-		add("age", *upd.Age)
+	if upd.AgeMonths != nil {
+		add("age", domain.ChildAgeToDB(*upd.AgeMonths))
 	}
 
 	if upd.Gender != nil {
@@ -318,7 +318,7 @@ func (c dbChild) toDomain() domain.Child {
 	return domain.Child{
 		ID:        c.ID,
 		Name:      c.Name,
-		Age:       int(c.Age),
+		AgeMonths: domain.ChildAgeFromDB(c.Age),
 		Gender:    c.Gender,
 		PhotoID:   c.PhotoID,
 		GoalIDs:   c.GoalIDs,

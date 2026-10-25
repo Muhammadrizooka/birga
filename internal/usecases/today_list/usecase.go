@@ -248,5 +248,5 @@ func (uc *UseCase) Similar(ctx context.Context, userID string, pro bool, activit
 
 // childAge clamps the child's age to the activity range, as the plan does.
 func childAge(c domain.Child) int {
-	return min(max(c.Age, domain.MinChildAge), domain.MaxChildAge)
+	return min(max(c.AgeYears(), domain.MinChildAge), domain.MaxChildAge)
 }

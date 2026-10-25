@@ -308,6 +308,7 @@ type TipUseCases struct {
 type proPlan interface {
 	Offer(ctx context.Context, p domain.Principal) (domain.ProOffer, error)
 	Grant(ctx context.Context, userID string, until *time.Time) (domain.User, error)
+	Purchase(ctx context.Context, p domain.Principal, method string) (domain.ProPurchase, error)
 }
 
 type otpSender interface {

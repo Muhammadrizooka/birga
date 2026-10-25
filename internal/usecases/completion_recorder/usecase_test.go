@@ -14,7 +14,7 @@ import (
 type fakeChildren struct{ err error }
 
 func (f fakeChildren) GetForParent(_ context.Context, id, _ string) (domain.Child, error) {
-	return domain.Child{ID: id, Age: 4}, f.err
+	return domain.Child{ID: id, AgeMonths: 48}, f.err
 }
 
 type fakeActivities struct {

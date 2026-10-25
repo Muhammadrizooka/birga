@@ -25,7 +25,7 @@ func (f fakeChildren) GetForParent(_ context.Context, id, userID string) (domain
 		return domain.Child{}, errs.ErrChildNotFound
 	}
 
-	return domain.Child{ID: id, Age: f.age}, nil
+	return domain.Child{ID: id, AgeMonths: f.age}, nil
 }
 
 type fakeMilestones struct {
@@ -91,7 +91,7 @@ func (f *fakeCompletions) CountBetween(_ context.Context, _ string, from, to tim
 }
 
 func newUC(age int, m *fakeMilestones, c *fakeCompletions) *UseCase {
-	uc := New(nil, fakeChildren{age: age}, m, fakeActivities{}, c)
+	uc := New(nil, fakeChildren{age: age * 12}, m, fakeActivities{}, c)
 	uc.now = func() time.Time { return time.Date(2026, 10, 31, 20, 0, 0, 0, time.UTC) } // 1 Nov in Tashkent
 
 	return uc

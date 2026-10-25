@@ -423,11 +423,14 @@ link, no token needed; video players follow the redirect and can seek).
 
 Free and Pro plans (Figma 37-40). A user has Pro when their role is `paid_user` or `admin`, or
 while `users.pro_until` is in the future. The access token check reads both on every request,
-so a change applies at once. There is no payment endpoint yet: an admin gives Pro by date.
+so a change applies at once. There is no real payment yet: the "To‘lash"
+button calls `POST /v1/pro/purchase`, which turns Pro on for a month without charging; an admin
+can also give Pro by date.
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/v1/pro` | the offer screen: price and the caller's plan (signed in, any role) |
+| POST | `/v1/pro/purchase` | the pay button: one more month of Pro, no real payment yet (signed in) |
 | PUT | `/v1/admin/users/{id}/pro` | set or clear `pro_until` (admin) |
 
 `GET /v1/pro` response:
@@ -437,6 +440,19 @@ so a change applies at once. There is no payment endpoint yet: an admin gives Pr
 ```
 
 `price_uzs` comes from `PRO_PRICE_UZS` (default 16000).
+
+`POST /v1/pro/purchase` body: `{"payment_method": "payme"}` (`payme` or `click`, case-insensitive;
+anything else is 422). Nothing is charged yet: the call adds one month to `pro_until`, counted from
+the current `pro_until` when that is still in the future, else from now, and answers
+
+```json
+{"payment_method": "payme", "amount_uzs": 16000, "paid": false, "plan": "pro",
+ "pro_until": "2026-11-25T13:20:00Z"}
+```
+
+`paid` stays `false` until Payme and Click are connected; the app can show the result as a
+successful payment. Real payments are on the project to-do list; the endpoint and its response
+stay the same then, only `paid` becomes `true` after a confirmed payment.
 
 `PUT /v1/admin/users/{id}/pro` body: `{"until": "2026-11-25T00:00:00+05:00"}` (RFC 3339) gives Pro
 until then; `{"until": null}` or a past date ends it. Response: the [user object](#user-object).
@@ -642,6 +658,16 @@ keep this action low-key and ask for confirmation; the API does not.
 children ([child object](#children-add-a-child-signed-in) fields). Use
 `GET /v1/children/{id}` for one child's page.
 
+### Child age in months
+
+Every client sends and reads a child's age in **months** (`age_months`). The steps the app offers
+are 1 to 11 months, then 1, 1.5, 2 ... 7 years (12 to 84 months in steps of 6), then 8 to 12 years
+(96 to 144 in steps of 12). The database keeps years as a fraction (`children.age`, 1 month =
+1/12); the conversion happens in one place, the child mapping of `internal/dbstore/child.go`
+(`domain.ChildAgeToDB` and `domain.ChildAgeFromDB`), so no handler or client deals with years.
+Content age ranges (`min_age`/`max_age` of activities, articles, videos, tips) stay in whole years
+2 to 6; a child is matched by its whole years (`age_months / 12`) clamped to 2..6.
+
 ### Children: add a child (signed in)
 
 | Method | Path | Description |
@@ -653,14 +679,15 @@ its `user_children` link to the caller are written in one transaction, so the ca
 child's first parent and a child never exists without one.
 
 ```json
-{"name": "Amir", "age": 4, "gender": "male", "photo_id": null,
+{"name": "Amir", "age_months": 54, "gender": "male", "photo_id": null,
  "goal_ids": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00", "8d0e6f1a-3b2c-4d5e-9f8a-7b6c5d4e3f2a"]}
 ```
 
 | Field | Rules |
 |---|---|
 | `name` | required, trimmed, at most 100 characters |
-| `age` | required, years, 0 to 18 (wider than the 2 to 6 activity range so the profile stays valid) |
+| `age_months` | required, the age in **months**: 1 to 11, then half years from 12 to 84 (12, 18, 24 ... 84), then whole years from 96 to 144 (8 to 12 years); anything else is 422 |
+| `age` | old field, whole years; read (times 12) only when `age_months` is missing. New clients send `age_months` |
 | `gender` | required, `male` or `female` (case-insensitive) |
 | `photo_id` | optional id from `POST /v1/media`; an unknown id is 422 |
 | `goal_ids` | required, 1 to 20 goal ids from [`GET /v1/goals`](#goals), the goals picked for this child; repeats are stored once; an id that is not an active goal is 422 `goals contains ids that are not active goals, ...` |
@@ -669,14 +696,15 @@ In the same transaction the child gets its first [7-day plan](#children-7-day-pl
 made from its goals and age (when no published activity fits the age yet, the plan is made on
 the first `GET .../plan` instead).
 
-Response `data` is the child: `id`, `name`, `age`, `gender`, `photo_id`, `photo_url` (see [Media](#media-public)), `goal_ids`,
+Response `data` is the child: `id`, `name`, `age_months`, `age` (whole years, `age_months / 12`
+rounded down, for old clients), `gender`, `photo_id`, `photo_url` (see [Media](#media-public)), `goal_ids`,
 `created_at`, `updated_at`. Use `id` in the `/v1/children/{id}/...` endpoints below. Errors: 400 bad JSON,
 401 no or invalid token, 403 a second child on the free plan (see [Birga Pro](#birga-pro)), 422 a rule above.
 
 ```bash
 curl -X POST localhost:8080/v1/children \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Amir","age":4,"gender":"male","goal_ids":["'$GOAL'"]}'
+  -d '{"name":"Amir","age_months":54,"gender":"male","goal_ids":["'$GOAL'"]}'
 ```
 
 `GET /v1/me/children` lists the caller's children and `GET /v1/children/{id}` returns one
@@ -689,11 +717,11 @@ second parent.
 |---|---|---|
 | PATCH | `/v1/children/{id}` | change some fields of one of the caller's children |
 
-Needs [user authentication](#user-authentication); any role. Body: any of `name`, `age`,
-`gender`, `photo_id`, `goal_ids`. Omitted or `null` fields are kept; `""` clears `photo_id`;
+Needs [user authentication](#user-authentication); any role. Body: any of `name`, `age_months`
+(or the old `age` in years), `gender`, `photo_id`, `goal_ids`. Omitted or `null` fields are kept; `""` clears `photo_id`;
 `goal_ids` replaces the child's goals (1 to 20 active goal ids, 422 otherwise). The given fields
 follow the [add-child rules](#children-add-a-child-signed-in) (`usecases/child_updater`): `name`
-1 to 100 characters after trimming, `age` 0 to 18, `gender` `male` or `female`
+1 to 100 characters after trimming, `age_months` in the steps above, `gender` `male` or `female`
 (case-insensitive), `photo_id` an id from `POST /v1/media` (unknown: 422). An empty body is 422
 `nothing to update`. A child the caller is not a parent of, or a deleted one, is 404. Any of the
 child's parents may edit it. `updated_at` is set on every edit.
@@ -703,7 +731,7 @@ Response `data`: the child, as for add.
 ```bash
 curl -X PATCH localhost:8080/v1/children/$CHILD \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Amirjon","age":5}'
+  -d '{"name":"Amirjon","age_months":60}'
 ```
 
 A changed age or changed goals apply to the child's next plan; the current plan keeps its days.

@@ -200,7 +200,15 @@ definitions:
   rest.CreateChildRequest:
     properties:
       age:
+        description: Age is the old field in whole years, read only when age_months
+          is missing.
         example: 4
+        type: integer
+      age_months:
+        description: |-
+          AgeMonths is the child's age in months: 1..11, then 12..84 in steps of 6, then 96..144
+          in steps of 12.
+        example: 48
         type: integer
       gender:
         enum:
@@ -472,6 +480,15 @@ definitions:
         allOf:
         - $ref: '#/definitions/rest.statusType'
         example: Failure
+    type: object
+  rest.PurchaseProRequest:
+    properties:
+      payment_method:
+        enum:
+        - payme
+        - click
+        example: payme
+        type: string
     type: object
   rest.R:
     properties:
@@ -756,7 +773,13 @@ definitions:
   rest.UpdateChildRequest:
     properties:
       age:
+        description: Age is the old field in whole years, read only when age_months
+          is missing.
         example: 5
+        type: integer
+      age_months:
+        description: AgeMonths is the child's age in months (same steps as POST /v1/children).
+        example: 60
         type: integer
       gender:
         enum:
@@ -1227,7 +1250,13 @@ definitions:
   rest.childView:
     properties:
       age:
+        description: Age is the age in whole years (age_months / 12, rounded down),
+          kept for old clients.
         example: 4
+        type: integer
+      age_months:
+        description: AgeMonths is the child's age in months.
+        example: 54
         type: integer
       created_at:
         type: string
@@ -1839,6 +1868,25 @@ definitions:
       pro_until:
         description: ProUntil is when Birga Pro given by date ends; null when never
           given.
+        type: string
+    type: object
+  rest.proPurchaseView:
+    properties:
+      amount_uzs:
+        example: 16000
+        type: integer
+      paid:
+        description: 'Paid is false while there is no payment integration: nothing
+          was charged.'
+        example: false
+        type: boolean
+      payment_method:
+        example: payme
+        type: string
+      plan:
+        example: pro
+        type: string
+      pro_until:
         type: string
     type: object
   rest.profileView:
@@ -4756,7 +4804,10 @@ paths:
         - creates the child profile and links it to the caller in the same transaction;
         the caller is the child's first parent
         - any signed-in role (user, paid_user, admin) may add children
-        - name is required, at most 100 characters; age is required, 0..18; gender is male or female
+        - name is required, at most 100 characters; gender is male or female
+        - age_months is required: 1..11 months, then half years 12..84 (12, 18, 24 ... 84),
+        then whole years 96..144; anything else is 422. The old field age (whole years)
+        is still read when age_months is missing
         - photo_id is an optional id from POST /v1/media (422 if unknown)
         - goal_ids is required: 1 to 20 goal ids from GET /v1/goals, repeats stored once;
         an id that is not an active goal: 422
@@ -4854,7 +4905,8 @@ paths:
       description: |-
         - only the child's parents can edit it; any other id, or a deleted child, is 404
         - omitted or null fields are kept; the add-child rules apply to the given ones:
-        name 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media
+        name 1..100 characters, age_months (or the old age in years), gender male or
+        female, photo_id from POST /v1/media
         ("" clears it, an unknown id is 422)
         - goal_ids replaces the child's goals (1 to 20 active goal ids, 422 otherwise); the
         current plan keeps its days, the next plan uses the new goals
@@ -6402,7 +6454,8 @@ paths:
       - posts
   /v1/pro:
     get:
-      description: There is no payment endpoint yet; an admin gives Pro with PUT /v1/admin/users/{id}/pro.
+      description: Pro is turned on with POST /v1/pro/purchase (no real payment yet)
+        or by an admin with PUT /v1/admin/users/{id}/pro.
       produces:
       - application/json
       responses:
@@ -6426,6 +6479,55 @@ paths:
       security:
       - BearerAuth: []
       summary: 'the Birga Pro offer: price and the caller''s plan'
+      tags:
+      - pro
+  /v1/pro/purchase:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        There is no payment integration yet: nothing is charged (paid is false). The call adds one month to
+        pro_until, counted from the current end of Pro or from now, and takes effect on the next request.
+        payment_method is payme or click (422 otherwise).
+      parameters:
+      - description: payment type
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.PurchaseProRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.proPurchaseView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'the "To‘lash" button: turns on Birga Pro for one month (no real payment
+        yet)'
       tags:
       - pro
   /v1/tips:

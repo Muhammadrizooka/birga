@@ -20,3 +20,15 @@ type ProOffer struct {
 	Plan     string
 	ProUntil *time.Time
 }
+
+// PaymentMethods are the payment types the Pro payment screen offers (Figma 38).
+var PaymentMethods = []string{"payme", "click"}
+
+// ProPurchase is the result of the Pro "To‘lash" button. Paid is false while there is no
+// payment integration: Pro is turned on without charging.
+type ProPurchase struct {
+	PaymentMethod string
+	AmountUZS     int
+	Paid          bool
+	User          User
+}

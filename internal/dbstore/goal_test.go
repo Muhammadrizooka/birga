@@ -88,7 +88,7 @@ func TestChildRepo_Goals(t *testing.T) {
 			t.Fatalf("Create user: %+v %v", u, err)
 		}
 
-		c, err := s.Child().Create(ctx, domain.Child{Name: "Goal", Age: 3, Gender: domain.GenderMale, GoalIDs: []string{goal.ID}})
+		c, err := s.Child().Create(ctx, domain.Child{Name: "Goal", AgeMonths: 36, Gender: domain.GenderMale, GoalIDs: []string{goal.ID}})
 		if err != nil || len(c.GoalIDs) != 1 || c.GoalIDs[0] != goal.ID {
 			t.Fatalf("Create child: %+v %v", c, err)
 		}

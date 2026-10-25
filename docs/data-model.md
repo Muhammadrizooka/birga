@@ -228,7 +228,7 @@ Child profiles. Created by `000006_create_children_tables`. Rows are soft-delete
 |---|---|---|---|---|
 | `id` | `UUID` | no | `gen_random_uuid()` | primary key |
 | `name` | `TEXT` | no | | display name |
-| `age` | `SMALLINT` | no | | age in years, as entered; not advanced automatically |
+| `age` | `DOUBLE PRECISION` | no | | age in years as a fraction (1 month = 1/12, so 18 months is 1.5), as entered; not advanced automatically. `SMALLINT` whole years until `000023_child_age_years_float`. The API speaks months; `dbstore/child.go` converts (`domain.ChildAgeToDB`/`ChildAgeFromDB`) |
 | `gender` | `TEXT` | no | | `male` or `female` |
 | `photo_id` | `UUID` | yes | | references `media(id)` `ON DELETE SET NULL` (constraint `children_photo_id_fkey`), same as `users.photo_id` |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) picked for this child, in the order given (added by `000014_child_goals_and_plans`); no foreign key. The API requires 1 to 20 (`domain.MaxChildGoals`); empty only for a child whose goals were all deleted |
@@ -238,9 +238,10 @@ Child profiles. Created by `000006_create_children_tables`. Rows are soft-delete
 
 Constraints:
 
-- `children_age_chk`: `age BETWEEN 0 AND 18`. Wider than the 2 to 6 activity range
-  (`domain.MinChildAge`/`MaxChildAge`) so a profile stays valid as the child grows;
-  `domain.IsValidChildAge` checks the same 0 to 18 range.
+- `children_age_chk`: `age BETWEEN 0 AND 18`, kept from `000006` for older rows. The API allows
+  less: `domain.IsValidChildAgeMonths` takes 1 to 11 months, half years to 7, whole years to 12
+  (`domain.MaxChildAgeMonths` = 144). Content matching uses whole years clamped to the 2 to 6
+  activity range (`domain.MinChildAge`/`MaxChildAge`).
 - `children_gender_chk`: `gender IN ('male', 'female')` (`domain.IsKnownGender`).
 
 `internal/dbstore/child.go` reads only rows with `deleted_at IS NULL`, maps a failed check to
@@ -562,6 +563,24 @@ use case.
 Repository (`store.Extra()`): `ListDay`, `Add`, `Pick` (a published activity for the child's
 age serving one goal, not in today's list, never done or done longest ago first).
 `store.Activity().Similar` serves `GET /v1/activities/{id}/similar`.
+
+### Sample content (`000024_sample_content`)
+
+Not a table: the migration adds 10 published tips, 10 articles and 10 videos (posts) in Uzbek,
+Russian and English (user request, 2026-10-25), so the library and the daily cards have
+something to show. Real content is made in the dashboard; edit or delete the samples there.
+
+- Ids are fixed (`5a1e0000-...` tips, `5a2e0000-...` articles, `5a3e0000-...` posts, ending in
+  1 to 10), so running it twice adds nothing and the down migration deletes exactly these rows
+  (their daily picks and reads go with them by cascade).
+- Tips take their topic by English name (the topics of `000020`), else the oldest active topic.
+- Articles and videos take their goal by English name (Language, Motor skills, Thinking, Social
+  skills, Emotions), else the oldest active goal; with no goals they are skipped. Their topic is
+  set by English name when such a topic exists.
+- Videos need a video file, and a migration cannot upload one: all 10 reuse the oldest uploaded
+  `media` row with a `video/*` content type. With no uploaded video they are skipped; upload one
+  in the dashboard and run the migration again by hand
+  (`psql "$POSTGRES_URL" -f migrations/000024_sample_content.up.sql`), or make the videos there.
 
 ## Conventions
 

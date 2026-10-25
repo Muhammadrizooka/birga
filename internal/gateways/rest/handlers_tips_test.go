@@ -89,6 +89,28 @@ func (f *fakeTips) Grant(_ context.Context, userID string, until *time.Time) (do
 	return domain.User{ID: userID, ProUntil: until}, f.err
 }
 
+func (f *fakeTips) Purchase(_ context.Context, p domain.Principal, method string) (domain.ProPurchase, error) {
+	f.principal = p
+	until := time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)
+
+	return domain.ProPurchase{PaymentMethod: method, AmountUZS: 16000, User: domain.User{ID: p.UserID, ProUntil: &until}}, f.err
+}
+
+func TestProPurchase(t *testing.T) {
+	s, d := newTestServer(testAdminKey)
+
+	code, r := do(t, s, http.MethodPost, "/v1/pro/purchase", `{"payment_method":"click"}`, bearer)
+	data := mustJSON(t, r.Data)
+	if code != http.StatusOK || d.tips.principal.UserID != testUserID || string(data["plan"]) != `"pro"` ||
+		string(data["paid"]) != "false" || string(data["payment_method"]) != `"click"` {
+		t.Fatalf("purchase: %d %+v", code, r.Data)
+	}
+
+	if code, _ := do(t, s, http.MethodPost, "/v1/pro/purchase", `{"payment_method":"click"}`, nil); code != http.StatusUnauthorized {
+		t.Errorf("without token: %d", code)
+	}
+}
+
 func TestTips_Admin(t *testing.T) {
 	s, d := newTestServer(testAdminKey)
 

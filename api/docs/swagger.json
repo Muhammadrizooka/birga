@@ -3831,7 +3831,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- creates the child profile and links it to the caller in the same transaction;\nthe caller is the child's first parent\n- any signed-in role (user, paid_user, admin) may add children\n- name is required, at most 100 characters; age is required, 0..18; gender is male or female\n- photo_id is an optional id from POST /v1/media (422 if unknown)\n- goal_ids is required: 1 to 20 goal ids from GET /v1/goals, repeats stored once;\nan id that is not an active goal: 422\n- the child's first 7-day plan is made at once from its goals (GET /v1/children/{id}/plan)",
+                "description": "- creates the child profile and links it to the caller in the same transaction;\nthe caller is the child's first parent\n- any signed-in role (user, paid_user, admin) may add children\n- name is required, at most 100 characters; gender is male or female\n- age_months is required: 1..11 months, then half years 12..84 (12, 18, 24 ... 84),\nthen whole years 96..144; anything else is 422. The old field age (whole years)\nis still read when age_months is missing\n- photo_id is an optional id from POST /v1/media (422 if unknown)\n- goal_ids is required: 1 to 20 goal ids from GET /v1/goals, repeats stored once;\nan id that is not an active goal: 422\n- the child's first 7-day plan is made at once from its goals (GET /v1/children/{id}/plan)",
                 "consumes": [
                     "application/json"
                 ],
@@ -3980,7 +3980,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- only the child's parents can edit it; any other id, or a deleted child, is 404\n- omitted or null fields are kept; the add-child rules apply to the given ones:\nname 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media\n(\"\" clears it, an unknown id is 422)\n- goal_ids replaces the child's goals (1 to 20 active goal ids, 422 otherwise); the\ncurrent plan keeps its days, the next plan uses the new goals\n- an empty body is 422 (nothing to update)",
+                "description": "- only the child's parents can edit it; any other id, or a deleted child, is 404\n- omitted or null fields are kept; the add-child rules apply to the given ones:\nname 1..100 characters, age_months (or the old age in years), gender male or\nfemale, photo_id from POST /v1/media\n(\"\" clears it, an unknown id is 422)\n- goal_ids replaces the child's goals (1 to 20 active goal ids, 422 otherwise); the\ncurrent plan keeps its days, the next plan uses the new goals\n- an empty body is 422 (nothing to update)",
                 "consumes": [
                     "application/json"
                 ],
@@ -6303,7 +6303,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "There is no payment endpoint yet; an admin gives Pro with PUT /v1/admin/users/{id}/pro.",
+                "description": "Pro is turned on with POST /v1/pro/purchase (no real payment yet) or by an admin with PUT /v1/admin/users/{id}/pro.",
                 "produces": [
                     "application/json"
                 ],
@@ -6334,6 +6334,81 @@
                         "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/pro/purchase": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "There is no payment integration yet: nothing is charged (paid is false). The call adds one month to\npro_until, counted from the current end of Pro or from now, and takes effect on the next request.\npayment_method is payme or click (422 otherwise).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pro"
+                ],
+                "summary": "the \"To‘lash\" button: turns on Birga Pro for one month (no real payment yet)",
+                "parameters": [
+                    {
+                        "description": "payment type",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.PurchaseProRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.proPurchaseView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
                         }
                     },
                     "500": {
@@ -6757,8 +6832,14 @@
             "type": "object",
             "properties": {
                 "age": {
+                    "description": "Age is the old field in whole years, read only when age_months is missing.",
                     "type": "integer",
                     "example": 4
+                },
+                "age_months": {
+                    "description": "AgeMonths is the child's age in months: 1..11, then 12..84 in steps of 6, then 96..144\nin steps of 12.",
+                    "type": "integer",
+                    "example": 48
                 },
                 "gender": {
                     "type": "string",
@@ -7131,6 +7212,19 @@
                         }
                     ],
                     "example": "Failure"
+                }
+            }
+        },
+        "rest.PurchaseProRequest": {
+            "type": "object",
+            "properties": {
+                "payment_method": {
+                    "type": "string",
+                    "enum": [
+                        "payme",
+                        "click"
+                    ],
+                    "example": "payme"
                 }
             }
         },
@@ -7538,8 +7632,14 @@
             "type": "object",
             "properties": {
                 "age": {
+                    "description": "Age is the old field in whole years, read only when age_months is missing.",
                     "type": "integer",
                     "example": 5
+                },
+                "age_months": {
+                    "description": "AgeMonths is the child's age in months (same steps as POST /v1/children).",
+                    "type": "integer",
+                    "example": 60
                 },
                 "gender": {
                     "type": "string",
@@ -8188,8 +8288,14 @@
             "type": "object",
             "properties": {
                 "age": {
+                    "description": "Age is the age in whole years (age_months / 12, rounded down), kept for old clients.",
                     "type": "integer",
                     "example": 4
+                },
+                "age_months": {
+                    "description": "AgeMonths is the child's age in months.",
+                    "type": "integer",
+                    "example": 54
                 },
                 "created_at": {
                     "type": "string"
@@ -9024,6 +9130,31 @@
                 },
                 "pro_until": {
                     "description": "ProUntil is when Birga Pro given by date ends; null when never given.",
+                    "type": "string"
+                }
+            }
+        },
+        "rest.proPurchaseView": {
+            "type": "object",
+            "properties": {
+                "amount_uzs": {
+                    "type": "integer",
+                    "example": 16000
+                },
+                "paid": {
+                    "description": "Paid is false while there is no payment integration: nothing was charged.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "payment_method": {
+                    "type": "string",
+                    "example": "payme"
+                },
+                "plan": {
+                    "type": "string",
+                    "example": "pro"
+                },
+                "pro_until": {
                     "type": "string"
                 }
             }

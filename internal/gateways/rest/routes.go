@@ -37,6 +37,7 @@ func (s *Server) endpoints() {
 
 	v1.POST("/auth/logout", s.userAuth(), s.Logout())
 	v1.GET("/pro", s.userAuth(), s.GetProOffer())
+	v1.POST("/pro/purchase", s.userAuth(), s.PurchasePro())
 	v1.GET("/tips", s.userAuth(), s.ListTips())
 	v1.GET("/activities/:id/similar", s.userAuth(), s.GetSimilarActivities())
 	v1.GET("/milestones/:id", s.userAuth(), s.GetMilestone())

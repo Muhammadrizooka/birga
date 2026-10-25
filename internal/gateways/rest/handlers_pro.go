@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
 )
 
@@ -20,7 +21,7 @@ type proOfferView struct {
 
 // GetProOffer godoc swagger
 // @Summary the Birga Pro offer: price and the caller's plan
-// @Description There is no payment endpoint yet; an admin gives Pro with PUT /v1/admin/users/{id}/pro.
+// @Description Pro is turned on with POST /v1/pro/purchase (no real payment yet) or by an admin with PUT /v1/admin/users/{id}/pro.
 // @Tags pro
 // @Security BearerAuth
 // @Produce json
@@ -38,6 +39,58 @@ func (s *Server) GetProOffer() gin.HandlerFunc {
 		}
 
 		Return(c, proOfferView{PriceUZS: o.PriceUZS, Period: "month", Plan: o.Plan, ProUntil: o.ProUntil}, nil)
+	}
+}
+
+// PurchaseProRequest is the body of POST /v1/pro/purchase.
+type PurchaseProRequest struct {
+	PaymentMethod string `json:"payment_method" example:"payme" enums:"payme,click"`
+}
+
+type proPurchaseView struct {
+	PaymentMethod string `json:"payment_method" example:"payme"`
+	AmountUZS     int    `json:"amount_uzs" example:"16000"`
+	// Paid is false while there is no payment integration: nothing was charged.
+	Paid     bool       `json:"paid" example:"false"`
+	Plan     string     `json:"plan" example:"pro"`
+	ProUntil *time.Time `json:"pro_until"`
+}
+
+// PurchasePro godoc swagger
+// @Summary the "To‘lash" button: turns on Birga Pro for one month (no real payment yet)
+// @Description There is no payment integration yet: nothing is charged (paid is false). The call adds one month to
+// @Description pro_until, counted from the current end of Pro or from now, and takes effect on the next request.
+// @Description payment_method is payme or click (422 otherwise).
+// @Tags pro
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param body body PurchaseProRequest true "payment type"
+// @Success 200 {object} rest.R{data=rest.proPurchaseView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 422 {object} rest.UnprocessableContentResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/pro/purchase [POST]
+func (s *Server) PurchasePro() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req PurchaseProRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			Return(c, nil, errs.Errf(errs.ErrBadRequest, "invalid JSON body: %s", err.Error()))
+
+			return
+		}
+
+		p, err := s.pro.Purchase(c.Request.Context(), currentPrincipal(c), req.PaymentMethod)
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, proPurchaseView{
+			PaymentMethod: p.PaymentMethod, AmountUZS: p.AmountUZS, Paid: p.Paid, Plan: domain.PlanPro, ProUntil: p.User.ProUntil,
+		}, nil)
 	}
 }
 
