@@ -84,6 +84,7 @@ func (s *Server) endpoints() {
 		child.GET("/recommendation", s.RecommendActivity())
 		child.GET("/today", s.GetToday())
 		child.POST("/today/extras", s.AddTodayExtra())
+		child.POST("/today/difficulty", s.ChangeTodayDifficulty())
 		child.GET("/milestones", s.GetChildMilestones())
 		child.PUT("/milestones/:milestone_id", s.MarkMilestone())
 		child.DELETE("/milestones/:milestone_id", s.UnmarkMilestone())

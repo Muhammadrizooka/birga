@@ -83,6 +83,15 @@ func TestExecute_Success(t *testing.T) {
 	if len(repo.got.GoalIDs) != 1 || repo.got.GoalIDs[0] != goalID {
 		t.Fatalf("goal ids should be deduplicated, got %v", repo.got.GoalIDs)
 	}
+
+	if repo.got.Difficulty != domain.DifficultyNormal {
+		t.Fatalf("difficulty should default to normal, got %q", repo.got.Difficulty)
+	}
+
+	a.Difficulty = " Easy "
+	if _, err := New(nil, repo, &fakeGoals{active: -1}).Execute(context.Background(), a); err != nil || repo.got.Difficulty != domain.DifficultyEasy {
+		t.Fatalf("difficulty easy: %q %v", repo.got.Difficulty, err)
+	}
 }
 
 func TestExecute_UnknownGoal(t *testing.T) {
@@ -111,6 +120,7 @@ func TestExecute_Validation(t *testing.T) {
 		"age inverted":     func(a *domain.Activity) { a.MinAge, a.MaxAge = 5, 3 },
 		"zero duration":    func(a *domain.Activity) { a.DurationMinutes = 0 },
 		"too long session": func(a *domain.Activity) { a.DurationMinutes = 61 },
+		"bad difficulty":   func(a *domain.Activity) { a.Difficulty = "hard" },
 	}
 
 	for name, mutate := range cases {

@@ -38,6 +38,7 @@ type dbActivity struct {
 	HarderUz        string    `db:"harder_uz"`
 	HarderRu        string    `db:"harder_ru"`
 	HarderEn        string    `db:"harder_en"`
+	Difficulty      string    `db:"difficulty"`
 	GoalIDs         []string  `db:"goal_ids"`
 	MinAge          int16     `db:"min_age"`
 	MaxAge          int16     `db:"max_age"`
@@ -49,7 +50,7 @@ type dbActivity struct {
 
 const activityColumns = `
 	id, title_uz, title_ru, title_en, description_uz, description_ru, description_en, main_idea_uz, main_idea_ru, main_idea_en,
-	easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en,
+	easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en, difficulty,
 	goal_ids, min_age, max_age, duration_minutes, is_published, created_at, updated_at`
 
 func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Activity, error) {
@@ -61,8 +62,8 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 		INSERT INTO activities (
 			title_uz, title_ru, title_en, description_uz, description_ru, description_en,
 			main_idea_uz, main_idea_ru, main_idea_en, easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en,
-			goal_ids, min_age, max_age, duration_minutes, is_published
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+			goal_ids, min_age, max_age, duration_minutes, is_published, difficulty
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, COALESCE(NULLIF($21, ''), 'normal'))
 		RETURNING ` + activityColumns
 	)
 
@@ -70,7 +71,7 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 		a.TitleUz, a.TitleRu, a.TitleEn, a.DescriptionUz, a.DescriptionRu, a.DescriptionEn,
 		a.MainIdeaUz, a.MainIdeaRu, a.MainIdeaEn,
 		a.EasierUz, a.EasierRu, a.EasierEn, a.HarderUz, a.HarderRu, a.HarderEn, a.GoalIDs,
-		a.MinAge, a.MaxAge, a.DurationMinutes, a.IsPublished,
+		a.MinAge, a.MaxAge, a.DurationMinutes, a.IsPublished, a.Difficulty,
 	)
 	if err != nil {
 		l.Error("sqlClient.Query", zap.Error(err))
@@ -240,6 +241,11 @@ func activityWhere(f domain.ActivityFilter) (string, []any) {
 		conds = append(conds, "duration_minutes <= $"+strconv.Itoa(len(args)))
 	}
 
+	if f.Difficulty != "" {
+		args = append(args, f.Difficulty)
+		conds = append(conds, "difficulty = $"+strconv.Itoa(len(args)))
+	}
+
 	return " WHERE " + strings.Join(conds, " AND "), args
 }
 
@@ -300,6 +306,7 @@ func activitySet(upd domain.ActivityUpdate) (string, []any) {
 	}{
 		{"easier_uz", upd.EasierUz}, {"easier_ru", upd.EasierRu}, {"easier_en", upd.EasierEn},
 		{"harder_uz", upd.HarderUz}, {"harder_ru", upd.HarderRu}, {"harder_en", upd.HarderEn},
+		{"difficulty", upd.Difficulty},
 	} {
 		if f.value != nil {
 			add(f.column, *f.value)
@@ -347,6 +354,7 @@ func (a dbActivity) toDomain() domain.Activity {
 		HarderUz:        a.HarderUz,
 		HarderRu:        a.HarderRu,
 		HarderEn:        a.HarderEn,
+		Difficulty:      a.Difficulty,
 		GoalIDs:         nonNil(a.GoalIDs),
 		MinAge:          int(a.MinAge),
 		MaxAge:          int(a.MaxAge),

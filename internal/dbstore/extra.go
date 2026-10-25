@@ -76,9 +76,26 @@ func (r *extraRepo) Add(ctx context.Context, childID string, day time.Time, acti
 	return nil
 }
 
-// Pick returns a published activity serving p.GoalID within p.Age and not in p.ExcludeIDs: the
-// ones the child never did first, then the one done longest ago, then a per-child, per-day order.
-// No match is errs.ErrNoExtra.
+// Replace swaps oldID for newID in the child's day, keeping its place in the list.
+func (r *extraRepo) Replace(ctx context.Context, childID string, day time.Time, oldID, newID string) error {
+	l := logger.FromCtx(ctx, "extraRepo.Replace").With(zap.String("child_id", childID))
+
+	_, err := r.store.sqlClientByCtx(ctx).Exec(ctx, `
+		UPDATE child_day_extras SET activity_id = $4
+		WHERE child_id = $1 AND day = $2 AND activity_id = $3`, childID, day.Format(time.DateOnly), oldID, newID)
+	if err != nil {
+		l.Error("sqlClient.Exec", zap.Error(err))
+
+		return errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return nil
+}
+
+// Pick returns a published activity serving one of p.GoalIDs (any goal when empty) within p.Age
+// and not in p.ExcludeIDs. With p.Difficulty only activities of that level match; otherwise normal
+// ones come first. Then those sharing more of p.GoalIDs, the ones the child never did, the one
+// done longest ago, and a per-child, per-day order. No match is errs.ErrNoExtra.
 func (r *extraRepo) Pick(ctx context.Context, p domain.ExtraPick, day time.Time) (domain.Activity, error) {
 	l := logger.FromCtx(ctx, "extraRepo.Pick").With(zap.String("child_id", p.ChildID))
 
@@ -91,11 +108,15 @@ func (r *extraRepo) Pick(ctx context.Context, p domain.ExtraPick, day time.Time)
 			GROUP BY activity_id
 		) done ON done.activity_id = a.id
 		WHERE a.is_published AND a.deleted_at IS NULL AND a.min_age <= $2 AND a.max_age >= $2
-			AND $3::uuid = ANY(a.goal_ids) AND NOT (a.id = ANY($4::uuid[]))
-		ORDER BY done.last_on NULLS FIRST, md5(a.id::text || $1::text || $5::text)
+			AND (cardinality($3::uuid[]) = 0 OR a.goal_ids && $3::uuid[]) AND NOT (a.id = ANY($4::uuid[]))
+			AND ($6 = '' OR a.difficulty = $6)
+		ORDER BY a.difficulty = 'normal' DESC,
+			(SELECT COUNT(*) FROM unnest(a.goal_ids) g WHERE g = ANY($3::uuid[])) DESC,
+			done.last_on NULLS FIRST, md5(a.id::text || $1::text || $5::text)
 		LIMIT 1`
 
-	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q, p.ChildID, p.Age, p.GoalID, nonNil(p.ExcludeIDs), day.Format(time.DateOnly))
+	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q,
+		p.ChildID, p.Age, nonNil(p.GoalIDs), nonNil(p.ExcludeIDs), day.Format(time.DateOnly), p.Difficulty)
 	if err == nil {
 		var a dbActivity
 

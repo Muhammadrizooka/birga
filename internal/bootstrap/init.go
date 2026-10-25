@@ -347,7 +347,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		completionLister: completionlister.New(l.Named("usecase.completion_lister"), store.Child(), store.Completion()),
 		streakGetter:     streakgetter.New(l.Named("usecase.streak_getter"), store.Child(), store.Plan()),
 		todayList: todaylist.New(l.Named("usecase.today_list"),
-			store.Child(), planGetter, store.Activity(), store.Extra(), store.Goal()),
+			store.Child(), planGetter, store.Activity(), store.Extra(), store.Goal(), store.Plan()),
 		milestoneManager: milestonemanager.New(l.Named("usecase.milestone_manager"), store.Milestone(), store.Activity()),
 		childMilestones: childmilestones.New(l.Named("usecase.child_milestones"),
 			store.Child(), store.Milestone(), store.Activity(), store.Completion()),

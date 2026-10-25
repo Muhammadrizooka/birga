@@ -132,10 +132,11 @@ Query parameters for the list:
 | `goal_id` | UUID string | a goal id from [`GET /v1/goals`](#goals); matches activities whose `goal_ids` contain it |
 | `q` | string | title search: matches activities whose `title_uz`, `title_ru` or `title_en` contains the text, ignoring case; trimmed, at most 100 characters; `%` and `_` match literally |
 | `max_minutes` | int | only activities of at most this many minutes (the "10 daqiqagacha" filter) |
+| `difficulty` | string | only activities of this level: `easy`, `normal` or `difficult` |
 | `limit`, `offset` | int | see [Pagination](#pagination) |
 
-An `age` outside 2..6, a `goal_id` that is not a UUID, a negative `max_minutes` or a `q` over 100
-characters returns 422; a non-integer `age` or `max_minutes` returns 400. A UUID that is not a goal simply matches nothing.
+An `age` outside 2..6, a `goal_id` that is not a UUID, a negative `max_minutes`, a `q` over 100
+characters or another `difficulty` returns 422; a non-integer `age` or `max_minutes` returns 400. A UUID that is not a goal simply matches nothing.
 
 Example:
 
@@ -153,7 +154,7 @@ curl 'localhost:8080/v1/activities?age=4&goal_id='$GOAL'&limit=10'
 | PATCH | `/v1/admin/activities/{id}` | change some fields, including publishing or unpublishing |
 | DELETE | `/v1/admin/activities/{id}` | soft-delete an activity |
 
-The admin list takes the public list's `age`, `goal_id`, `q`, `limit` and `offset`, and also
+The admin list takes the public list's `age`, `goal_id`, `q`, `difficulty`, `limit` and `offset`, and also
 `status`: `published` (only published activities), `draft` (only unpublished ones) or omitted
 for both. Any other value is 422 `status must be published or draft`. The public list ignores
 `status`.
@@ -179,6 +180,7 @@ Create body:
   "min_age": 3,
   "max_age": 5,
   "duration_minutes": 10,
+  "difficulty": "normal",
   "is_published": true
 }
 ```
@@ -189,6 +191,9 @@ Validation (`usecases/activity_creator`), all returning 422:
 - `main_idea_uz`, `main_idea_ru`, `main_idea_en` are optional (trimmed, default `""`);
 - `easier_uz/ru/en` and `harder_uz/ru/en` are optional (trimmed, default `""`): the "Osonroq" and
   "Qiyinroq" variants ("Odatdagi" is the description);
+- `difficulty` is `easy`, `normal` or `difficult` (case and spaces ignored); omitted or `""` means
+  `normal`. Plans give children normal activities; the easy and difficult ones are what
+  [the difficulty switch](#difficulty-switch) swaps to, so each goal and age needs some of each;
 - `goal_ids` must hold 1 to 5 UUIDs (repeats are stored once), and each must be an active goal
   from [`GET /v1/goals`](#goals) (`goals contains ids that are not active goals, ...`);
 - `2 <= min_age <= max_age <= 6`;
@@ -203,7 +208,7 @@ curl -X POST localhost:8080/v1/admin/activities \
 ```
 
 Update (`PATCH`) takes the same fields, all optional. Omitted or `null` fields are kept. Each
-given field follows the create rules (titles and descriptions cannot be emptied, `main_idea_*`, `easier_*` and `harder_*` can; `goal_ids`, when sent, replaces the
+given field follows the create rules (titles and descriptions cannot be emptied, `main_idea_*`, `easier_*` and `harder_*` can, `difficulty` must be one of the three levels; `goal_ids`, when sent, replaces the
 whole list and cannot be emptied); an age that is valid alone but
 not together with the stored one, such as `min_age` above the stored `max_age`, is rejected
 by the database check, also with 422. An empty body is 422 (`nothing to update`).
@@ -755,6 +760,7 @@ child: a parent with three children has three plans and three streaks.
 | GET | `/v1/children/{id}/streak/days` | the streak calendar: done and missed days |
 | GET | `/v1/children/{id}/today` | today's list: plan activity and added activities |
 | POST | `/v1/children/{id}/today/extras` | add an activity to today's list (Birga Pro) |
+| POST | `/v1/children/{id}/today/difficulty` | swap an activity of today's list for an easier or harder one (Birga Pro) |
 
 #### Today's list
 
@@ -781,7 +787,8 @@ like `GET .../plan`.
 - `{"goal_id": "..."}`: "Qaysi maqsad uchun yangi mashg‘ulot?" (40a). The backend picks a
   published activity for the child's age (2 to 6) that serves that goal, is not a day of the
   child's current 7-day plan (so it is never done early and then again on its plan day) and is
-  not in today's list yet. Activities the child never did come first, then the one done longest ago. 404
+  not in today's list yet. Normal-difficulty activities come first, then the ones the child never
+  did, then the one done longest ago. 404
   `no other published activity serves this goal at the child's age` when none is left, 422 for a
   goal that is not active.
 - `{"activity_id": "..."}`: "Bugungi rejaga qo‘shish" and "Yana bittasi" (42). 404 for an
@@ -795,6 +802,46 @@ call is 403 `this needs Birga Pro`; sending both fields or neither is 422.
 
 Mark an extra done with the normal [Complete](#complete) call. It goes into the history and
 `done_count`, but not the streak: only plan days keep the streak.
+
+#### Difficulty switch
+
+`POST /v1/children/{id}/today/difficulty` (Birga Pro): "Qiyinlik darajasi" with "Osonroq",
+"Odatdagi" and "Qiyinroq" on the activity page. Every activity has a `difficulty` (`easy`,
+`normal`, `difficult`); plans give normal ones. The switch swaps the activity for another one of
+the chosen level:
+
+```json
+{"activity_id": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11", "difficulty": "easy"}
+```
+
+- `activity_id` is an item of the child's [list for today](#todays-list): the open plan activity
+  (`plan.activity`, `status` `today`) or an added activity (`extras[].activity`) not done yet.
+- The backend picks a published activity with that `difficulty` for the child's age (2 to 6) and
+  the same goal: the plan day's `goal_id` for the plan activity, one of the activity's `goal_ids`
+  for an added one (sharing more of them first). It is never the current activity, a day of the
+  child's 7-day plan or an activity already in today's list. So asking for the level the activity
+  already has (easy, then easy again) gives another activity of that level. The ones the child
+  never did come first, then the one done longest ago.
+- The new activity takes the item's place in today's list. On the plan day it becomes that day's
+  activity in [`GET .../plan`](#children-7-day-plan-signed-in) too, so completing it marks the plan
+  day done and keeps the streak. Switching back ("Odatdagi") picks another normal activity; the
+  old one is not remembered.
+
+Response: the new [activity object](#activity-object). Show the segment that matches its
+`difficulty`.
+
+| HTTP | error_code | When |
+|---:|---:|---|
+| 403 | -21 | free plan: `this needs Birga Pro` |
+| 404 | -30 | `this activity is not in the child's list for today` |
+| 404 | -30 | `no other published activity of this difficulty serves the goal at the child's age` (keep the current activity) |
+| 409 | -40 | `this activity is already done today, it cannot be changed` |
+| 422 | -10 | `difficulty must be easy, normal or difficult, got "..."`, or `activity_id` not a UUID |
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/today/difficulty \
+  -d '{"activity_id": "'$ACTIVITY'", "difficulty": "difficult"}'
+```
 
 #### Similar activities
 
@@ -904,9 +951,10 @@ plan takes one published activity whose age range contains the child's age (clam
 not yet used in this plan, ordered by:
 
 1. serving the day's goal;
-2. serving more of the child's goals;
-3. never done by the child, then done longest ago;
-4. a tie-break by `md5(activity id || child id || plan number and day)`.
+2. `difficulty` `normal` (easy and difficult activities are for the [difficulty switch](#difficulty-switch));
+3. serving more of the child's goals;
+4. never done by the child, then done longest ago;
+5. a tie-break by `md5(activity id || child id || plan number and day)`.
 
 When the catalogue for the age has fewer than seven activities, later days repeat earlier
 activities. No published activity for the age at all: 404 `no published activity matches this
@@ -1511,6 +1559,7 @@ Deleted goals are never returned, so `deleted_at` is not part of the object.
 | `main_idea_uz`, `main_idea_ru`, `main_idea_en` | string | the "Katta g'oya" / "Главная идея" / "Big idea" box on the activity page: what the activity teaches. Optional, `""` until an admin fills it in; the app hides the box when the text for the user's language is empty |
 | `easier_uz`, `easier_ru`, `easier_en` | string | the "Osonroq" variant (Figma 41, a Birga Pro box in the app); `""` when there is none |
 | `harder_uz`, `harder_ru`, `harder_en` | string | the "Qiyinroq" variant; `""` when there is none. The API always returns both; the app shows them to Pro users and a locked box to the others |
+| `difficulty` | string | `easy`, `normal` or `difficult` ("Osonroq", "Odatdagi", "Qiyinroq"); see [Difficulty switch](#difficulty-switch) |
 | `goal_ids` | array of UUID strings | the [goals](#goals) the activity serves; normally 1 to 5, empty only if its goals were deleted |
 | `min_age`, `max_age` | int | years, inclusive |
 | `duration_minutes` | int | |

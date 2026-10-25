@@ -26,6 +26,7 @@ type Activity struct {
 	HarderUz        string // optional "Qiyinroq" variant (Pro); empty means none
 	HarderRu        string
 	HarderEn        string
+	Difficulty      string   // DifficultyEasy, DifficultyNormal or DifficultyDifficult
 	GoalIDs         []string // ids of the goals table rows the activity serves, at least one
 	MinAge          int
 	MaxAge          int
@@ -33,6 +34,18 @@ type Activity struct {
 	IsPublished     bool
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+// Activity difficulty levels ("Osonroq", "Odatdagi", "Qiyinroq"). Plans and picks prefer normal ones.
+const (
+	DifficultyEasy      = "easy"
+	DifficultyNormal    = "normal"
+	DifficultyDifficult = "difficult"
+)
+
+// ValidDifficulty reports whether d is one of the difficulty levels.
+func ValidDifficulty(d string) bool {
+	return d == DifficultyEasy || d == DifficultyNormal || d == DifficultyDifficult
 }
 
 // Activity publication states an admin listing can filter on.
@@ -55,6 +68,8 @@ type ActivityFilter struct {
 	PublishedOnly bool
 	// MaxMinutes keeps activities of at most this many minutes ("10 daqiqagacha").
 	MaxMinutes int
+	// Difficulty keeps activities of this level.
+	Difficulty string
 	Limit      int
 	Offset     int
 }
@@ -82,6 +97,7 @@ type ActivityUpdate struct {
 	HarderUz        *string
 	HarderRu        *string
 	HarderEn        *string
+	Difficulty      *string
 	GoalIDs         []string // nil keeps the goals; a non-nil list replaces them
 	MinAge          *int
 	MaxAge          *int
@@ -93,6 +109,6 @@ type ActivityUpdate struct {
 func (u ActivityUpdate) IsEmpty() bool {
 	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.DescriptionUz == nil && u.DescriptionRu == nil &&
 		u.DescriptionEn == nil && u.MainIdeaUz == nil && u.MainIdeaRu == nil && u.MainIdeaEn == nil &&
-		u.EasierUz == nil && u.EasierRu == nil && u.EasierEn == nil && u.HarderUz == nil && u.HarderRu == nil && u.HarderEn == nil &&
+		u.EasierUz == nil && u.EasierRu == nil && u.EasierEn == nil && u.HarderUz == nil && u.HarderRu == nil && u.HarderEn == nil && u.Difficulty == nil &&
 		u.GoalIDs == nil && u.MinAge == nil && u.MaxAge == nil && u.DurationMinutes == nil && u.IsPublished == nil
 }

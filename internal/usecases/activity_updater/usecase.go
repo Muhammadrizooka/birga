@@ -57,6 +57,11 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.ActivityUp
 		upd.GoalIDs = domain.NormalizeIDs(upd.GoalIDs)
 	}
 
+	if upd.Difficulty != nil {
+		v := strings.ToLower(strings.TrimSpace(*upd.Difficulty))
+		upd.Difficulty = &v
+	}
+
 	if err := validate(upd); err != nil {
 		return domain.Activity{}, err
 	}
@@ -96,6 +101,9 @@ func validate(upd domain.ActivityUpdate) error {
 	case upd.DurationMinutes != nil &&
 		(*upd.DurationMinutes <= 0 || *upd.DurationMinutes > domain.MaxActivityDurationMinutes):
 		return errs.Errf(errs.ErrValidation, "duration_minutes must be between 1 and %d", domain.MaxActivityDurationMinutes)
+	case upd.Difficulty != nil && !domain.ValidDifficulty(*upd.Difficulty):
+		return errs.Errf(errs.ErrValidation, "difficulty must be %s, %s or %s",
+			domain.DifficultyEasy, domain.DifficultyNormal, domain.DifficultyDifficult)
 	}
 
 	for _, id := range upd.GoalIDs {

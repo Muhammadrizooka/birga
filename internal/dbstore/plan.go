@@ -143,9 +143,9 @@ func (r *planRepo) Create(ctx context.Context, childID string, number int, start
 }
 
 // Pick returns one published activity for a plan day: within the child's age and not in
-// ExcludeIDs. Activities serving the day's goal come first, then those serving more of the
-// child's goals, then the ones the child has not done (or did longest ago); ties are broken per
-// child and Seed. No match is ErrNoRecommendation.
+// ExcludeIDs. Activities serving the day's goal come first, then normal ones (not easy or
+// difficult), then those serving more of the child's goals, then the ones the child has not done
+// (or did longest ago); ties are broken per child and Seed. No match is ErrNoRecommendation.
 func (r *planRepo) Pick(ctx context.Context, p domain.PlanPick) (domain.Activity, error) {
 	l := logger.FromCtx(ctx, "planRepo.Pick").With(zap.String("child_id", p.ChildID))
 
@@ -159,7 +159,7 @@ func (r *planRepo) Pick(ctx context.Context, p domain.PlanPick) (domain.Activity
 		) done ON done.activity_id = a.id
 		WHERE a.is_published AND a.deleted_at IS NULL AND a.min_age <= $2 AND a.max_age >= $2
 			AND NOT (a.id = ANY($3::uuid[]))
-		ORDER BY COALESCE($4::uuid = ANY(a.goal_ids), FALSE) DESC,
+		ORDER BY COALESCE($4::uuid = ANY(a.goal_ids), FALSE) DESC, a.difficulty = 'normal' DESC,
 			(SELECT COUNT(*) FROM unnest(a.goal_ids) g WHERE g = ANY($5::uuid[])) DESC,
 			done.last_on NULLS FIRST, md5(a.id::text || $1::text || $6::text)
 		LIMIT 1`

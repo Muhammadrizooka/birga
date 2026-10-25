@@ -27,6 +27,7 @@ Rows are soft-deleted by setting `deleted_at`.
 | `main_idea_en` | `TEXT` | no | `''` | English main idea, optional (`000018`) |
 | `easier_uz`, `easier_ru`, `easier_en` | `TEXT` | no | `''` | the "Osonroq" variant (Birga Pro), optional (added by `000021_activity_variants_today_extras`) |
 | `harder_uz`, `harder_ru`, `harder_en` | `TEXT` | no | `''` | the "Qiyinroq" variant (Birga Pro), optional (`000021`) |
+| `difficulty` | `TEXT` | no | `'normal'` | `easy`, `normal` or `difficult` (added by `000025_activity_difficulty`). Plans and goal picks take normal ones first; the "Osonroq / Odatdagi / Qiyinroq" switch swaps an activity for another of the chosen level |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) the activity serves; no foreign key, see below |
 | `min_age` | `SMALLINT` | no | | youngest suitable age, years |
 | `max_age` | `SMALLINT` | no | | oldest suitable age, years |
@@ -40,6 +41,7 @@ Constraints:
 
 - `activities_age_range_chk`: `min_age >= 2 AND max_age <= 6 AND min_age <= max_age`
 - `activities_duration_chk`: `duration_minutes > 0`
+- `activities_difficulty_chk`: `difficulty IN ('easy', 'normal', 'difficult')` (`000025`)
 
 Indexes:
 
@@ -560,8 +562,10 @@ is done comes from [`activity_completions`](#activity_completions) on the same d
 mark a plan day done, so they do not count toward the streak. At most 10 a day, checked by the
 use case.
 
-Repository (`store.Extra()`): `ListDay`, `Add`, `Pick` (a published activity for the child's
-age serving one goal, not in today's list, never done or done longest ago first).
+Repository (`store.Extra()`): `ListDay`, `Add`, `Replace` (swaps one activity of the day for
+another, used by the difficulty switch), `Pick` (a published activity for the child's age serving
+one of the given goals, not in today's list; only one difficulty when asked, otherwise normal
+first; then never done or done longest ago first).
 `store.Activity().Similar` serves `GET /v1/activities/{id}/similar`.
 
 ### Sample content (`000024_sample_content`)

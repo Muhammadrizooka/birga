@@ -34,6 +34,7 @@ func New(l logger.Logger, repo activityRepo) *UseCase {
 func (uc *UseCase) Execute(ctx context.Context, f domain.ActivityFilter) ([]domain.Activity, int, error) {
 	f.Search = strings.TrimSpace(f.Search)
 	f.Status = strings.ToLower(strings.TrimSpace(f.Status))
+	f.Difficulty = strings.ToLower(strings.TrimSpace(f.Difficulty))
 
 	if utf8.RuneCountInString(f.Search) > domain.MaxActivitySearchLength {
 		return nil, 0, errs.Errf(errs.ErrValidation, "q must be at most %d characters", domain.MaxActivitySearchLength)
@@ -41,6 +42,11 @@ func (uc *UseCase) Execute(ctx context.Context, f domain.ActivityFilter) ([]doma
 
 	if f.Status != "" && f.Status != domain.ActivityStatusPublished && f.Status != domain.ActivityStatusDraft {
 		return nil, 0, errs.Errf(errs.ErrValidation, "status must be %s or %s", domain.ActivityStatusPublished, domain.ActivityStatusDraft)
+	}
+
+	if f.Difficulty != "" && !domain.ValidDifficulty(f.Difficulty) {
+		return nil, 0, errs.Errf(errs.ErrValidation, "difficulty must be %s, %s or %s",
+			domain.DifficultyEasy, domain.DifficultyNormal, domain.DifficultyDifficult)
 	}
 
 	if f.GoalID != "" && uuid.Validate(f.GoalID) != nil {

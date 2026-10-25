@@ -36,6 +36,19 @@ definitions:
         - $ref: '#/definitions/rest.statusType'
         example: Failure
     type: object
+  rest.ChangeTodayDifficultyRequest:
+    properties:
+      activity_id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      difficulty:
+        enum:
+        - easy
+        - normal
+        - difficult
+        example: easy
+        type: string
+    type: object
   rest.CompleteActivityRequest:
     properties:
       activity_id:
@@ -71,6 +84,13 @@ definitions:
         type: string
       description_uz:
         example: Toshlarni rangi bo'yicha saralang
+        type: string
+      difficulty:
+        enum:
+        - easy
+        - normal
+        - difficult
+        example: normal
         type: string
       duration_minutes:
         example: 10
@@ -652,6 +672,13 @@ definitions:
       description_uz:
         example: Toshlarni rangi bo'yicha saralang
         type: string
+      difficulty:
+        enum:
+        - easy
+        - normal
+        - difficult
+        example: easy
+        type: string
       duration_minutes:
         example: 10
         maximum: 60
@@ -991,6 +1018,13 @@ definitions:
       description_ru:
         type: string
       description_uz:
+        type: string
+      difficulty:
+        enum:
+        - easy
+        - normal
+        - difficult
+        example: normal
         type: string
       duration_minutes:
         example: 10
@@ -2389,6 +2423,14 @@ paths:
         in: query
         name: q
         type: string
+      - description: only activities of this level
+        enum:
+        - easy
+        - normal
+        - difficult
+        in: query
+        name: difficulty
+        type: string
       - description: page size (default 20, max 100)
         in: query
         name: limit
@@ -2538,6 +2580,14 @@ paths:
         in: query
         name: q
         type: string
+      - description: only activities of this level
+        enum:
+        - easy
+        - normal
+        - difficult
+        in: query
+        name: difficulty
+        type: string
       - description: published or draft; omitted lists both
         enum:
         - published
@@ -2595,6 +2645,7 @@ paths:
         active goal (422), repeats are stored once
         - min_age/max_age are child ages in years, within 2..6
         - main_idea_uz/ru/en are optional (the "Katta g'oya" box); empty hides the box in the app
+        - difficulty is easy, normal or difficult (default normal); plans pick normal ones first
       parameters:
       - description: activity
         in: body
@@ -5586,6 +5637,79 @@ paths:
       security:
       - BearerAuth: []
       summary: returns a child's list for today
+      tags:
+      - children
+  /v1/children/{id}/today/difficulty:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        "Osonroq / Odatdagi / Qiyinroq" on the activity page. activity_id is today's open plan
+        activity or an added activity not done yet. The backend picks another published
+        activity of that difficulty for the child's age and the same goal (the plan day's goal,
+        or one of the added activity's goals), never the current one, a plan day or one already in
+        today's list, so asking for the level it already has gives another activity of that level.
+        The new activity takes the item's place: done on the plan day it keeps the streak.
+        - 403 without Birga Pro
+        - 404 when the activity is not in today's list, or no activity of that difficulty is left
+        - 409 when the item is already done today
+        - 422 for a difficulty other than easy, normal, difficult
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: activity and level
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.ChangeTodayDifficultyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.activityView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/rest.ConflictResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: swaps an activity of today's list for one of another difficulty (Birga
+        Pro)
       tags:
       - children
   /v1/children/{id}/today/extras:
