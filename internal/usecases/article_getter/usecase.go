@@ -2,6 +2,7 @@ package articlegetter
 
 import (
 	"context"
+	"time"
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
@@ -10,6 +11,7 @@ import (
 
 type articleRepo interface {
 	Get(ctx context.Context, id, readerID string) (domain.Article, error)
+	WasDaily(ctx context.Context, userID, articleID string, day time.Time) (bool, error)
 }
 
 // UseCase returns one article by id.
@@ -36,6 +38,27 @@ func (uc *UseCase) Execute(ctx context.Context, id, readerID string) (domain.Art
 
 	if readerID != "" && a.Status != domain.ArticleStatusPublished {
 		return domain.Article{}, errs.ErrArticleNotFound
+	}
+
+	return a, nil
+}
+
+// ForUser returns a published article to a signed-in app user, with IsRead. Pro users open every
+// published article; the others only their own daily articles of today or earlier days
+// (errs.ErrArticleNotOpened otherwise; tomorrow's article opens tomorrow).
+func (uc *UseCase) ForUser(ctx context.Context, userID string, pro bool, id string) (domain.Article, error) {
+	a, err := uc.Execute(ctx, id, userID)
+	if err != nil || pro {
+		return a, err
+	}
+
+	ok, err := uc.repo.WasDaily(ctx, userID, id, domain.LocalDay(time.Now()))
+	if err != nil {
+		return domain.Article{}, err
+	}
+
+	if !ok {
+		return domain.Article{}, errs.ErrArticleNotOpened
 	}
 
 	return a, nil

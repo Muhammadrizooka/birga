@@ -26,7 +26,7 @@ Every response, success or failure, has the same shape:
 | -10 | 422 | validation error | business rule broken, e.g. `duration_minutes must be between 1 and 60`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification; a free-plan user opening a video that was not their daily video; a free-plan user calling a Pro feature (`this needs Birga Pro`) |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification; a free-plan user opening a video or article that was not their daily one; a free-plan user calling a Pro feature (`this needs Birga Pro`) |
 | -30 | 404 | not found | unknown id, unpublished or soft-deleted activity or article on an app endpoint, no published article or video for the daily article or video, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken`; starting the next plan before the current one is done |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
@@ -131,10 +131,11 @@ Query parameters for the list:
 | `age` | int | child age in years, 2 to 6; matches activities where `min_age <= age <= max_age` |
 | `goal_id` | UUID string | a goal id from [`GET /v1/goals`](#goals); matches activities whose `goal_ids` contain it |
 | `q` | string | title search: matches activities whose `title_uz`, `title_ru` or `title_en` contains the text, ignoring case; trimmed, at most 100 characters; `%` and `_` match literally |
+| `max_minutes` | int | only activities of at most this many minutes (the "10 daqiqagacha" filter) |
 | `limit`, `offset` | int | see [Pagination](#pagination) |
 
-An `age` outside 2..6, a `goal_id` that is not a UUID or a `q` over 100 characters returns 422;
-a non-integer `age` returns 400. A UUID that is not a goal simply matches nothing.
+An `age` outside 2..6, a `goal_id` that is not a UUID, a negative `max_minutes` or a `q` over 100
+characters returns 422; a non-integer `age` or `max_minutes` returns 400. A UUID that is not a goal simply matches nothing.
 
 Example:
 
@@ -287,8 +288,8 @@ Every article here carries `is_read` for the signed-in user.
 |---|---|---|
 | GET | `/v1/me/articles/daily` | today's article for this user and tomorrow's ("Kun maqolasi" card on the home screen) |
 | GET | `/v1/me/articles` | this user's daily articles up to today, newest first (`limit`, `offset`) |
-| GET | `/v1/articles` | published articles: `q`, `goal_id`, `topic_id`, `age`, `limit`, `offset` |
-| GET | `/v1/articles/{id}` | one published article; others are 404 |
+| GET | `/v1/articles` | published articles: `q`, `goal_id`, `topic_id`, `age`, `max_minutes` (at most this `expected_read_time`), `limit`, `offset` |
+| GET | `/v1/articles/{id}` | one published article; others are 404; see the free-plan rule below |
 | POST | `/v1/articles/{id}/read` | mark it read ("O‘qib chiqdim"); calling it again changes nothing |
 
 #### Daily article
@@ -322,6 +323,15 @@ So articles that fit a goal and an age always come first, even when they repeat;
 exists does it fall back to a goal fit with another age, then to any published article. A stored
 pick that was unpublished or deleted since is replaced on the next call. A user with no children
 or no goals gets articles in the order of rules 3 to 6.
+
+#### One article a day on the free plan
+
+Users without [Birga Pro](#birga-pro) can open with `GET /v1/articles/{id}` only articles that
+were their daily article, today or earlier (tomorrow's opens tomorrow); any other article is 403
+(-21) `this article was not your daily article, the free plan opens one article a day`. In
+`GET /v1/articles` those other articles come back with `locked: true` and empty
+`article_body_*` and `tip_*` (title, photo, tags and read time stay, for the locked card). Pro
+users open every published article and always get `locked: false`.
 
 ### Daily videos: posts (admin)
 
@@ -381,7 +391,7 @@ All need `Authorization: Bearer <access token>` and only show `published` posts.
 |---|---|---|
 | GET | `/v1/me/posts/daily` | today's video for this user ("Kun videosi" card) and the next ones, locked |
 | GET | `/v1/me/posts` | this user's daily videos up to today, newest first (`limit`, `offset`) |
-| GET | `/v1/posts` | published posts as previews without the video (`q`, `goal_id`, `topic_id`, `age`, `limit`, `offset`) |
+| GET | `/v1/posts` | published posts as previews without the video (`q`, `goal_id`, `topic_id`, `age`, `max_minutes`, `limit`, `offset`) |
 | GET | `/v1/posts/{id}` | one published post with its video, see the rule below |
 
 ```json
@@ -402,7 +412,9 @@ post is published.
 One video a day on the free plan: users without [Birga Pro](#birga-pro) can open with
 `GET /v1/posts/{id}` only posts that were their daily video, today or earlier; any other post is
 403 (`this video was not your daily video, ...`). Pro users (including roles `paid_user` and
-`admin`) can open every published post. The video plays from `video_url` (`/v1/media/{video_id}`, a 302 to a signed S3
+`admin`) can open every published post. For free users the previews say so: `locked: true` on
+the `GET /v1/posts` items that were never their daily video and on every `next` video; for Pro
+users `locked` is always `false`. `max_minutes` keeps videos of at most that `duration`. The video plays from `video_url` (`/v1/media/{video_id}`, a 302 to a signed S3
 link, no token needed; video players follow the redirect and can seek).
 
 ### Birga Pro
@@ -428,9 +440,18 @@ so a change applies at once. There is no payment endpoint yet: an admin gives Pr
 until then; `{"until": null}` or a past date ends it. Response: the [user object](#user-object).
 404 for an unknown or deleted user.
 
-What Pro changes so far: every published video opens (see [Daily videos](#daily-videos-posts-signed-in)),
-and every tip shows its text in `GET /v1/tips`. Free-plan users get 403 (-21) `this needs Birga Pro`
-on Pro-only endpoints.
+What the free plan allows, and what Pro opens:
+
+| | Free | Pro |
+|---|---|---|
+| activities | the child's plan activity of the day: `POST /v1/children/{id}/completions` for any other activity is 403 `this needs Birga Pro` (repeating today's completion to change its note still works) | any activity |
+| children | one: a second `POST /v1/children` is 403 `this needs Birga Pro: the free plan has 1 child` | any number |
+| articles | the daily article, today or earlier; others `locked` and 403 ([rule](#one-article-a-day-on-the-free-plan)) | every published article |
+| videos | the daily video, today or earlier; others `locked` and 403 | every published post |
+| tips | the daily tip; others `locked` with empty texts | every tip |
+
+Free-plan users get 403 (-21) `this needs Birga Pro` on Pro-only actions. Children added while a
+user had Pro stay after Pro ends; only adding more is blocked.
 
 ### Topics
 
@@ -472,7 +493,9 @@ Create body:
 ```
 
 - `text_uz`, `text_ru`, `text_en` are required, trimmed, at most 500 characters each (422).
-- `topic_id` must be an active [topic](#topics) (422 `topic_id is not an active topic ...`).
+- `topic_id` is required and must be an active [topic](#topics) (422 `topic_id is not an active topic ...`).
+  Unlike articles and posts a tip always has a topic (the daily tip rotates by topic), so on
+  `PATCH` it can be changed to another topic but not removed: `""` is 422.
 - `min_age`/`max_age` within 2..6, `min_age <= max_age` (422).
 - `status` is `published`, `in_review` (the default) or `unpublished`; only `published` reaches the app.
 - `q` searches the texts in every language, ignoring case (at most 100 characters).
@@ -645,7 +668,7 @@ the first `GET .../plan` instead).
 
 Response `data` is the child: `id`, `name`, `age`, `gender`, `photo_id`, `photo_url` (see [Media](#media-public)), `goal_ids`,
 `created_at`, `updated_at`. Use `id` in the `/v1/children/{id}/...` endpoints below. Errors: 400 bad JSON,
-401 no or invalid token, 422 a rule above.
+401 no or invalid token, 403 a second child on the free plan (see [Birga Pro](#birga-pro)), 422 a rule above.
 
 ```bash
 curl -X POST localhost:8080/v1/children \
@@ -726,6 +749,8 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/recomme
   toward the child's streak; `plan_day` in the response names the day (1 to 7). Any other
   activity (from the catalogue, or a later plan day ahead of time) only goes into the history:
   `plan_day` is `null`.
+- That second kind needs [Birga Pro](#birga-pro): on the free plan it is 403 (-21) `this needs
+  Birga Pro` and nothing is stored. Repeating a completion already made today still works.
 
 Response: a [completion object](#completion-object) with `plan_day`.
 
@@ -1326,6 +1351,7 @@ Soft-deleted activities are never returned, so `deleted_at` is not part of the o
 | `status` | string | `published`, `in_review` or `unpublished` |
 | `created_at`, `updated_at` | RFC 3339 timestamp | |
 | `is_read` | bool | only on the signed-in endpoints: whether this user marked it read |
+| `locked` | bool | only on `GET /v1/articles`: `true` when the article does not open for a free-plan user (texts are empty then) |
 
 Soft-deleted articles are never returned, so `deleted_at` is not part of the object.
 

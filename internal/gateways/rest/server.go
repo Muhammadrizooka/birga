@@ -100,7 +100,7 @@ type streakGetter interface {
 }
 
 type childCreator interface {
-	Execute(ctx context.Context, userID string, c domain.Child) (domain.Child, error)
+	Execute(ctx context.Context, userID string, pro bool, c domain.Child) (domain.Child, error)
 }
 
 type childGetter interface {
@@ -186,6 +186,7 @@ type articleLister interface {
 
 type articleGetter interface {
 	Execute(ctx context.Context, id, readerID string) (domain.Article, error)
+	ForUser(ctx context.Context, userID string, pro bool, id string) (domain.Article, error)
 }
 
 type articleUpdater interface {

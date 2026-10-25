@@ -637,6 +637,12 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "description": "at most this many minutes",
+                        "name": "max_minutes",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
                         "description": "page size (default 20, max 100)",
                         "name": "limit",
                         "in": "query"
@@ -1364,6 +1370,12 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "child age in years (2..6)",
                         "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "at most this many minutes",
+                        "name": "max_minutes",
                         "in": "query"
                     },
                     {
@@ -2779,7 +2791,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Each item says whether the signed-in user marked it read (is_read).",
+                "description": "Each item says whether the signed-in user marked it read (is_read). Without Birga Pro, articles that\nwere never the user's daily article have locked=true.",
                 "produces": [
                     "application/json"
                 ],
@@ -2810,6 +2822,12 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "child age in years (2..6)",
                         "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "at most this many minutes",
+                        "name": "max_minutes",
                         "in": "query"
                     },
                     {
@@ -2878,6 +2896,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Without Birga Pro only the user's daily articles of today or earlier open (403 otherwise).",
                 "produces": [
                     "application/json"
                 ],
@@ -5123,6 +5142,12 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
+                        "description": "at most this many minutes",
+                        "name": "max_minutes",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
                         "description": "page size (default 20, max 100)",
                         "name": "limit",
                         "in": "query"
@@ -5187,7 +5212,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Roles user and unverified_user (the free plan) may open only posts that were their daily video,\ntoday or earlier (403 otherwise); paid_user and admin may open every published post.",
+                "description": "Users without Birga Pro may open only posts that were their daily video, today or earlier\n(403 otherwise); Pro users may open every published post.",
                 "produces": [
                     "application/json"
                 ],
@@ -7317,6 +7342,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
                 },
+                "locked": {
+                    "description": "Locked is true for a user without Birga Pro when the post does not open for them: on\nGET /v1/posts the posts that were never their daily video, and every \"next\" video.",
+                    "type": "boolean",
+                    "example": true
+                },
                 "max_age": {
                     "type": "integer",
                     "example": 5
@@ -7816,6 +7846,11 @@ const docTemplate = `{
                 },
                 "is_read": {
                     "description": "IsRead tells whether the signed-in user marked the article read.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "locked": {
+                    "description": "Locked is true on GET /v1/articles for a user without Birga Pro when the article was never\ntheir daily article: it does not open.",
                     "type": "boolean",
                     "example": false
                 },

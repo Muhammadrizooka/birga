@@ -111,6 +111,7 @@ func (s *Server) CompleteActivity() gin.HandlerFunc {
 			ChildID:    childID,
 			ActivityID: req.ActivityID,
 			Note:       req.Note,
+			Pro:        currentUserPro(c),
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -382,7 +383,7 @@ func (s *Server) CreateChild() gin.HandlerFunc {
 			return
 		}
 
-		child, err := s.childCreator.Execute(c.Request.Context(), currentUserID(c), domain.Child{
+		child, err := s.childCreator.Execute(c.Request.Context(), currentUserID(c), currentUserPro(c), domain.Child{
 			Name:    req.Name,
 			Age:     *req.Age,
 			Gender:  req.Gender,

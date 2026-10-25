@@ -119,7 +119,7 @@ func (fn planGetterFunc) Next(_ context.Context, userID, childID string) (domain
 
 type childCreatorFunc func(string, domain.Child) (domain.Child, error)
 
-func (fn childCreatorFunc) Execute(_ context.Context, userID string, c domain.Child) (domain.Child, error) {
+func (fn childCreatorFunc) Execute(_ context.Context, userID string, _ bool, c domain.Child) (domain.Child, error) {
 	return fn(userID, c)
 }
 

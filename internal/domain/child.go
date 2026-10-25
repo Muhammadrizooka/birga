@@ -49,6 +49,9 @@ func (u ChildUpdate) IsEmpty() bool {
 	return u.Name == nil && u.Age == nil && u.Gender == nil && u.PhotoID == nil && u.GoalIDs == nil
 }
 
+// MaxFreeChildren is how many children a user without Birga Pro may add.
+const MaxFreeChildren = 1
+
 // ChildFilter narrows a child listing. A non-empty ParentID lists only that user's children.
 type ChildFilter struct {
 	ParentID string

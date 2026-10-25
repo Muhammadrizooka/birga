@@ -15,6 +15,7 @@ import (
 type childRepo interface {
 	Create(ctx context.Context, c domain.Child) (domain.Child, error)
 	AddParent(ctx context.Context, childID, userID string) error
+	List(ctx context.Context, f domain.ChildFilter) ([]domain.Child, int, error)
 }
 
 type goalRepo interface {
@@ -46,8 +47,9 @@ func New(l logger.Logger, tx txRunner, children childRepo, goals goalRepo, plans
 // Execute validates the child, then in one transaction stores it in children, links it to userID
 // in user_children, so a child never exists without a parent, and makes its first 7-day plan from
 // its goals. The child needs at least one goal; repeated goal ids are stored once and every one
-// must be an active goal.
-func (uc *UseCase) Execute(ctx context.Context, userID string, c domain.Child) (domain.Child, error) {
+// must be an active goal. On the free plan (pro false) a user may have one child: adding another
+// is errs.ErrNeedsPro.
+func (uc *UseCase) Execute(ctx context.Context, userID string, pro bool, c domain.Child) (domain.Child, error) {
 	c.Name = strings.TrimSpace(c.Name)
 	c.Gender = strings.ToLower(strings.TrimSpace(c.Gender))
 
@@ -69,6 +71,14 @@ func (uc *UseCase) Execute(ctx context.Context, userID string, c domain.Child) (
 		return domain.Child{}, err
 	} else if n != len(c.GoalIDs) {
 		return domain.Child{}, errs.ErrUnknownGoals
+	}
+
+	if !pro {
+		if _, n, err := uc.children.List(ctx, domain.ChildFilter{ParentID: userID, Limit: 1}); err != nil {
+			return domain.Child{}, err
+		} else if n >= domain.MaxFreeChildren {
+			return domain.Child{}, errs.Errf(errs.ErrNeedsPro, "%s: the free plan has %d child", errs.ErrNeedsPro.Error(), domain.MaxFreeChildren)
+		}
 	}
 
 	var created domain.Child

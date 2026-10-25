@@ -97,6 +97,7 @@ func (s *Server) CreateArticle() gin.HandlerFunc {
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
+// @Param max_minutes query int false "at most this many minutes"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.articleListView}
@@ -276,7 +277,8 @@ func (s *Server) DeleteArticle() gin.HandlerFunc {
 
 // ListArticles godoc swagger
 // @Summary lists published articles
-// @Description Each item says whether the signed-in user marked it read (is_read).
+// @Description Each item says whether the signed-in user marked it read (is_read). Without Birga Pro, articles that
+// @Description were never the user's daily article have locked=true.
 // @Tags articles
 // @Security BearerAuth
 // @Produce json
@@ -284,6 +286,7 @@ func (s *Server) DeleteArticle() gin.HandlerFunc {
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
+// @Param max_minutes query int false "at most this many minutes"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.userArticleListView}
@@ -301,6 +304,10 @@ func (s *Server) ListArticles() gin.HandlerFunc {
 
 		f.Status = domain.ArticleStatusPublished
 		f.ReaderID = currentUserID(c)
+
+		if !currentUserPro(c) {
+			f.LockFor = currentUserID(c)
+		}
 
 		items, total, err := s.articleLister.Execute(c.Request.Context(), f)
 		if err != nil {
@@ -320,6 +327,7 @@ func (s *Server) ListArticles() gin.HandlerFunc {
 
 // GetArticle godoc swagger
 // @Summary returns a published article
+// @Description Without Birga Pro only the user's daily articles of today or earlier open (403 otherwise).
 // @Tags articles
 // @Security BearerAuth
 // @Produce json
@@ -339,7 +347,7 @@ func (s *Server) GetArticle() gin.HandlerFunc {
 			return
 		}
 
-		a, err := s.articleGetter.Execute(c.Request.Context(), id, currentUserID(c))
+		a, err := s.articleGetter.ForUser(c.Request.Context(), currentUserID(c), currentUserPro(c), id)
 		if err != nil {
 			Return(c, nil, err)
 
@@ -467,13 +475,21 @@ func articleFilter(c *gin.Context) (domain.ArticleFilter, bool) {
 		return domain.ArticleFilter{}, false
 	}
 
+	maxMinutes, err := parseOptionalInt(c, "max_minutes")
+	if err != nil {
+		Return(c, nil, err)
+
+		return domain.ArticleFilter{}, false
+	}
+
 	return domain.ArticleFilter{
-		Age:     age,
-		GoalID:  c.Query("goal_id"),
-		TopicID: c.Query("topic_id"),
-		Search:  c.Query("q"),
-		Limit:   limit,
-		Offset:  offset,
+		MaxMinutes: maxMinutes,
+		Age:        age,
+		GoalID:     c.Query("goal_id"),
+		TopicID:    c.Query("topic_id"),
+		Search:     c.Query("q"),
+		Limit:      limit,
+		Offset:     offset,
 	}, true
 }
 
@@ -508,6 +524,9 @@ type userArticleView struct {
 	articleView
 	// IsRead tells whether the signed-in user marked the article read.
 	IsRead bool `json:"is_read" example:"false"`
+	// Locked is true on GET /v1/articles for a user without Birga Pro when the article was never
+	// their daily article: it does not open.
+	Locked bool `json:"locked" example:"false"`
 }
 
 type articleListView struct {
@@ -578,7 +597,7 @@ func toArticleView(a domain.Article) articleView {
 }
 
 func toUserArticleView(a domain.Article) userArticleView {
-	return userArticleView{articleView: toArticleView(a), IsRead: a.IsRead}
+	return userArticleView{articleView: toArticleView(a), IsRead: a.IsRead, Locked: a.Locked}
 }
 
 func toArticleTeaserView(a domain.Article) articleTeaserView {

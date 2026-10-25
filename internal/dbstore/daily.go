@@ -135,3 +135,48 @@ func (d dailyPicks) oneID(ctx context.Context, name, q string, args ...any) (str
 		return "", false, errs.Errf(errs.ErrInternal, "%s", err.Error())
 	}
 }
+
+// wasDaily reports whether id was the user's item on day or an earlier day.
+func (d dailyPicks) wasDaily(ctx context.Context, userID, id string, day time.Time) (bool, error) {
+	var ok bool
+
+	q := `SELECT EXISTS (SELECT 1 FROM ` + d.daily + ` WHERE user_id = $1 AND ` + d.idColumn + ` = $2 AND day <= $3)`
+	if err := d.store.sqlClientByCtx(ctx).QueryRow(ctx, q, userID, id, day).Scan(&ok); err != nil {
+		logger.FromCtx(ctx, "dailyPicks.wasDaily").Error("sqlClient.QueryRow", zap.Error(err), zap.String("table", d.daily))
+
+		return false, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return ok, nil
+}
+
+// dailyIDs returns which of ids were the user's item on day or an earlier day.
+func (d dailyPicks) dailyIDs(ctx context.Context, userID string, ids []string, day time.Time) (map[string]bool, error) {
+	out := make(map[string]bool, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	q := `SELECT DISTINCT ` + d.idColumn + `::text FROM ` + d.daily + `
+		WHERE user_id = $1 AND ` + d.idColumn + ` = ANY($2::uuid[]) AND day <= $3`
+
+	rows, err := d.store.sqlClientByCtx(ctx).Query(ctx, q, userID, ids, day)
+	if err != nil {
+		logger.FromCtx(ctx, "dailyPicks.dailyIDs").Error("sqlClient.Query", zap.Error(err), zap.String("table", d.daily))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	shown, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		logger.FromCtx(ctx, "dailyPicks.dailyIDs").Error("pgx.CollectRows", zap.Error(err))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	for _, id := range shown {
+		out[id] = true
+	}
+
+	return out, nil
+}

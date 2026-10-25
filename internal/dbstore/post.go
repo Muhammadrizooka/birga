@@ -136,18 +136,12 @@ func (r *postRepo) List(ctx context.Context, f domain.PostFilter) ([]domain.Post
 
 // WasDaily reports whether the post was the user's daily video on day or before.
 func (r *postRepo) WasDaily(ctx context.Context, userID, postID string, day time.Time) (bool, error) {
-	var ok bool
+	return r.daily().wasDaily(ctx, userID, postID, day)
+}
 
-	if err := r.store.sqlClientByCtx(ctx).QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM user_daily_posts WHERE user_id = $1 AND post_id = $2 AND day <= $3)`,
-		userID, postID, day,
-	).Scan(&ok); err != nil {
-		logger.FromCtx(ctx, "postRepo.WasDaily").Error("sqlClient.QueryRow", zap.Error(err))
-
-		return false, errs.Errf(errs.ErrInternal, "%s", err.Error())
-	}
-
-	return ok, nil
+// DailyIDs returns which of ids were the user's daily video on day or earlier.
+func (r *postRepo) DailyIDs(ctx context.Context, userID string, ids []string, day time.Time) (map[string]bool, error) {
+	return r.daily().dailyIDs(ctx, userID, ids, day)
 }
 
 func (r *postRepo) daily() dailyPicks {
@@ -313,6 +307,10 @@ func postWhere(f domain.PostFilter) (string, []any) {
 
 	if f.TopicID != "" {
 		add(func(n string) string { return "p.topic_id = " + n + "::uuid" }, f.TopicID)
+	}
+
+	if f.MaxMinutes > 0 {
+		add(func(n string) string { return "p.duration <= " + n }, f.MaxMinutes)
 	}
 
 	if f.Age > 0 {

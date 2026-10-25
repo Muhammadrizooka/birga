@@ -46,6 +46,9 @@ type Article struct {
 	// IsRead tells whether the signed-in user marked the article read. It is only filled on
 	// user-scoped reads.
 	IsRead bool
+	// Locked is set on app lists for a free-plan user: the article was never their daily article,
+	// so it does not open (GET /v1/articles/{id} is 403).
+	Locked bool
 }
 
 // ArticleUpdate is a partial update. A nil field is left unchanged; PhotoID pointing to "" clears
@@ -86,6 +89,10 @@ type ArticleFilter struct {
 	Search string
 	// Status is one of the article statuses; empty lists all.
 	Status string
+	// MaxMinutes keeps articles of at most this expected read time.
+	MaxMinutes int
+	// LockFor, when set, marks the articles that were never this user's daily article as Locked.
+	LockFor string
 	// ReaderID, when set, fills Article.IsRead for that user.
 	ReaderID string
 	Limit    int

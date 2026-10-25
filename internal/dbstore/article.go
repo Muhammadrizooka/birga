@@ -236,6 +236,16 @@ func (r *articleRepo) SetDailyArticle(ctx context.Context, userID string, day ti
 	return r.daily().set(ctx, userID, day, articleID)
 }
 
+// WasDaily reports whether the article was the user's daily article on day or an earlier day.
+func (r *articleRepo) WasDaily(ctx context.Context, userID, articleID string, day time.Time) (bool, error) {
+	return r.daily().wasDaily(ctx, userID, articleID, day)
+}
+
+// DailyIDs returns which of ids were the user's daily article on day or earlier.
+func (r *articleRepo) DailyIDs(ctx context.Context, userID string, ids []string, day time.Time) (map[string]bool, error) {
+	return r.daily().dailyIDs(ctx, userID, ids, day)
+}
+
 // LockDaily serializes daily article picks of one user until the surrounding transaction ends.
 func (r *articleRepo) LockDaily(ctx context.Context, userID string) error {
 	return r.daily().lock(ctx, userID)
@@ -392,6 +402,10 @@ func articleWhere(f domain.ArticleFilter) (string, []any) {
 
 	if f.TopicID != "" {
 		add(func(n string) string { return "a.topic_id = " + n + "::uuid" }, f.TopicID)
+	}
+
+	if f.MaxMinutes > 0 {
+		add(func(n string) string { return "a.expected_read_time <= " + n }, f.MaxMinutes)
 	}
 
 	if f.Age > 0 {

@@ -1356,6 +1356,12 @@ definitions:
       id:
         example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
         type: string
+      locked:
+        description: |-
+          Locked is true for a user without Birga Pro when the post does not open for them: on
+          GET /v1/posts the posts that were never their daily video, and every "next" video.
+        example: true
+        type: boolean
       max_age:
         example: 5
         type: integer
@@ -1731,6 +1737,12 @@ definitions:
         type: string
       is_read:
         description: IsRead tells whether the signed-in user marked the article read.
+        example: false
+        type: boolean
+      locked:
+        description: |-
+          Locked is true on GET /v1/articles for a user without Birga Pro when the article was never
+          their daily article: it does not open.
         example: false
         type: boolean
       max_age:
@@ -2254,6 +2266,10 @@ paths:
         in: query
         name: age
         type: integer
+      - description: at most this many minutes
+        in: query
+        name: max_minutes
+        type: integer
       - description: page size (default 20, max 100)
         in: query
         name: limit
@@ -2722,6 +2738,10 @@ paths:
       - description: child age in years (2..6)
         in: query
         name: age
+        type: integer
+      - description: at most this many minutes
+        in: query
+        name: max_minutes
         type: integer
       - description: page size (default 20, max 100)
         in: query
@@ -3624,7 +3644,9 @@ paths:
       - admin
   /v1/articles:
     get:
-      description: Each item says whether the signed-in user marked it read (is_read).
+      description: |-
+        Each item says whether the signed-in user marked it read (is_read). Without Birga Pro, articles that
+        were never the user's daily article have locked=true.
       parameters:
       - description: text the title (any language) contains, ignoring case (at most
           100 characters)
@@ -3642,6 +3664,10 @@ paths:
       - description: child age in years (2..6)
         in: query
         name: age
+        type: integer
+      - description: at most this many minutes
+        in: query
+        name: max_minutes
         type: integer
       - description: page size (default 20, max 100)
         in: query
@@ -3686,6 +3712,8 @@ paths:
       - articles
   /v1/articles/{id}:
     get:
+      description: Without Birga Pro only the user's daily articles of today or earlier
+        open (403 otherwise).
       parameters:
       - description: article id (UUID)
         in: path
@@ -5202,6 +5230,10 @@ paths:
         in: query
         name: age
         type: integer
+      - description: at most this many minutes
+        in: query
+        name: max_minutes
+        type: integer
       - description: page size (default 20, max 100)
         in: query
         name: limit
@@ -5246,8 +5278,8 @@ paths:
   /v1/posts/{id}:
     get:
       description: |-
-        Roles user and unverified_user (the free plan) may open only posts that were their daily video,
-        today or earlier (403 otherwise); paid_user and admin may open every published post.
+        Users without Birga Pro may open only posts that were their daily video, today or earlier
+        (403 otherwise); Pro users may open every published post.
       parameters:
       - description: post id (UUID)
         in: path

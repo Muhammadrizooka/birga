@@ -31,8 +31,10 @@ type Post struct {
 	QuestionsRu  string
 	QuestionsEn  string
 	Status       string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// Locked is set on app lists for a free-plan user: the post was never their daily video.
+	Locked    bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // PostUpdate is a partial update. A nil field is left unchanged; a suggestion or questions text
@@ -74,8 +76,12 @@ type PostFilter struct {
 	Search string
 	// Status is one of the article statuses; empty lists all.
 	Status string
-	Limit  int
-	Offset int
+	// MaxMinutes keeps videos of at most this many minutes.
+	MaxMinutes float64
+	// LockFor, when set, marks the posts that were never this user's daily video as Locked.
+	LockFor string
+	Limit   int
+	Offset  int
 }
 
 // DailyPost is the video a user gets for one local day.

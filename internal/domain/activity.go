@@ -47,8 +47,10 @@ type ActivityFilter struct {
 	// Status is ActivityStatusPublished or ActivityStatusDraft; empty lists both.
 	Status        string
 	PublishedOnly bool
-	Limit         int
-	Offset        int
+	// MaxMinutes keeps activities of at most this many minutes ("10 daqiqagacha").
+	MaxMinutes int
+	Limit      int
+	Offset     int
 }
 
 // MaxActivityGoals caps how many goals one activity can serve.

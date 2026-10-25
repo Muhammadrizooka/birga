@@ -99,6 +99,7 @@ func (s *Server) CreatePost() gin.HandlerFunc {
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
+// @Param max_minutes query int false "at most this many minutes"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.postListView}
@@ -284,6 +285,7 @@ func (s *Server) DeletePost() gin.HandlerFunc {
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
+// @Param max_minutes query int false "at most this many minutes"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.postTeaserListView}
@@ -300,6 +302,9 @@ func (s *Server) ListPosts() gin.HandlerFunc {
 		}
 
 		f.Status = domain.ArticleStatusPublished
+		if !currentUserPro(c) {
+			f.LockFor = currentUserID(c)
+		}
 
 		items, total, err := s.postLister.Execute(c.Request.Context(), f)
 		if err != nil {
@@ -319,8 +324,8 @@ func (s *Server) ListPosts() gin.HandlerFunc {
 
 // GetPost godoc swagger
 // @Summary returns a published video post with its video
-// @Description Roles user and unverified_user (the free plan) may open only posts that were their daily video,
-// @Description today or earlier (403 otherwise); paid_user and admin may open every published post.
+// @Description Users without Birga Pro may open only posts that were their daily video, today or earlier
+// @Description (403 otherwise); Pro users may open every published post.
 // @Tags posts
 // @Security BearerAuth
 // @Produce json
@@ -379,7 +384,9 @@ func (s *Server) GetDailyPost() gin.HandlerFunc {
 			Day: d.Today.Day.Format(time.DateOnly), Post: toPostView(d.Today.Post), Next: make([]postTeaserView, 0, len(d.Next)),
 		}
 		for i := range d.Next {
-			v.Next = append(v.Next, toPostTeaserView(d.Next[i]))
+			next := toPostTeaserView(d.Next[i])
+			next.Locked = !currentUserPro(c)
+			v.Next = append(v.Next, next)
 		}
 
 		Return(c, v, nil)
@@ -428,7 +435,10 @@ func (s *Server) ListMyPosts() gin.HandlerFunc {
 func postFilter(c *gin.Context) (domain.PostFilter, bool) {
 	f, ok := articleFilter(c)
 
-	return domain.PostFilter{Age: f.Age, GoalID: f.GoalID, TopicID: f.TopicID, Search: f.Search, Limit: f.Limit, Offset: f.Offset}, ok
+	return domain.PostFilter{
+		Age: f.Age, GoalID: f.GoalID, TopicID: f.TopicID, Search: f.Search, MaxMinutes: float64(f.MaxMinutes),
+		Limit: f.Limit, Offset: f.Offset,
+	}, ok
 }
 
 type postView struct {
@@ -469,6 +479,9 @@ type postTeaserView struct {
 	MinAge   int     `json:"min_age" example:"3"`
 	MaxAge   int     `json:"max_age" example:"5"`
 	Duration float64 `json:"duration" example:"3.67"`
+	// Locked is true for a user without Birga Pro when the post does not open for them: on
+	// GET /v1/posts the posts that were never their daily video, and every "next" video.
+	Locked bool `json:"locked" example:"true"`
 }
 
 type postListView struct {
@@ -533,6 +546,6 @@ func toPostTeaserView(p domain.Post) postTeaserView {
 	return postTeaserView{
 		ID: p.ID, TitleUz: p.TitleUz, TitleRu: p.TitleRu, TitleEn: p.TitleEn,
 		GoalID:  p.GoalID,
-		TopicID: p.TopicID, MinAge: p.MinAge, MaxAge: p.MaxAge, Duration: p.Duration,
+		TopicID: p.TopicID, MinAge: p.MinAge, MaxAge: p.MaxAge, Duration: p.Duration, Locked: p.Locked,
 	}
 }

@@ -177,7 +177,15 @@ func (s *Server) listActivities(publishedOnly bool) gin.HandlerFunc {
 			return
 		}
 
+		maxMinutes, err := parseOptionalInt(c, "max_minutes")
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
 		f := domain.ActivityFilter{
+			MaxMinutes:    maxMinutes,
 			Age:           age,
 			GoalID:        c.Query("goal_id"),
 			Search:        c.Query("q"),

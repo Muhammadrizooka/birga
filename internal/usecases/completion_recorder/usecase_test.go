@@ -68,7 +68,7 @@ func TestExecute_Success(t *testing.T) {
 	note := "  yaxshi o'tdi  "
 
 	_, err := newUC(fakeChildren{}, fakeActivities{a: domain.Activity{IsPublished: true}}, comp).
-		Execute(context.Background(), Request{UserID: "u", ChildID: "c", ActivityID: "a", Note: &note})
+		Execute(context.Background(), Request{UserID: "u", ChildID: "c", ActivityID: "a", Note: &note, Pro: true})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestExecute_Success(t *testing.T) {
 
 	blank := "   "
 	if _, err := newUC(fakeChildren{}, fakeActivities{a: domain.Activity{IsPublished: true}}, comp).
-		Execute(context.Background(), Request{ChildID: "c", ActivityID: "a", Note: &blank}); err != nil || comp.got.Note != nil {
+		Execute(context.Background(), Request{ChildID: "c", ActivityID: "a", Note: &blank, Pro: true}); err != nil || comp.got.Note != nil {
 		t.Fatalf("blank note should be dropped: %v %+v", err, comp.got.Note)
 	}
 }
@@ -121,8 +121,13 @@ func TestExecute_PlanDay(t *testing.T) {
 	}
 
 	c, err = newUC(fakeChildren{}, fakeActivities{a: domain.Activity{IsPublished: true}}, &fakeCompletions{}).
-		Execute(context.Background(), Request{UserID: "u", ChildID: "c", ActivityID: "a"})
+		Execute(context.Background(), Request{UserID: "u", ChildID: "c", ActivityID: "a", Pro: true})
 	if err != nil || c.PlanDay != nil {
 		t.Fatalf("not a plan day: %+v %v", c, err)
+	}
+
+	if _, err := newUC(fakeChildren{}, fakeActivities{a: domain.Activity{IsPublished: true}}, &fakeCompletions{}).
+		Execute(context.Background(), Request{UserID: "u", ChildID: "c", ActivityID: "a"}); !errors.Is(err, errs.ErrNeedsPro) {
+		t.Fatalf("free plan, not a plan day: %v", err)
 	}
 }

@@ -226,6 +226,11 @@ func activityWhere(f domain.ActivityFilter) (string, []any) {
 		conds = append(conds, "min_age <= $"+n+" AND max_age >= $"+n)
 	}
 
+	if f.MaxMinutes > 0 {
+		args = append(args, f.MaxMinutes)
+		conds = append(conds, "duration_minutes <= $"+strconv.Itoa(len(args)))
+	}
+
 	return " WHERE " + strings.Join(conds, " AND "), args
 }
 
