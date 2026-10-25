@@ -27,20 +27,18 @@ func TestForUser(t *testing.T) {
 	cases := []struct {
 		name     string
 		post     domain.Post
-		role     domain.UserRole
+		pro      bool
 		wasDaily bool
 		want     error
 	}{
-		{"free user, own daily video", published, domain.UserRoleUser, true, nil},
-		{"free user, other video", published, domain.UserRoleUser, false, errs.ErrForbidden},
-		{"unverified user, other video", published, domain.UserRoleUnverifiedUser, false, errs.ErrForbidden},
-		{"paid user, any video", published, domain.UserRolePaidUser, false, nil},
-		{"admin, any video", published, domain.UserRoleAdmin, false, nil},
-		{"paid user, unpublished", domain.Post{Status: domain.ArticleStatusInReview}, domain.UserRolePaidUser, true, errs.ErrNotFound},
+		{"free user, own daily video", published, false, true, nil},
+		{"free user, other video", published, false, false, errs.ErrForbidden},
+		{"pro user, any video", published, true, false, nil},
+		{"pro user, unpublished", domain.Post{Status: domain.ArticleStatusInReview}, true, true, errs.ErrNotFound},
 	}
 
 	for _, tc := range cases {
-		_, err := New(nil, fakeRepo{post: tc.post, wasDaily: tc.wasDaily}).ForUser(context.Background(), "u", tc.role, "p")
+		_, err := New(nil, fakeRepo{post: tc.post, wasDaily: tc.wasDaily}).ForUser(context.Background(), "u", tc.pro, "p")
 		if (tc.want == nil) != (err == nil) || (tc.want != nil && !errors.Is(err, tc.want)) {
 			t.Errorf("%s: got %v, want %v", tc.name, err, tc.want)
 		}

@@ -624,6 +624,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "topic id (UUID) from GET /v1/topics",
+                        "name": "topic_id",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "child age in years (2..6)",
                         "name": "age",
@@ -693,7 +699,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title and article_body are required in Uzbek, Russian and English; tip_* is optional (\"\" = no tip box)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- photo_id is an optional id from POST /v1/media (422 if unknown)\n- expected_read_time is in minutes (1..60); min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published articles reach the app",
+                "description": "- title and article_body are required in Uzbek, Russian and English; tip_* is optional (\"\" = no tip box)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)\n- photo_id is an optional id from POST /v1/media (422 if unknown)\n- expected_read_time is in minutes (1..60); min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published articles reach the app",
                 "consumes": [
                     "application/json"
                 ],
@@ -1349,6 +1355,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "topic id (UUID) from GET /v1/topics",
+                        "name": "topic_id",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "child age in years (2..6)",
                         "name": "age",
@@ -1418,7 +1430,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title is required in Uzbek, Russian and English; suggestion_* (\"Tavsiya\" line) and\nquestions_* (\"ask after watching\" box, one question per line) are optional, \"\" hides them\n- video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app",
+                "description": "- title is required in Uzbek, Russian and English; suggestion_* (\"Tavsiya\" line) and\nquestions_* (\"ask after watching\" box, one question per line) are optional, \"\" hides them\n- video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)\n- duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app",
                 "consumes": [
                     "application/json"
                 ],
@@ -1680,6 +1692,623 @@ const docTemplate = `{
                         "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/tips": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "lists tips in every status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the tip (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "in_review",
+                            "unpublished"
+                        ],
+                        "type": "string",
+                        "description": "published, in_review or unpublished; omitted lists all",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "topic id (UUID) from GET /v1/topics",
+                        "name": "topic_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tipListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- text_uz, text_ru and text_en are required, at most 500 characters each\n- topic_id is an active topic from GET /v1/topics (422 if unknown)\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published tips reach the app",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "creates a tip (\"Kun maslahati\")",
+                "parameters": [
+                    {
+                        "description": "tip",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.CreateTipRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tipView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/tips/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "returns a tip in any status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "tip id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tipView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "soft-deletes a tip",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "tip id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Same rules as create; texts cannot be emptied; the resulting age range must stay valid (422).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "updates a tip partially, including its status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "tip id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.UpdateTipRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tipView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/topics": {
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "name_uz, name_ru and name_en are required, at most 100 characters, each unique among active topics (409).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "creates a topic",
+                "parameters": [
+                    {
+                        "description": "topic",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.TopicRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.topicView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/topics/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "It leaves GET /v1/topics; tips, articles and videos tagged with it keep the tag id.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "soft-deletes a topic",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "topic id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Only the names present change; a given name cannot be empty.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "renames a topic",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "topic id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "names to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.TopicRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.topicView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
                         }
                     },
                     "422": {
@@ -2061,6 +2690,88 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/admin/users/{id}/pro": {
+            "put": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Sets users.pro_until. The user is Pro while it is in the future; {\"until\": null} ends Pro.\nIt takes effect on the user's next request. Roles paid_user and admin are always Pro.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "gives Birga Pro to a user until a date, or ends it",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "user id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "end of Pro",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.SetProRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.userView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/articles": {
             "get": {
                 "security": [
@@ -2087,6 +2798,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "goal id (UUID) from GET /v1/goals",
                         "name": "goal_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "topic id (UUID) from GET /v1/topics",
+                        "name": "topic_id",
                         "in": "query"
                     },
                     {
@@ -3493,7 +4210,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "- the user row plus the current role (user, paid_user or admin)",
+                "description": "- the user row plus the current role (user, paid_user or admin) and plan (free or pro)",
                 "produces": [
                     "application/json"
                 ],
@@ -4053,6 +4770,61 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/me/tips/daily": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The tip is picked once per day (Uzbekistan time) and stays the same all day. It prefers a tip whose\nage range fits one of the user's children, not shown before, then the one shown longest ago, rotating\nthrough the topics. 404 when no tip is published.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tips"
+                ],
+                "summary": "returns the signed-in user's tip of the day (\"Kun maslahati\")",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.dailyTipView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/media": {
             "post": {
                 "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from: GET /v1/media/{id} on this API\n- 503 when S3 is not configured (S3_BUCKET empty)",
@@ -4338,6 +5110,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "topic id (UUID) from GET /v1/topics",
+                        "name": "topic_id",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "child age in years (2..6)",
                         "name": "age",
@@ -4467,6 +5245,189 @@ const docTemplate = `{
                         "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/pro": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "There is no payment endpoint yet; an admin gives Pro with PUT /v1/admin/users/{id}/pro.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pro"
+                ],
+                "summary": "the Birga Pro offer: price and the caller's plan",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.proOfferView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tips": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "For a user without Birga Pro, every tip that was never their daily tip has locked=true and empty texts.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tips"
+                ],
+                "summary": "lists published tips (Kutubxona \u003e Maslahat)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the tip (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "topic id (UUID) from GET /v1/topics",
+                        "name": "topic_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tipListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/topics": {
+            "get": {
+                "description": "Open without a token. Not paginated: the list is short.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "topics"
+                ],
+                "summary": "lists the active topics (tags of tips, articles and videos), oldest first",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/rest.topicView"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "500": {
@@ -4707,6 +5668,11 @@ const docTemplate = `{
                 "title_uz": {
                     "type": "string",
                     "example": "Nega bola «yo‘q» deydi?"
+                },
+                "topic_id": {
+                    "description": "TopicID is the optional topic tag from GET /v1/topics; null means none.",
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
                 }
             }
         },
@@ -4831,9 +5797,56 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Ranglar qo‘shig‘i"
                 },
+                "topic_id": {
+                    "description": "TopicID is the optional topic tag from GET /v1/topics; null means none.",
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
+                },
                 "video_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                }
+            }
+        },
+        "rest.CreateTipRequest": {
+            "type": "object",
+            "properties": {
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 6
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 2
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "in_review"
+                },
+                "text_en": {
+                    "type": "string",
+                    "example": "Put the phone away at mealtimes."
+                },
+                "text_ru": {
+                    "type": "string",
+                    "example": "Во время еды отложите телефон."
+                },
+                "text_uz": {
+                    "type": "string",
+                    "example": "Ovqat paytida telefonni chetga qo‘ying."
+                },
+                "topic_id": {
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
                 }
             }
         },
@@ -5039,6 +6052,16 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.SetProRequest": {
+            "type": "object",
+            "properties": {
+                "until": {
+                    "description": "Until is when Pro ends (RFC 3339); null ends it now.",
+                    "type": "string",
+                    "example": "2026-11-25T00:00:00+05:00"
+                }
+            }
+        },
         "rest.SignUpRequest": {
             "type": "object",
             "properties": {
@@ -5108,6 +6131,23 @@ const docTemplate = `{
                         }
                     ],
                     "example": "Failure"
+                }
+            }
+        },
+        "rest.TopicRequest": {
+            "type": "object",
+            "properties": {
+                "name_en": {
+                    "type": "string",
+                    "example": "Sleep"
+                },
+                "name_ru": {
+                    "type": "string",
+                    "example": "Сон"
+                },
+                "name_uz": {
+                    "type": "string",
+                    "example": "Uyqu"
                 }
             }
         },
@@ -5303,6 +6343,11 @@ const docTemplate = `{
                 "title_uz": {
                     "type": "string",
                     "example": "Nega bola «yo‘q» deydi?"
+                },
+                "topic_id": {
+                    "description": "TopicID \"\" removes the topic; omitted or null keeps it.",
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
                 }
             }
         },
@@ -5420,6 +6465,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Ranglar qo‘shig‘i"
                 },
+                "topic_id": {
+                    "description": "TopicID \"\" removes the topic; omitted or null keeps it.",
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
+                },
                 "video_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
@@ -5458,6 +6508,45 @@ const docTemplate = `{
                 "username": {
                     "type": "string",
                     "example": "dilnoza_95"
+                }
+            }
+        },
+        "rest.UpdateTipRequest": {
+            "type": "object",
+            "properties": {
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 6
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 2
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "text_en": {
+                    "type": "string"
+                },
+                "text_ru": {
+                    "type": "string"
+                },
+                "text_uz": {
+                    "type": "string"
+                },
+                "topic_id": {
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
                 }
             }
         },
@@ -5734,6 +6823,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Nega bola «yo‘q» deydi?"
                 },
+                "topic_id": {
+                    "description": "TopicID is the optional topic tag from GET /v1/topics; null means none.",
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
+                },
                 "updated_at": {
                     "type": "string"
                 }
@@ -5969,6 +7063,19 @@ const docTemplate = `{
                 },
                 "post": {
                     "$ref": "#/definitions/rest.postView"
+                }
+            }
+        },
+        "rest.dailyTipView": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "description": "Day is today's date in Uzbekistan time.",
+                    "type": "string",
+                    "example": "2026-10-25"
+                },
+                "tip": {
+                    "$ref": "#/definitions/rest.tipView"
                 }
             }
         },
@@ -6229,6 +7336,11 @@ const docTemplate = `{
                 "title_uz": {
                     "type": "string",
                     "example": "Hayvonlar ovozi"
+                },
+                "topic_id": {
+                    "description": "TopicID is the optional topic tag from GET /v1/topics; null means none.",
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
                 }
             }
         },
@@ -6298,6 +7410,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Ranglar qo‘shig‘i"
                 },
+                "topic_id": {
+                    "description": "TopicID is the optional topic tag from GET /v1/topics; null means none.",
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
+                },
                 "updated_at": {
                     "type": "string"
                 },
@@ -6309,6 +7426,36 @@ const docTemplate = `{
                     "description": "VideoURL plays the video without a token: it redirects (302) to a short-lived link.",
                     "type": "string",
                     "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                }
+            }
+        },
+        "rest.proOfferView": {
+            "type": "object",
+            "properties": {
+                "period": {
+                    "type": "string",
+                    "enum": [
+                        "month"
+                    ],
+                    "example": "month"
+                },
+                "plan": {
+                    "description": "Plan is the caller's plan now.",
+                    "type": "string",
+                    "enum": [
+                        "free",
+                        "pro"
+                    ],
+                    "example": "free"
+                },
+                "price_uzs": {
+                    "description": "PriceUZS is the monthly price in so'm.",
+                    "type": "integer",
+                    "example": 16000
+                },
+                "pro_until": {
+                    "description": "ProUntil is when Birga Pro given by date ends; null when never given.",
+                    "type": "string"
                 }
             }
         },
@@ -6343,6 +7490,19 @@ const docTemplate = `{
                     "description": "PhotoURL is where clients load the photo from (GET, no token); null without a photo.",
                     "type": "string",
                     "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "plan": {
+                    "description": "Plan is \"pro\" while the user has Birga Pro, otherwise \"free\". On /v1/me it also counts the\npaid_user and admin roles; in admin user lists it follows pro_until only.",
+                    "type": "string",
+                    "enum": [
+                        "free",
+                        "pro"
+                    ],
+                    "example": "free"
+                },
+                "pro_until": {
+                    "description": "ProUntil is when Birga Pro given by date ends; null when it was never given.",
+                    "type": "string"
                 },
                 "relationship": {
                     "description": "Relationship is null for users created before sign-up asked for it, or by an admin.",
@@ -6482,6 +7642,82 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.tipListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.tipView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 52
+                }
+            }
+        },
+        "rest.tipView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "5c3b2a10-7d8e-4f9a-b1c2-d3e4f5a6b7c8"
+                },
+                "locked": {
+                    "description": "Locked is true on GET /v1/tips for a user without Birga Pro when the tip was never their\ndaily tip; its texts are then empty.",
+                    "type": "boolean",
+                    "example": false
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 6
+                },
+                "min_age": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "published"
+                },
+                "text_en": {
+                    "type": "string",
+                    "example": "Put the phone away at mealtimes."
+                },
+                "text_ru": {
+                    "type": "string",
+                    "example": "Во время еды отложите телефон."
+                },
+                "text_uz": {
+                    "type": "string",
+                    "example": "Ovqat paytida telefonni chetga qo‘ying."
+                },
+                "topic_id": {
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "rest.tokenPairView": {
             "type": "object",
             "properties": {
@@ -6497,6 +7733,33 @@ const docTemplate = `{
                 "refresh_token": {
                     "type": "string",
                     "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
+        "rest.topicView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
+                },
+                "name_en": {
+                    "type": "string",
+                    "example": "Sleep"
+                },
+                "name_ru": {
+                    "type": "string",
+                    "example": "Сон"
+                },
+                "name_uz": {
+                    "type": "string",
+                    "example": "Uyqu"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -6603,6 +7866,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Nega bola «yo‘q» deydi?"
                 },
+                "topic_id": {
+                    "description": "TopicID is the optional topic tag from GET /v1/topics; null means none.",
+                    "type": "string",
+                    "example": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"
+                },
                 "updated_at": {
                     "type": "string"
                 }
@@ -6662,6 +7930,19 @@ const docTemplate = `{
                     "description": "PhotoURL is where clients load the photo from (GET, no token); null without a photo.",
                     "type": "string",
                     "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "plan": {
+                    "description": "Plan is \"pro\" while the user has Birga Pro, otherwise \"free\". On /v1/me it also counts the\npaid_user and admin roles; in admin user lists it follows pro_until only.",
+                    "type": "string",
+                    "enum": [
+                        "free",
+                        "pro"
+                    ],
+                    "example": "free"
+                },
+                "pro_until": {
+                    "description": "ProUntil is when Birga Pro given by date ends; null when it was never given.",
+                    "type": "string"
                 },
                 "relationship": {
                     "description": "Relationship is null for users created before sign-up asked for it, or by an admin.",

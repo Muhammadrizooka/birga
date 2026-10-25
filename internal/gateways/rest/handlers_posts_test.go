@@ -14,7 +14,7 @@ type fakePosts struct {
 	created domain.Post
 	updated domain.PostUpdate
 	filter  domain.PostFilter
-	gotRole domain.UserRole
+	gotPro  *bool
 	deleted string
 	err     error
 }
@@ -55,8 +55,8 @@ func (g fakePostGetter) Execute(_ context.Context, id string) (domain.Post, erro
 	return domain.Post{ID: id}, g.f.err
 }
 
-func (g fakePostGetter) ForUser(_ context.Context, _ string, role domain.UserRole, id string) (domain.Post, error) {
-	g.f.gotRole = role
+func (g fakePostGetter) ForUser(_ context.Context, _ string, pro bool, id string) (domain.Post, error) {
+	g.f.gotPro = &pro
 
 	return domain.Post{ID: id, VideoID: testUserID}, g.f.err
 }
@@ -126,9 +126,13 @@ func TestPosts_App(t *testing.T) {
 	}
 
 	code, r := do(t, s, http.MethodGet, "/v1/posts/"+testID, "", bearer)
-	if code != http.StatusOK || d.posts.gotRole != domain.UserRoleUser ||
+	if code != http.StatusOK || d.posts.gotPro == nil || *d.posts.gotPro ||
 		string(mustJSON(t, r.Data)["video_url"]) != `"/v1/media/`+testUserID+`"` {
-		t.Fatalf("get: %d role %q %+v", code, d.posts.gotRole, r.Data)
+		t.Fatalf("get: %d pro %v %+v", code, d.posts.gotPro, r.Data)
+	}
+
+	if code, _ := do(t, s, http.MethodGet, "/v1/posts/"+testID, "", proBearer); code != http.StatusOK || !*d.posts.gotPro {
+		t.Fatalf("get as pro: %d pro %v", code, *d.posts.gotPro)
 	}
 
 	code, r = do(t, s, http.MethodGet, "/v1/posts?status=in_review", "", bearer)

@@ -45,14 +45,14 @@ func (r *authRepo) Get(ctx context.Context, userID string) (domain.UserAuth, err
 	l := logger.FromCtx(ctx, "authRepo.Get").With(zap.String("user_id", userID))
 
 	q := `
-		SELECT id, COALESCE(username, ''), COALESCE(password, ''), role::TEXT,
-			COALESCE(access_token, ''), COALESCE(refresh_token, '')
-		FROM user_auth WHERE id = $1`
+		SELECT a.id, COALESCE(a.username, ''), COALESCE(a.password, ''), a.role::TEXT,
+			COALESCE(a.access_token, ''), COALESCE(a.refresh_token, ''), u.pro_until
+		FROM user_auth a JOIN users u ON u.id = a.id WHERE a.id = $1`
 
 	var a domain.UserAuth
 
 	err := r.store.sqlClientByCtx(ctx).QueryRow(ctx, q, userID).
-		Scan(&a.UserID, &a.Username, &a.PasswordHash, &a.Role, &a.AccessTokenHash, &a.RefreshTokenHash)
+		Scan(&a.UserID, &a.Username, &a.PasswordHash, &a.Role, &a.AccessTokenHash, &a.RefreshTokenHash, &a.ProUntil)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.UserAuth{}, errs.ErrUserNotFound
 	}

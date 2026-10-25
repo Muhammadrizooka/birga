@@ -41,6 +41,8 @@ func (uc *UseCase) Execute(ctx context.Context, f domain.ArticleFilter) ([]domai
 	case f.Status != "" && !domain.IsKnownArticleStatus(f.Status):
 		return nil, 0, errs.Errf(errs.ErrValidation, "status must be %s, %s or %s",
 			domain.ArticleStatusPublished, domain.ArticleStatusInReview, domain.ArticleStatusUnpublished)
+	case f.TopicID != "" && uuid.Validate(f.TopicID) != nil:
+		return nil, 0, errs.Errf(errs.ErrValidation, "topic_id must be a topic id (UUID), got %q", f.TopicID)
 	case f.GoalID != "" && uuid.Validate(f.GoalID) != nil:
 		return nil, 0, errs.Errf(errs.ErrValidation, "goal_id must be a goal id (UUID), got %q", f.GoalID)
 	case f.Age != 0 && (f.Age < domain.MinChildAge || f.Age > domain.MaxChildAge):

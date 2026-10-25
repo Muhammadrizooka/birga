@@ -226,7 +226,7 @@ type postLister interface {
 
 type postGetter interface {
 	Execute(ctx context.Context, id string) (domain.Post, error)
-	ForUser(ctx context.Context, userID string, role domain.UserRole, id string) (domain.Post, error)
+	ForUser(ctx context.Context, userID string, pro bool, id string) (domain.Post, error)
 }
 
 type postUpdater interface {
@@ -250,6 +250,36 @@ type PostUseCases struct {
 	Updater postUpdater
 	Deleter postDeleter
 	Daily   dailyPost
+}
+
+type topicManager interface {
+	Create(ctx context.Context, t domain.Topic) (domain.Topic, error)
+	List(ctx context.Context) ([]domain.Topic, error)
+	Update(ctx context.Context, id string, upd domain.TopicUpdate) (domain.Topic, error)
+	Delete(ctx context.Context, id string) error
+}
+
+type tipManager interface {
+	Create(ctx context.Context, t domain.Tip) (domain.Tip, error)
+	Get(ctx context.Context, id string, appOnly bool) (domain.Tip, error)
+	Update(ctx context.Context, id string, upd domain.TipUpdate) (domain.Tip, error)
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context, f domain.TipFilter) ([]domain.Tip, int, error)
+}
+
+type dailyTip interface {
+	Execute(ctx context.Context, userID string) (domain.DailyTip, error)
+}
+
+type TipUseCases struct {
+	Topics topicManager
+	Tips   tipManager
+	Daily  dailyTip
+}
+
+type proPlan interface {
+	Offer(ctx context.Context, p domain.Principal) (domain.ProOffer, error)
+	Grant(ctx context.Context, userID string, until *time.Time) (domain.User, error)
 }
 
 type otpSender interface {
@@ -361,6 +391,11 @@ type Server struct {
 	postDeleter postDeleter
 	dailyPost   dailyPost
 
+	topics   topicManager
+	tips     tipManager
+	dailyTip dailyTip
+	pro      proPlan
+
 	profileUpdater   profileUpdater
 	passwordResetter passwordResetter
 	childLister      childLister
@@ -396,6 +431,8 @@ func New(cfg config.Application,
 	auth AuthUseCases,
 	articles ArticleUseCases,
 	posts PostUseCases,
+	tips TipUseCases,
+	pro proPlan,
 	media mediaUploader,
 ) *Server {
 	if cfg.IsProduction() {
@@ -466,6 +503,11 @@ func New(cfg config.Application,
 		postUpdater: posts.Updater,
 		postDeleter: posts.Deleter,
 		dailyPost:   posts.Daily,
+
+		topics:   tips.Topics,
+		tips:     tips.Tips,
+		dailyTip: tips.Daily,
+		pro:      pro,
 
 		profileUpdater:   me.Updater,
 		passwordResetter: me.Password,

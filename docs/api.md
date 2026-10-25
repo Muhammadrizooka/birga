@@ -26,7 +26,7 @@ Every response, success or failure, has the same shape:
 | -10 | 422 | validation error | business rule broken, e.g. `duration_minutes must be between 1 and 60`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification; a free-plan user opening a video that was not their daily video |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification; a free-plan user opening a video that was not their daily video; a free-plan user calling a Pro feature (`this needs Birga Pro`) |
 | -30 | 404 | not found | unknown id, unpublished or soft-deleted activity or article on an app endpoint, no published article or video for the daily article or video, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken`; starting the next plan before the current one is done |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
@@ -230,7 +230,7 @@ Short texts for parents, managed from the dashboard. Same auth as the other admi
 
 List query parameters: `q` (title search in any language, ignoring case, at most 100
 characters), `status` (`published`, `in_review` or `unpublished`; omitted lists all),
-`goal_id`, `age` (2..6, matches `min_age <= age <= max_age`), `limit`, `offset`. Newest first.
+`goal_id`, `topic_id`, `age` (2..6, matches `min_age <= age <= max_age`), `limit`, `offset`. Newest first.
 
 Create body:
 
@@ -287,7 +287,7 @@ Every article here carries `is_read` for the signed-in user.
 |---|---|---|
 | GET | `/v1/me/articles/daily` | today's article for this user and tomorrow's ("Kun maqolasi" card on the home screen) |
 | GET | `/v1/me/articles` | this user's daily articles up to today, newest first (`limit`, `offset`) |
-| GET | `/v1/articles` | published articles: `q`, `goal_id`, `age`, `limit`, `offset` |
+| GET | `/v1/articles` | published articles: `q`, `goal_id`, `topic_id`, `age`, `limit`, `offset` |
 | GET | `/v1/articles/{id}` | one published article; others are 404 |
 | POST | `/v1/articles/{id}/read` | mark it read ("O‘qib chiqdim"); calling it again changes nothing |
 
@@ -332,7 +332,7 @@ an uploaded video. Same auth as the other admin endpoints.
 |---|---|---|
 | POST | `/v1/admin/media` | upload the video (or an image): same form as [`POST /v1/media`](#media-public), also accepts MP4 and WebM |
 | POST | `/v1/admin/posts` | create a post |
-| GET | `/v1/admin/posts` | list posts in every status (`q`, `status`, `goal_id`, `age`, `limit`, `offset`, like articles) |
+| GET | `/v1/admin/posts` | list posts in every status (`q`, `status`, `goal_id`, `topic_id`, `age`, `limit`, `offset`, like articles) |
 | GET | `/v1/admin/posts/{id}` | one post in any status |
 | PATCH | `/v1/admin/posts/{id}` | change some fields, including the status |
 | DELETE | `/v1/admin/posts/{id}` | soft-delete a post (the video file is kept) |
@@ -381,7 +381,7 @@ All need `Authorization: Bearer <access token>` and only show `published` posts.
 |---|---|---|
 | GET | `/v1/me/posts/daily` | today's video for this user ("Kun videosi" card) and the next ones, locked |
 | GET | `/v1/me/posts` | this user's daily videos up to today, newest first (`limit`, `offset`) |
-| GET | `/v1/posts` | published posts as previews without the video (`q`, `goal_id`, `age`, `limit`, `offset`) |
+| GET | `/v1/posts` | published posts as previews without the video (`q`, `goal_id`, `topic_id`, `age`, `limit`, `offset`) |
 | GET | `/v1/posts/{id}` | one published post with its video, see the rule below |
 
 ```json
@@ -399,11 +399,97 @@ first). `next` lists up to 2 videos that would come next; they are a preview, no
 have no video, for the locked "Keyingi videolar" list. 404 (`no published video yet`) when no
 post is published.
 
-One video a day on the free plan: users with role `user` or `unverified_user` can open with
+One video a day on the free plan: users without [Birga Pro](#birga-pro) can open with
 `GET /v1/posts/{id}` only posts that were their daily video, today or earlier; any other post is
-403 (`this video was not your daily video, ...`). Roles `paid_user` and `admin` can open every
-published post. The video plays from `video_url` (`/v1/media/{video_id}`, a 302 to a signed S3
+403 (`this video was not your daily video, ...`). Pro users (including roles `paid_user` and
+`admin`) can open every published post. The video plays from `video_url` (`/v1/media/{video_id}`, a 302 to a signed S3
 link, no token needed; video players follow the redirect and can seek).
+
+### Birga Pro
+
+Free and Pro plans (Figma 37-40). A user has Pro when their role is `paid_user` or `admin`, or
+while `users.pro_until` is in the future. The access token check reads both on every request,
+so a change applies at once. There is no payment endpoint yet: an admin gives Pro by date.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/pro` | the offer screen: price and the caller's plan (signed in, any role) |
+| PUT | `/v1/admin/users/{id}/pro` | set or clear `pro_until` (admin) |
+
+`GET /v1/pro` response:
+
+```json
+{"price_uzs": 16000, "period": "month", "plan": "free", "pro_until": null}
+```
+
+`price_uzs` comes from `PRO_PRICE_UZS` (default 16000).
+
+`PUT /v1/admin/users/{id}/pro` body: `{"until": "2026-11-25T00:00:00+05:00"}` (RFC 3339) gives Pro
+until then; `{"until": null}` or a past date ends it. Response: the [user object](#user-object).
+404 for an unknown or deleted user.
+
+What Pro changes so far: every published video opens (see [Daily videos](#daily-videos-posts-signed-in)),
+and every tip shows its text in `GET /v1/tips`. Free-plan users get 403 (-21) `this needs Birga Pro`
+on Pro-only endpoints.
+
+### Topics
+
+Tags for tips, articles and videos whose subject is not a goal ("Ovqat", "Uyqu", "Ekran
+vaqti"). Same shape and name rules as [goals](#goals): `name_uz`, `name_ru`, `name_en` required,
+at most 100 characters, each unique among active topics ignoring case (409 otherwise).
+Migration `000020` adds Ovqat, Uyqu, Nutq, His-tuyg‘ular, Ekran vaqti, Xulq-atvor and O‘yin.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/topics` | active topics, oldest first, not paged (no token) |
+| POST | `/v1/admin/topics` | create a topic |
+| PATCH | `/v1/admin/topics/{id}` | rename it (names present change) |
+| DELETE | `/v1/admin/topics/{id}` | soft-delete it; tagged content keeps the id |
+
+Response: a topic object `{id, name_uz, name_ru, name_en, created_at, updated_at}`.
+
+### Tips ("Kun maslahati")
+
+One- or two-sentence advice for parents: the "Kun maslahati" card on the home screen and the
+Kutubxona > Maslahat tab.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/admin/tips` | create a tip |
+| GET | `/v1/admin/tips` | tips in every status: `q`, `status`, `topic_id`, `age`, `limit`, `offset` |
+| GET | `/v1/admin/tips/{id}` | one tip in any status |
+| PATCH | `/v1/admin/tips/{id}` | change some fields, including the status |
+| DELETE | `/v1/admin/tips/{id}` | soft-delete a tip |
+| GET | `/v1/me/tips/daily` | today's tip for the signed-in user |
+| GET | `/v1/tips` | published tips: `q`, `topic_id`, `age`, `limit`, `offset` (signed in) |
+
+Create body:
+
+```json
+{"text_uz": "Ovqat paytida telefonni chetga qo‘ying.", "text_ru": "Во время еды отложите телефон.",
+ "text_en": "Put the phone away at mealtimes.", "topic_id": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e",
+ "min_age": 2, "max_age": 6, "status": "published"}
+```
+
+- `text_uz`, `text_ru`, `text_en` are required, trimmed, at most 500 characters each (422).
+- `topic_id` must be an active [topic](#topics) (422 `topic_id is not an active topic ...`).
+- `min_age`/`max_age` within 2..6, `min_age <= max_age` (422).
+- `status` is `published`, `in_review` (the default) or `unpublished`; only `published` reaches the app.
+- `q` searches the texts in every language, ignoring case (at most 100 characters).
+
+Daily tip: `{"day": "2026-10-25", "tip": {tip object}}`. The tip is picked the first time the
+day is asked for, stored in `user_daily_tips` and stays the same all day. Among published tips it
+prefers one whose age range fits one of the user's children, then one never shown to the user,
+then the one shown longest ago, then the topic shown longest ago (so the days rotate through the
+topics), then the oldest. A stored pick that was unpublished or deleted since is replaced. 404
+`no published tip yet` when no tip is published.
+
+`GET /v1/tips` for a user without Pro: tips that were never the user's daily tip come back with
+`locked: true` and empty texts, so the app can show them as locked cards. Pro users get every
+text and `locked: false`.
+
+Tip object: `id`, `text_uz`, `text_ru`, `text_en`, `topic_id`, `min_age`, `max_age`, `status`,
+`created_at`, `updated_at`, `locked` (only `true` on `GET /v1/tips`, see above).
 
 ### Goals
 
@@ -468,7 +554,8 @@ The signed-in user's own account, for the app's profile page. All of these need
 #### Get profile
 
 Response `data` is the [user object](#user-object) plus `role` (`unverified_user`, `user`, `paid_user` or `admin`,
-the current `user_auth.role`).
+the current `user_auth.role`). Here `plan` counts every way to have [Birga Pro](#birga-pro),
+including the role.
 
 #### Edit profile
 
@@ -1131,6 +1218,7 @@ user also deletes their children that have no other parent, and unlinks them fro
 | GET | `/v1/admin/users/{id}` | one user |
 | PATCH | `/v1/admin/users/{id}` | change some fields of a user |
 | DELETE | `/v1/admin/users/{id}` | soft-delete a user; `data` is `null` |
+| PUT | `/v1/admin/users/{id}/pro` | give [Birga Pro](#birga-pro) until a date, or end it |
 
 Create body (only `phone_number` is required):
 
@@ -1189,6 +1277,8 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `agreed_on_conditions` | bool | consent given at sign-up (or later through `PATCH /v1/me`); `false` for older users and users created by an admin |
 | `reminder_enabled` | bool | daily reminder on or off, `false` by default |
 | `reminder_time` | string | daily reminder time, `HH:MM` in Uzbekistan time, `"18:00"` by default |
+| `plan` | string | `pro` while the user has [Birga Pro](#birga-pro), otherwise `free`. On `/v1/me` it also counts the `paid_user` and `admin` roles; in admin user lists it follows `pro_until` only |
+| `pro_until` | RFC 3339 timestamp or `null` | when Pro given by date ends; `null` when never given |
 | `created_at`, `updated_at` | RFC 3339 timestamp | `updated_at` changes on every update and on delete |
 
 `deleted_at` is never returned: deleted users are not returned at all.
@@ -1232,6 +1322,7 @@ Soft-deleted activities are never returned, so `deleted_at` is not part of the o
 | `expected_read_time` | int | minutes |
 | `min_age`, `max_age` | int | years, inclusive (the "2–5 yosh" tag) |
 | `goal_id` | UUID string | the [goal](#goals) the article serves (the tag, e.g. "Xulq-atvor") |
+| `topic_id` | UUID string or `null` | optional [topic](#topics) tag (e.g. "Uyqu"); when set the app shows it instead of the goal name. Create: omitted, `null` or `""` means none; update: `""` removes it, omitted or `null` keeps it |
 | `status` | string | `published`, `in_review` or `unpublished` |
 | `created_at`, `updated_at` | RFC 3339 timestamp | |
 | `is_read` | bool | only on the signed-in endpoints: whether this user marked it read |
@@ -1247,6 +1338,7 @@ Soft-deleted articles are never returned, so `deleted_at` is not part of the obj
 | `video_id` | UUID string | the uploaded video |
 | `video_url` | string | `/v1/media/{video_id}`; play it from the API base address |
 | `goal_id` | UUID string | the [goal](#goals) the video serves (the tag, e.g. "Nutq") |
+| `topic_id` | UUID string or `null` | optional [topic](#topics) tag, same rules as on articles; also on the `next` previews |
 | `min_age`, `max_age` | int | years, inclusive ("3–5 yosh") |
 | `duration` | number | minutes, a decimal (`4.2` is 4:12) |
 | `suggestion_uz`, `suggestion_ru`, `suggestion_en` | string | the "Tavsiya" line; `""` when there is none |

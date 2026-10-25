@@ -229,10 +229,15 @@ type userView struct {
 	// AgreedOnConditions is the consent to the terms given at sign-up.
 	AgreedOnConditions bool `json:"agreed_on_conditions" example:"true"`
 	// ReminderEnabled and ReminderTime are the daily reminder setting (HH:MM, Uzbekistan time).
-	ReminderEnabled bool      `json:"reminder_enabled" example:"true"`
-	ReminderTime    string    `json:"reminder_time" example:"18:00"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ReminderEnabled bool   `json:"reminder_enabled" example:"true"`
+	ReminderTime    string `json:"reminder_time" example:"18:00"`
+	// Plan is "pro" while the user has Birga Pro, otherwise "free". On /v1/me it also counts the
+	// paid_user and admin roles; in admin user lists it follows pro_until only.
+	Plan string `json:"plan" example:"free" enums:"free,pro"`
+	// ProUntil is when Birga Pro given by date ends; null when it was never given.
+	ProUntil  *time.Time `json:"pro_until"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 type userListView struct {
@@ -255,7 +260,17 @@ func toUserView(u domain.User) userView {
 		AgreedOnConditions: u.AgreedOnConditions,
 		ReminderEnabled:    u.ReminderEnabled,
 		ReminderTime:       u.ReminderTime,
+		Plan:               planName(domain.IsPro("", u.ProUntil, time.Now())),
+		ProUntil:           u.ProUntil,
 		CreatedAt:          u.CreatedAt,
 		UpdatedAt:          u.UpdatedAt,
 	}
+}
+
+func planName(pro bool) string {
+	if pro {
+		return domain.PlanPro
+	}
+
+	return domain.PlanFree
 }

@@ -13,12 +13,14 @@ const MaxNextPosts = 2
 
 // Post is a short video for parents and children ("Kun videosi"). It serves one goal and an age range.
 type Post struct {
-	ID           string
-	TitleUz      string
-	TitleRu      string
-	TitleEn      string
-	VideoID      string // an uploaded media id holding an MP4 or WebM video
-	GoalID       string
+	ID      string
+	TitleUz string
+	TitleRu string
+	TitleEn string
+	VideoID string // an uploaded media id holding an MP4 or WebM video
+	GoalID  string
+	// TopicID is the optional topic tag; nil means none.
+	TopicID      *string
 	MinAge       int
 	MaxAge       int
 	Duration     float64 // minutes
@@ -36,11 +38,13 @@ type Post struct {
 // PostUpdate is a partial update. A nil field is left unchanged; a suggestion or questions text
 // pointing to "" removes it.
 type PostUpdate struct {
-	TitleUz      *string
-	TitleRu      *string
-	TitleEn      *string
-	VideoID      *string
-	GoalID       *string
+	TitleUz *string
+	TitleRu *string
+	TitleEn *string
+	VideoID *string
+	GoalID  *string
+	// TopicID pointing to "" removes the topic.
+	TopicID      *string
 	MinAge       *int
 	MaxAge       *int
 	Duration     *float64
@@ -55,7 +59,7 @@ type PostUpdate struct {
 
 // IsEmpty reports whether the update changes nothing.
 func (u PostUpdate) IsEmpty() bool {
-	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.VideoID == nil && u.GoalID == nil &&
+	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.VideoID == nil && u.GoalID == nil && u.TopicID == nil &&
 		u.MinAge == nil && u.MaxAge == nil && u.Duration == nil && u.SuggestionUz == nil &&
 		u.SuggestionRu == nil && u.SuggestionEn == nil && u.QuestionsUz == nil && u.QuestionsRu == nil &&
 		u.QuestionsEn == nil && u.Status == nil
@@ -63,8 +67,9 @@ func (u PostUpdate) IsEmpty() bool {
 
 // PostFilter narrows a post listing. Zero values mean "no filter".
 type PostFilter struct {
-	Age    int
-	GoalID string
+	Age     int
+	GoalID  string
+	TopicID string
 	// Search matches posts whose title in any language contains it, ignoring case.
 	Search string
 	// Status is one of the article statuses; empty lists all.
@@ -84,10 +89,4 @@ type DailyPost struct {
 type DailyPosts struct {
 	Today DailyPost
 	Next  []Post
-}
-
-// CanOpenAnyPost reports whether the role may open every published post; the others may only
-// open their own daily videos.
-func CanOpenAnyPost(role UserRole) bool {
-	return role == UserRolePaidUser || role == UserRoleAdmin
 }

@@ -96,6 +96,7 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `HTTP_PORT` | `:8080` | API listen address |
 | `METRICS_PORT` | `:9090` | Prometheus `/metrics` listen address; never expose publicly |
 | `ADMIN_API_KEY` | empty | shared key for `/v1/admin/*` (`X-Admin-Key` header); empty disables the admin API |
+| `PRO_PRICE_UZS` | `16000` | monthly Birga Pro price in so'm, returned by `GET /v1/pro` |
 | `POSTGRES_URL` | **required** | full connection string, e.g. `postgres://birga:birga@localhost:5432/birga?sslmode=disable` |
 | `POSTGRES_MAX_CONNS` | `25` | pool max connections |
 | `POSTGRES_MIN_CONNS` | `2` | pool min connections |

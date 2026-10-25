@@ -37,6 +37,7 @@ import (
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	dailyarticle "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_article"
 	dailypost "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_post"
+	dailytip "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_tip"
 	goalcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_creator"
 	goaldeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_deleter"
 	goalgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_getter"
@@ -52,10 +53,13 @@ import (
 	postgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/post_getter"
 	postlister "gitlab.com/loyihalar/birga/backend/internal/usecases/post_lister"
 	postupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/post_updater"
+	proplan "gitlab.com/loyihalar/birga/backend/internal/usecases/pro_plan"
 	profileupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/profile_updater"
 	streakgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/streak_getter"
+	tipmanager "gitlab.com/loyihalar/birga/backend/internal/usecases/tip_manager"
 	tokenchecker "gitlab.com/loyihalar/birga/backend/internal/usecases/token_checker"
 	tokenrefresher "gitlab.com/loyihalar/birga/backend/internal/usecases/token_refresher"
+	topicmanager "gitlab.com/loyihalar/birga/backend/internal/usecases/topic_manager"
 	usercreator "gitlab.com/loyihalar/birga/backend/internal/usecases/user_creator"
 	userdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_deleter"
 	usergetter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_getter"
@@ -279,6 +283,11 @@ type useCases struct {
 	postDeleter *postdeleter.UseCase
 	dailyPost   *dailypost.UseCase
 
+	topicManager *topicmanager.UseCase
+	tipManager   *tipmanager.UseCase
+	dailyTip     *dailytip.UseCase
+	proPlan      *proplan.UseCase
+
 	otpSender   *otpsender.UseCase
 	otpVerifier *otpverifier.UseCase
 
@@ -347,6 +356,11 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		articleDeleter: articledeleter.New(l.Named("usecase.article_deleter"), store.Article()),
 		articleReader:  articlereader.New(l.Named("usecase.article_reader"), store.Article()),
 		dailyArticle:   dailyarticle.New(l.Named("usecase.daily_article"), store, store.Article()),
+
+		topicManager: topicmanager.New(l.Named("usecase.topic_manager"), store.Topic()),
+		tipManager:   tipmanager.New(l.Named("usecase.tip_manager"), store.Tip(), store.Topic()),
+		dailyTip:     dailytip.New(l.Named("usecase.daily_tip"), store, store.Tip()),
+		proPlan:      proplan.New(l.Named("usecase.pro_plan"), store.User(), cfg.ProPriceUZS),
 
 		postCreator: postcreator.New(l.Named("usecase.post_creator"), store.Post(), store.Goal(), store.Media()),
 		postLister:  postlister.New(l.Named("usecase.post_lister"), store.Post()),
@@ -450,6 +464,12 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Deleter: ucs.postDeleter,
 			Daily:   ucs.dailyPost,
 		},
+		rest.TipUseCases{
+			Topics: ucs.topicManager,
+			Tips:   ucs.tipManager,
+			Daily:  ucs.dailyTip,
+		},
+		ucs.proPlan,
 		media,
 	)
 

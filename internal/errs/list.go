@@ -30,6 +30,14 @@ var (
 	ErrNoPlanDayToday = Errf(ErrNotFound, "no plan day is open today: today's plan day is done, or the plan is done")
 	ErrPlanNotDone    = Errf(ErrConflict, "the current plan is not done yet, the next plan starts after its last day")
 
+	ErrTopicNotFound  = Errf(ErrNotFound, "topic not found")
+	ErrTopicNameTaken = Errf(ErrConflict, "a topic with this name already exists")
+	ErrUnknownTopic   = Errf(ErrValidation, "topic_id is not an active topic, list them with GET /v1/topics")
+	ErrTipNotFound    = Errf(ErrNotFound, "tip not found")
+	ErrNoTip          = Errf(ErrNotFound, "no published tip yet")
+
+	ErrNeedsPro = Errf(ErrForbidden, "this needs Birga Pro")
+
 	ErrGoalNotFound  = Errf(ErrNotFound, "goal not found")
 	ErrGoalNameTaken = Errf(ErrConflict, "a goal with this name already exists")
 	ErrUnknownGoals  = Errf(ErrValidation, "goals contains ids that are not active goals, list them with GET /v1/goals")

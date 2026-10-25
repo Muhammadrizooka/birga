@@ -77,13 +77,14 @@ type deps struct {
 	goals   *fakeGoals
 	arts    *fakeArticles
 	posts   *fakePosts
+	tips    *fakeTips
 }
 
 func newTestServer(adminKey string) (*Server, *deps) {
 	gin.SetMode(gin.TestMode)
 
 	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}, users: &fakeUsers{}, otp: &fakeOTPSender{}, media: &fakeMedia{}, auth: &fakeAuth{},
-		edit: &fakeActivityEdit{}, kids: &fakeChildActivities{}, me: &fakeMe{}, goals: &fakeGoals{}, arts: &fakeArticles{}, posts: &fakePosts{}}
+		edit: &fakeActivityEdit{}, kids: &fakeChildActivities{}, me: &fakeMe{}, goals: &fakeGoals{}, arts: &fakeArticles{}, posts: &fakePosts{}, tips: &fakeTips{}}
 	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter,
 		ActivityEditUseCases{Updater: d.edit, Deleter: activityDeleterFunc(d.edit.delete)},
 		GoalUseCases{
@@ -115,7 +116,7 @@ func newTestServer(adminKey string) (*Server, *deps) {
 		AuthUseCases{
 			SignUp: d.auth, Refresher: refresherFunc(d.auth.refresh), Checker: checkerFunc(d.auth.check),
 			Login: loginFunc(d.auth.login), Logout: logoutFunc(d.auth.logout), ForgotPassword: forgotFunc(d.auth.forgot),
-		}, d.arts.useCases(), d.posts.useCases(), d.media)
+		}, d.arts.useCases(), d.posts.useCases(), d.tips.useCases(), d.tips, d.media)
 
 	return s, d
 }

@@ -31,9 +31,17 @@ type profileView struct {
 	Role domain.UserRole `json:"role" example:"user" enums:"unverified_user,user,paid_user,admin"`
 }
 
+// toProfileView is the user row with the caller's current role and plan.
+func toProfileView(c *gin.Context, u domain.User) profileView {
+	v := profileView{userView: toUserView(u), Role: currentUserRole(c)}
+	v.Plan = planName(currentUserPro(c))
+
+	return v
+}
+
 // GetProfile godoc swagger
 // @Summary the signed-in user's profile
-// @Description - the user row plus the current role (user, paid_user or admin)
+// @Description - the user row plus the current role (user, paid_user or admin) and plan (free or pro)
 // @Tags me
 // @Security BearerAuth
 // @Produce json
@@ -50,7 +58,7 @@ func (s *Server) GetProfile() gin.HandlerFunc {
 			return
 		}
 
-		Return(c, profileView{userView: toUserView(u), Role: currentUserRole(c)}, nil)
+		Return(c, toProfileView(c, u), nil)
 	}
 }
 
@@ -102,7 +110,7 @@ func (s *Server) UpdateProfile() gin.HandlerFunc {
 			return
 		}
 
-		Return(c, profileView{userView: toUserView(u), Role: currentUserRole(c)}, nil)
+		Return(c, toProfileView(c, u), nil)
 	}
 }
 

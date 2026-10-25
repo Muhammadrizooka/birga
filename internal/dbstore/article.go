@@ -38,6 +38,7 @@ type dbArticle struct {
 	MinAge      int16     `db:"min_age"`
 	MaxAge      int16     `db:"max_age"`
 	GoalID      string    `db:"goal_id"`
+	TopicID     *string   `db:"topic_id"`
 	Status      string    `db:"status"`
 	CreatedAt   time.Time `db:"created_at"`
 	UpdatedAt   time.Time `db:"updated_at"`
@@ -48,7 +49,7 @@ type dbArticle struct {
 const articleColumns = `
 	a.id, a.title_uz, a.title_ru, a.title_en, a.article_body_uz, a.article_body_ru, a.article_body_en,
 	a.tip_uz, a.tip_ru, a.tip_en, a.photo_id, a.expected_read_time, a.min_age, a.max_age, a.goal_id,
-	a.status, a.created_at, a.updated_at`
+	a.topic_id, a.status, a.created_at, a.updated_at`
 
 // readerJoin adds is_read for the user in parameter $n.
 func readerJoin(n int) (cols, join string) {
@@ -66,8 +67,8 @@ func (r *articleRepo) Create(ctx context.Context, a domain.Article) (domain.Arti
 	q := `
 		INSERT INTO articles AS a (
 			title_uz, title_ru, title_en, article_body_uz, article_body_ru, article_body_en,
-			tip_uz, tip_ru, tip_en, photo_id, expected_read_time, min_age, max_age, goal_id, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			tip_uz, tip_ru, tip_en, photo_id, expected_read_time, min_age, max_age, goal_id, status, topic_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING ` + articleColumns + noReader
 
 	var photoID *string
@@ -77,7 +78,7 @@ func (r *articleRepo) Create(ctx context.Context, a domain.Article) (domain.Arti
 
 	return r.one(ctx, l, q,
 		a.TitleUz, a.TitleRu, a.TitleEn, a.BodyUz, a.BodyRu, a.BodyEn,
-		a.TipUz, a.TipRu, a.TipEn, photoID, a.ReadMinutes, a.MinAge, a.MaxAge, a.GoalID, a.Status,
+		a.TipUz, a.TipRu, a.TipEn, photoID, a.ReadMinutes, a.MinAge, a.MaxAge, a.GoalID, a.Status, topicOrNull(a.TopicID),
 	)
 }
 
@@ -347,6 +348,8 @@ func (r *articleRepo) one(ctx context.Context, l *zap.Logger, q string, args ...
 			return domain.Article{}, errs.ErrPhotoNotFound
 		case pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "articles_goal_id_fkey":
 			return domain.Article{}, errs.ErrUnknownGoals
+		case pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "articles_topic_id_fkey":
+			return domain.Article{}, errs.ErrUnknownTopic
 		case pgErr.Code == pgCheckViolation && pgErr.ConstraintName == "articles_age_range_chk":
 			return domain.Article{}, errs.Errf(errs.ErrValidation,
 				"age range must be within %d..%d and min_age <= max_age, together with the stored values",
@@ -387,6 +390,10 @@ func articleWhere(f domain.ArticleFilter) (string, []any) {
 		add(func(n string) string { return "a.goal_id = " + n + "::uuid" }, f.GoalID)
 	}
 
+	if f.TopicID != "" {
+		add(func(n string) string { return "a.topic_id = " + n + "::uuid" }, f.TopicID)
+	}
+
 	if f.Age > 0 {
 		add(func(n string) string { return "a.min_age <= " + n + " AND a.max_age >= " + n }, f.Age)
 	}
@@ -424,6 +431,10 @@ func articleSet(upd domain.ArticleUpdate) (string, []any) {
 		add("photo_id", nullIfEmpty(*upd.PhotoID))
 	}
 
+	if upd.TopicID != nil {
+		add("topic_id", nullIfEmpty(*upd.TopicID))
+	}
+
 	for _, f := range []struct {
 		column string
 		value  *int
@@ -453,6 +464,7 @@ func (a dbArticle) toDomain() domain.Article {
 		MinAge:      int(a.MinAge),
 		MaxAge:      int(a.MaxAge),
 		GoalID:      a.GoalID,
+		TopicID:     a.TopicID,
 		Status:      a.Status,
 		CreatedAt:   a.CreatedAt,
 		UpdatedAt:   a.UpdatedAt,

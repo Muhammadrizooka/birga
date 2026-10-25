@@ -99,6 +99,7 @@ setting `deleted_at`.
 | `agreed_on_conditions` | `BOOLEAN` | no | `FALSE` | consent to the terms, the tick on the sign-up screen (added by `000012_add_user_consent_and_reminder`); FALSE for older users and users created by an admin |
 | `reminder_enabled` | `BOOLEAN` | no | `FALSE` | daily reminder on or off (`000012`) |
 | `reminder_time` | `VARCHAR(5)` | no | `'18:00'` | daily reminder time, `HH:MM` 24-hour, Uzbekistan time (`000012`); check `users_reminder_time_chk` |
+| `pro_until` | `TIMESTAMPTZ` | yes | | Birga Pro given by date ends at this time (added by `000020_pro_topics_tips`); NULL means never given. Set by `PUT /v1/admin/users/{id}/pro`; read with the auth row on every request (`authRepo.Get`) |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |
@@ -454,6 +455,48 @@ The daily pick of articles and posts shares one query (`dbstore/daily.go`, `dail
 
 Repository (`store.Post()`): `Create`, `Get`, `Update`, `Delete`, `List`, `WasDaily`,
 `LockDaily`, `DailyPostID`, `PickDaily`, `SetDailyPost`, `DailyHistory`.
+
+### `topics`
+
+Tags of tips, articles and videos ("Ovqat", "Uyqu"). Created by `000020_pro_topics_tips`, which
+also adds seven starter topics. Same columns and rules as [`goals`](#goals): `id`, `name_uz`,
+`name_ru`, `name_en`, `created_at`, `updated_at`, `deleted_at`; partial unique indexes
+`topics_name_{uz,ru,en}_uniq` on `LOWER(name_*) WHERE deleted_at IS NULL`. Soft delete only, so
+foreign keys from tips, articles and posts stay valid.
+
+`articles.topic_id` and `posts.topic_id` (`UUID`, nullable, references `topics(id)`) are the
+optional topic tag, added by the same migration.
+
+Repository (`store.Topic()`): `Create`, `Get`, `List`, `CountActive`, `Update`, `Delete`.
+
+### `tips`
+
+"Kun maslahati" tips. Created by `000020_pro_topics_tips`. Rows are soft-deleted by setting
+`deleted_at`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | `UUID` | no | `gen_random_uuid()` | primary key |
+| `text_uz`, `text_ru`, `text_en` | `TEXT` | no | | required by the API, at most 500 characters |
+| `topic_id` | `UUID` | no | | references `topics(id)` |
+| `min_age`, `max_age` | `SMALLINT` | no | | `2 <= min_age <= max_age <= 6` (`tips_age_range_chk`) |
+| `status` | `TEXT` | no | `'in_review'` | `published`, `in_review` or `unpublished` (`tips_status_chk`) |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+| `deleted_at` | `TIMESTAMPTZ` | yes | | soft delete |
+
+Partial index `tips_published_topic_idx` on `topic_id WHERE status = 'published' AND deleted_at IS NULL`.
+
+### `user_daily_tips`
+
+The daily tip of each user, one row per local day. Created by `000020_pro_topics_tips`. Same
+shape as [`user_daily_articles`](#user_daily_articles) with `tip_id` referencing `tips(id)`
+`ON DELETE CASCADE`; index `user_daily_tips_tip_idx` on `(user_id, tip_id)`. The rows also decide
+which tips a free-plan user sees unlocked in `GET /v1/tips`. The pick uses `dailyPicks` with
+`topicColumn = "topic_id"`: the days rotate through topics, and the children's goals are not
+matched.
+
+Repository (`store.Tip()`): `Create`, `Get`, `Update`, `Delete`, `List`, `LockDaily`,
+`DailyTipID`, `PickDaily`, `SetDailyTip`.
 
 ## Conventions
 

@@ -31,10 +31,10 @@ func (uc *UseCase) Execute(ctx context.Context, id string) (domain.Post, error) 
 	return uc.repo.Get(ctx, id)
 }
 
-// ForUser returns a published post to a signed-in app user. Roles that may open any post (paid
-// users, admins) get every published post; the others only their own daily videos of today or
-// earlier days (errs.ErrPostNotOpened otherwise).
-func (uc *UseCase) ForUser(ctx context.Context, userID string, role domain.UserRole, id string) (domain.Post, error) {
+// ForUser returns a published post to a signed-in app user. Pro users (domain.IsPro) get every
+// published post; the others only their own daily videos of today or earlier days
+// (errs.ErrPostNotOpened otherwise).
+func (uc *UseCase) ForUser(ctx context.Context, userID string, pro bool, id string) (domain.Post, error) {
 	p, err := uc.repo.Get(ctx, id)
 	if err != nil {
 		return domain.Post{}, err
@@ -44,7 +44,7 @@ func (uc *UseCase) ForUser(ctx context.Context, userID string, role domain.UserR
 		return domain.Post{}, errs.ErrPostNotFound
 	}
 
-	if domain.CanOpenAnyPost(role) {
+	if pro {
 		return p, nil
 	}
 

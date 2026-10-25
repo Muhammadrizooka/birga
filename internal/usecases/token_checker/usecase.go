@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"strings"
+	"time"
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
@@ -24,11 +25,12 @@ type UseCase struct {
 	l      logger.Logger
 	tokens tokenParser
 	auth   authRepo
+	now    func() time.Time
 }
 
 // New creates a new token checker use case.
 func New(l logger.Logger, tokens tokenParser, auth authRepo) *UseCase {
-	return &UseCase{l: l, tokens: tokens, auth: auth}
+	return &UseCase{l: l, tokens: tokens, auth: auth, now: time.Now}
 }
 
 // Execute returns the user of a validly signed, unexpired access token that is still the one
@@ -59,5 +61,5 @@ func (uc *UseCase) Execute(ctx context.Context, accessToken string) (domain.Prin
 		return domain.Principal{}, errs.Errf(errs.ErrUnauthorized, "access token is no longer valid, refresh it")
 	}
 
-	return domain.Principal{UserID: claims.UserID, Role: a.Role}, nil
+	return domain.Principal{UserID: claims.UserID, Role: a.Role, Pro: domain.IsPro(a.Role, a.ProUntil, uc.now())}, nil
 }

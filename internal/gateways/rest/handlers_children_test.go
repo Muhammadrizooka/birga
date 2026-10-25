@@ -19,6 +19,7 @@ const (
 )
 
 var bearer = map[string]string{authorizationHeader: "Bearer good"}
+var proBearer = map[string]string{authorizationHeader: "Bearer pro"}
 
 type fakeChildActivities struct {
 	gotCreate  domain.Child
