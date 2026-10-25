@@ -26,7 +26,7 @@ Every response, success or failure, has the same shape:
 | -10 | 422 | validation error | business rule broken, e.g. `duration_minutes must be between 1 and 60`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification; a free-plan user opening a video that was not their daily video |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification; a free-plan user opening a video or article that was not their daily one; a free-plan user calling a Pro feature (`this needs Birga Pro`) |
 | -30 | 404 | not found | unknown id, unpublished or soft-deleted activity or article on an app endpoint, no published article or video for the daily article or video, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken`; starting the next plan before the current one is done |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
@@ -131,10 +131,11 @@ Query parameters for the list:
 | `age` | int | child age in years, 2 to 6; matches activities where `min_age <= age <= max_age` |
 | `goal_id` | UUID string | a goal id from [`GET /v1/goals`](#goals); matches activities whose `goal_ids` contain it |
 | `q` | string | title search: matches activities whose `title_uz`, `title_ru` or `title_en` contains the text, ignoring case; trimmed, at most 100 characters; `%` and `_` match literally |
+| `max_minutes` | int | only activities of at most this many minutes (the "10 daqiqagacha" filter) |
 | `limit`, `offset` | int | see [Pagination](#pagination) |
 
-An `age` outside 2..6, a `goal_id` that is not a UUID or a `q` over 100 characters returns 422;
-a non-integer `age` returns 400. A UUID that is not a goal simply matches nothing.
+An `age` outside 2..6, a `goal_id` that is not a UUID, a negative `max_minutes` or a `q` over 100
+characters returns 422; a non-integer `age` or `max_minutes` returns 400. A UUID that is not a goal simply matches nothing.
 
 Example:
 
@@ -186,6 +187,8 @@ Validation (`usecases/activity_creator`), all returning 422:
 
 - titles and descriptions are required in all three languages, Uzbek, Russian and English (whitespace is trimmed first);
 - `main_idea_uz`, `main_idea_ru`, `main_idea_en` are optional (trimmed, default `""`);
+- `easier_uz/ru/en` and `harder_uz/ru/en` are optional (trimmed, default `""`): the "Osonroq" and
+  "Qiyinroq" variants ("Odatdagi" is the description);
 - `goal_ids` must hold 1 to 5 UUIDs (repeats are stored once), and each must be an active goal
   from [`GET /v1/goals`](#goals) (`goals contains ids that are not active goals, ...`);
 - `2 <= min_age <= max_age <= 6`;
@@ -200,7 +203,7 @@ curl -X POST localhost:8080/v1/admin/activities \
 ```
 
 Update (`PATCH`) takes the same fields, all optional. Omitted or `null` fields are kept. Each
-given field follows the create rules (titles and descriptions cannot be emptied, `main_idea_*` can; `goal_ids`, when sent, replaces the
+given field follows the create rules (titles and descriptions cannot be emptied, `main_idea_*`, `easier_*` and `harder_*` can; `goal_ids`, when sent, replaces the
 whole list and cannot be emptied); an age that is valid alone but
 not together with the stored one, such as `min_age` above the stored `max_age`, is rejected
 by the database check, also with 422. An empty body is 422 (`nothing to update`).
@@ -230,7 +233,7 @@ Short texts for parents, managed from the dashboard. Same auth as the other admi
 
 List query parameters: `q` (title search in any language, ignoring case, at most 100
 characters), `status` (`published`, `in_review` or `unpublished`; omitted lists all),
-`goal_id`, `age` (2..6, matches `min_age <= age <= max_age`), `limit`, `offset`. Newest first.
+`goal_id`, `topic_id`, `age` (2..6, matches `min_age <= age <= max_age`), `limit`, `offset`. Newest first.
 
 Create body:
 
@@ -287,8 +290,8 @@ Every article here carries `is_read` for the signed-in user.
 |---|---|---|
 | GET | `/v1/me/articles/daily` | today's article for this user and tomorrow's ("Kun maqolasi" card on the home screen) |
 | GET | `/v1/me/articles` | this user's daily articles up to today, newest first (`limit`, `offset`) |
-| GET | `/v1/articles` | published articles: `q`, `goal_id`, `age`, `limit`, `offset` |
-| GET | `/v1/articles/{id}` | one published article; others are 404 |
+| GET | `/v1/articles` | published articles: `q`, `goal_id`, `topic_id`, `age`, `max_minutes` (at most this `expected_read_time`), `limit`, `offset` |
+| GET | `/v1/articles/{id}` | one published article; others are 404; see the free-plan rule below |
 | POST | `/v1/articles/{id}/read` | mark it read ("O‘qib chiqdim"); calling it again changes nothing |
 
 #### Daily article
@@ -323,6 +326,15 @@ exists does it fall back to a goal fit with another age, then to any published a
 pick that was unpublished or deleted since is replaced on the next call. A user with no children
 or no goals gets articles in the order of rules 3 to 6.
 
+#### One article a day on the free plan
+
+Users without [Birga Pro](#birga-pro) can open with `GET /v1/articles/{id}` only articles that
+were their daily article, today or earlier (tomorrow's opens tomorrow); any other article is 403
+(-21) `this article was not your daily article, the free plan opens one article a day`. In
+`GET /v1/articles` those other articles come back with `locked: true` and empty
+`article_body_*` and `tip_*` (title, photo, tags and read time stay, for the locked card). Pro
+users open every published article and always get `locked: false`.
+
 ### Daily videos: posts (admin)
 
 "Kun videosi": short videos for parents and children, managed from the dashboard. A post holds
@@ -332,7 +344,7 @@ an uploaded video. Same auth as the other admin endpoints.
 |---|---|---|
 | POST | `/v1/admin/media` | upload the video (or an image): same form as [`POST /v1/media`](#media-public), also accepts MP4 and WebM |
 | POST | `/v1/admin/posts` | create a post |
-| GET | `/v1/admin/posts` | list posts in every status (`q`, `status`, `goal_id`, `age`, `limit`, `offset`, like articles) |
+| GET | `/v1/admin/posts` | list posts in every status (`q`, `status`, `goal_id`, `topic_id`, `age`, `limit`, `offset`, like articles) |
 | GET | `/v1/admin/posts/{id}` | one post in any status |
 | PATCH | `/v1/admin/posts/{id}` | change some fields, including the status |
 | DELETE | `/v1/admin/posts/{id}` | soft-delete a post (the video file is kept) |
@@ -381,7 +393,7 @@ All need `Authorization: Bearer <access token>` and only show `published` posts.
 |---|---|---|
 | GET | `/v1/me/posts/daily` | today's video for this user ("Kun videosi" card) and the next ones, locked |
 | GET | `/v1/me/posts` | this user's daily videos up to today, newest first (`limit`, `offset`) |
-| GET | `/v1/posts` | published posts as previews without the video (`q`, `goal_id`, `age`, `limit`, `offset`) |
+| GET | `/v1/posts` | published posts as previews without the video (`q`, `goal_id`, `topic_id`, `age`, `max_minutes`, `limit`, `offset`) |
 | GET | `/v1/posts/{id}` | one published post with its video, see the rule below |
 
 ```json
@@ -399,11 +411,127 @@ first). `next` lists up to 2 videos that would come next; they are a preview, no
 have no video, for the locked "Keyingi videolar" list. 404 (`no published video yet`) when no
 post is published.
 
-One video a day on the free plan: users with role `user` or `unverified_user` can open with
+One video a day on the free plan: users without [Birga Pro](#birga-pro) can open with
 `GET /v1/posts/{id}` only posts that were their daily video, today or earlier; any other post is
-403 (`this video was not your daily video, ...`). Roles `paid_user` and `admin` can open every
-published post. The video plays from `video_url` (`/v1/media/{video_id}`, a 302 to a signed S3
+403 (`this video was not your daily video, ...`). Pro users (including roles `paid_user` and
+`admin`) can open every published post. For free users the previews say so: `locked: true` on
+the `GET /v1/posts` items that were never their daily video and on every `next` video; for Pro
+users `locked` is always `false`. `max_minutes` keeps videos of at most that `duration`. The video plays from `video_url` (`/v1/media/{video_id}`, a 302 to a signed S3
 link, no token needed; video players follow the redirect and can seek).
+
+### Birga Pro
+
+Free and Pro plans (Figma 37-40). A user has Pro when their role is `paid_user` or `admin`, or
+while `users.pro_until` is in the future. The access token check reads both on every request,
+so a change applies at once. There is no real payment yet: the "To‘lash"
+button calls `POST /v1/pro/purchase`, which turns Pro on for a month without charging; an admin
+can also give Pro by date.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/pro` | the offer screen: price and the caller's plan (signed in, any role) |
+| POST | `/v1/pro/purchase` | the pay button: one more month of Pro, no real payment yet (signed in) |
+| PUT | `/v1/admin/users/{id}/pro` | set or clear `pro_until` (admin) |
+
+`GET /v1/pro` response:
+
+```json
+{"price_uzs": 16000, "period": "month", "plan": "free", "pro_until": null}
+```
+
+`price_uzs` comes from `PRO_PRICE_UZS` (default 16000).
+
+`POST /v1/pro/purchase` body: `{"payment_method": "payme"}` (`payme` or `click`, case-insensitive;
+anything else is 422). Nothing is charged yet: the call adds one month to `pro_until`, counted from
+the current `pro_until` when that is still in the future, else from now, and answers
+
+```json
+{"payment_method": "payme", "amount_uzs": 16000, "paid": false, "plan": "pro",
+ "pro_until": "2026-11-25T13:20:00Z"}
+```
+
+`paid` stays `false` until Payme and Click are connected; the app can show the result as a
+successful payment. Real payments are on the project to-do list; the endpoint and its response
+stay the same then, only `paid` becomes `true` after a confirmed payment.
+
+`PUT /v1/admin/users/{id}/pro` body: `{"until": "2026-11-25T00:00:00+05:00"}` (RFC 3339) gives Pro
+until then; `{"until": null}` or a past date ends it. Response: the [user object](#user-object).
+404 for an unknown or deleted user.
+
+What the free plan allows, and what Pro opens:
+
+| | Free | Pro |
+|---|---|---|
+| activities | the child's plan activity of the day; no added activities in today's list, no similar activities; `POST /v1/children/{id}/completions` for any other activity is 403 `this needs Birga Pro` (repeating today's completion to change its note still works) | any activity |
+| children | one: a second `POST /v1/children` is 403 `this needs Birga Pro: the free plan has 1 child` | any number |
+| articles | the daily article, today or earlier; others `locked` and 403 ([rule](#one-article-a-day-on-the-free-plan)) | every published article |
+| videos | the daily video, today or earlier; others `locked` and 403 | every published post |
+| tips | the daily tip; others `locked` with empty texts | every tip |
+| milestones | the list and marks; advice is empty (`advice_locked`), no monthly report | advice, related activities, monthly report |
+
+Free-plan users get 403 (-21) `this needs Birga Pro` on Pro-only actions. Children added while a
+user had Pro stay after Pro ends; only adding more is blocked.
+
+### Topics
+
+Tags for tips, articles and videos whose subject is not a goal ("Ovqat", "Uyqu", "Ekran
+vaqti"). Same shape and name rules as [goals](#goals): `name_uz`, `name_ru`, `name_en` required,
+at most 100 characters, each unique among active topics ignoring case (409 otherwise).
+Migration `000020` adds Ovqat, Uyqu, Nutq, His-tuyg‘ular, Ekran vaqti, Xulq-atvor and O‘yin.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/topics` | active topics, oldest first, not paged (no token) |
+| POST | `/v1/admin/topics` | create a topic |
+| PATCH | `/v1/admin/topics/{id}` | rename it (names present change) |
+| DELETE | `/v1/admin/topics/{id}` | soft-delete it; tagged content keeps the id |
+
+Response: a topic object `{id, name_uz, name_ru, name_en, created_at, updated_at}`.
+
+### Tips ("Kun maslahati")
+
+One- or two-sentence advice for parents: the "Kun maslahati" card on the home screen and the
+Kutubxona > Maslahat tab.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/admin/tips` | create a tip |
+| GET | `/v1/admin/tips` | tips in every status: `q`, `status`, `topic_id`, `age`, `limit`, `offset` |
+| GET | `/v1/admin/tips/{id}` | one tip in any status |
+| PATCH | `/v1/admin/tips/{id}` | change some fields, including the status |
+| DELETE | `/v1/admin/tips/{id}` | soft-delete a tip |
+| GET | `/v1/me/tips/daily` | today's tip for the signed-in user |
+| GET | `/v1/tips` | published tips: `q`, `topic_id`, `age`, `limit`, `offset` (signed in) |
+
+Create body:
+
+```json
+{"text_uz": "Ovqat paytida telefonni chetga qo‘ying.", "text_ru": "Во время еды отложите телефон.",
+ "text_en": "Put the phone away at mealtimes.", "topic_id": "9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e",
+ "min_age": 2, "max_age": 6, "status": "published"}
+```
+
+- `text_uz`, `text_ru`, `text_en` are required, trimmed, at most 500 characters each (422).
+- `topic_id` is required and must be an active [topic](#topics) (422 `topic_id is not an active topic ...`).
+  Unlike articles and posts a tip always has a topic (the daily tip rotates by topic), so on
+  `PATCH` it can be changed to another topic but not removed: `""` is 422.
+- `min_age`/`max_age` within 2..6, `min_age <= max_age` (422).
+- `status` is `published`, `in_review` (the default) or `unpublished`; only `published` reaches the app.
+- `q` searches the texts in every language, ignoring case (at most 100 characters).
+
+Daily tip: `{"day": "2026-10-25", "tip": {tip object}}`. The tip is picked the first time the
+day is asked for, stored in `user_daily_tips` and stays the same all day. Among published tips it
+prefers one whose age range fits one of the user's children, then one never shown to the user,
+then the one shown longest ago, then the topic shown longest ago (so the days rotate through the
+topics), then the oldest. A stored pick that was unpublished or deleted since is replaced. 404
+`no published tip yet` when no tip is published.
+
+`GET /v1/tips` for a user without Pro: tips that were never the user's daily tip come back with
+`locked: true` and empty texts, so the app can show them as locked cards. Pro users get every
+text and `locked: false`.
+
+Tip object: `id`, `text_uz`, `text_ru`, `text_en`, `topic_id`, `min_age`, `max_age`, `status`,
+`created_at`, `updated_at`, `locked` (only `true` on `GET /v1/tips`, see above).
 
 ### Goals
 
@@ -468,7 +596,8 @@ The signed-in user's own account, for the app's profile page. All of these need
 #### Get profile
 
 Response `data` is the [user object](#user-object) plus `role` (`unverified_user`, `user`, `paid_user` or `admin`,
-the current `user_auth.role`).
+the current `user_auth.role`). Here `plan` counts every way to have [Birga Pro](#birga-pro),
+including the role.
 
 #### Edit profile
 
@@ -529,6 +658,16 @@ keep this action low-key and ask for confirmation; the API does not.
 children ([child object](#children-add-a-child-signed-in) fields). Use
 `GET /v1/children/{id}` for one child's page.
 
+### Child age in months
+
+Every client sends and reads a child's age in **months** (`age_months`). The steps the app offers
+are 1 to 11 months, then 1, 1.5, 2 ... 7 years (12 to 84 months in steps of 6), then 8 to 12 years
+(96 to 144 in steps of 12). The database keeps years as a fraction (`children.age`, 1 month =
+1/12); the conversion happens in one place, the child mapping of `internal/dbstore/child.go`
+(`domain.ChildAgeToDB` and `domain.ChildAgeFromDB`), so no handler or client deals with years.
+Content age ranges (`min_age`/`max_age` of activities, articles, videos, tips) stay in whole years
+2 to 6; a child is matched by its whole years (`age_months / 12`) clamped to 2..6.
+
 ### Children: add a child (signed in)
 
 | Method | Path | Description |
@@ -540,14 +679,15 @@ its `user_children` link to the caller are written in one transaction, so the ca
 child's first parent and a child never exists without one.
 
 ```json
-{"name": "Amir", "age": 4, "gender": "male", "photo_id": null,
+{"name": "Amir", "age_months": 54, "gender": "male", "photo_id": null,
  "goal_ids": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00", "8d0e6f1a-3b2c-4d5e-9f8a-7b6c5d4e3f2a"]}
 ```
 
 | Field | Rules |
 |---|---|
 | `name` | required, trimmed, at most 100 characters |
-| `age` | required, years, 0 to 18 (wider than the 2 to 6 activity range so the profile stays valid) |
+| `age_months` | required, the age in **months**: 1 to 11, then half years from 12 to 84 (12, 18, 24 ... 84), then whole years from 96 to 144 (8 to 12 years); anything else is 422 |
+| `age` | old field, whole years; read (times 12) only when `age_months` is missing. New clients send `age_months` |
 | `gender` | required, `male` or `female` (case-insensitive) |
 | `photo_id` | optional id from `POST /v1/media`; an unknown id is 422 |
 | `goal_ids` | required, 1 to 20 goal ids from [`GET /v1/goals`](#goals), the goals picked for this child; repeats are stored once; an id that is not an active goal is 422 `goals contains ids that are not active goals, ...` |
@@ -556,14 +696,15 @@ In the same transaction the child gets its first [7-day plan](#children-7-day-pl
 made from its goals and age (when no published activity fits the age yet, the plan is made on
 the first `GET .../plan` instead).
 
-Response `data` is the child: `id`, `name`, `age`, `gender`, `photo_id`, `photo_url` (see [Media](#media-public)), `goal_ids`,
+Response `data` is the child: `id`, `name`, `age_months`, `age` (whole years, `age_months / 12`
+rounded down, for old clients), `gender`, `photo_id`, `photo_url` (see [Media](#media-public)), `goal_ids`,
 `created_at`, `updated_at`. Use `id` in the `/v1/children/{id}/...` endpoints below. Errors: 400 bad JSON,
-401 no or invalid token, 422 a rule above.
+401 no or invalid token, 403 a second child on the free plan (see [Birga Pro](#birga-pro)), 422 a rule above.
 
 ```bash
 curl -X POST localhost:8080/v1/children \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Amir","age":4,"gender":"male","goal_ids":["'$GOAL'"]}'
+  -d '{"name":"Amir","age_months":54,"gender":"male","goal_ids":["'$GOAL'"]}'
 ```
 
 `GET /v1/me/children` lists the caller's children and `GET /v1/children/{id}` returns one
@@ -576,11 +717,11 @@ second parent.
 |---|---|---|
 | PATCH | `/v1/children/{id}` | change some fields of one of the caller's children |
 
-Needs [user authentication](#user-authentication); any role. Body: any of `name`, `age`,
-`gender`, `photo_id`, `goal_ids`. Omitted or `null` fields are kept; `""` clears `photo_id`;
+Needs [user authentication](#user-authentication); any role. Body: any of `name`, `age_months`
+(or the old `age` in years), `gender`, `photo_id`, `goal_ids`. Omitted or `null` fields are kept; `""` clears `photo_id`;
 `goal_ids` replaces the child's goals (1 to 20 active goal ids, 422 otherwise). The given fields
 follow the [add-child rules](#children-add-a-child-signed-in) (`usecases/child_updater`): `name`
-1 to 100 characters after trimming, `age` 0 to 18, `gender` `male` or `female`
+1 to 100 characters after trimming, `age_months` in the steps above, `gender` `male` or `female`
 (case-insensitive), `photo_id` an id from `POST /v1/media` (unknown: 422). An empty body is 422
 `nothing to update`. A child the caller is not a parent of, or a deleted one, is 404. Any of the
 child's parents may edit it. `updated_at` is set on every edit.
@@ -590,7 +731,7 @@ Response `data`: the child, as for add.
 ```bash
 curl -X PATCH localhost:8080/v1/children/$CHILD \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Amirjon","age":5}'
+  -d '{"name":"Amirjon","age_months":60}'
 ```
 
 A changed age or changed goals apply to the child's next plan; the current plan keeps its days.
@@ -608,6 +749,55 @@ child: a parent with three children has three plans and three streaks.
 | GET | `/v1/children/{id}/completions` | the child's completions, newest first (paged) |
 | GET | `/v1/children/{id}/streak` | streak and progress counters |
 | GET | `/v1/children/{id}/streak/days` | the streak calendar: done and missed days |
+| GET | `/v1/children/{id}/today` | today's list: plan activity and added activities |
+| POST | `/v1/children/{id}/today/extras` | add an activity to today's list (Birga Pro) |
+
+#### Today's list
+
+`GET /v1/children/{id}/today`: the "Bugungi reja" list (Figma 40-42), the plan activity of the
+day and the activities a Pro parent added. It makes the child's first plan when it has none,
+like `GET .../plan`.
+
+```json
+{"day": "2026-10-25",
+ "plan": {"plan_day": 3, "status": "today", "done": false, "activity": {activity object}},
+ "extras": [{"activity": {activity object}, "done": true, "added_at": "2026-10-25T09:12:00Z"}],
+ "done_count": 1}
+```
+
+- `plan` is the open plan day (`status` `today`, `done` false) or the plan day done today
+  (`status` `done`, `done` true). It is `null` when neither exists: the plan was finished on an
+  earlier day (start the next one with `POST /v1/children/{id}/plan`), or no activity fits the
+  child's age.
+- `extras` are the added activities, oldest first. `done` means the child completed it today.
+- `done_count` counts the done items ("2 tasi bajarildi").
+
+`POST /v1/children/{id}/today/extras` (Birga Pro) adds an activity to today's list. Send one of:
+
+- `{"goal_id": "..."}`: "Qaysi maqsad uchun yangi mashg‘ulot?" (40a). The backend picks a
+  published activity for the child's age (2 to 6) that serves that goal and is not in today's
+  list yet. Activities the child never did come first, then the one done longest ago. 404
+  `no other published activity serves this goal at the child's age` when none is left, 422 for a
+  goal that is not active.
+- `{"activity_id": "..."}`: "Bugungi rejaga qo‘shish" and "Yana bittasi" (42). 404 for an
+  unknown or unpublished activity.
+
+Response: the new item `{"activity", "done", "added_at"}`. Adding an activity that is already
+in the list returns it unchanged. A day holds at most 10 added activities (422). Without Pro the
+call is 403 `this needs Birga Pro`; sending both fields or neither is 422.
+
+Mark an extra done with the normal [Complete](#complete) call. It goes into the history and
+`done_count`, but not the streak: only plan days keep the streak.
+
+#### Similar activities
+
+`GET /v1/activities/{id}/similar?child_id=&limit=3` (signed in, Birga Pro): "O‘xshash
+mashg‘ulotlar" on the activity page (42). It returns an array of published activities that share
+a goal with this one, without the activity itself. With `child_id` (one of the caller's
+children, else 404) they fit the child's age, and the ones the child never did, then did longest
+ago, come first. Without it they overlap the activity's age range. Then come those sharing more
+goals, then the newest. `limit` is 1 to 10 (default 3, 422 outside). It is 404 for an unknown or
+unpublished activity and 403 without Pro.
 
 #### Recommendation
 
@@ -639,6 +829,8 @@ curl -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/recomme
   toward the child's streak; `plan_day` in the response names the day (1 to 7). Any other
   activity (from the catalogue, or a later plan day ahead of time) only goes into the history:
   `plan_day` is `null`.
+- That second kind needs [Birga Pro](#birga-pro): on the free plan it is 403 (-21) `this needs
+  Birga Pro` and nothing is stored. Repeating a completion already made today still works.
 
 Response: a [completion object](#completion-object) with `plan_day`.
 
@@ -763,6 +955,96 @@ its name from [`GET /v1/goals`](#goals)); `null` when the child had no goals. `a
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
 curl -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
 ```
+
+### Development milestones ("Ko‘nikmalar")
+
+Milestones (skills) are what most children can do by an age, in four domains (Figma 27, 44, 45).
+Migration `000022` seeds 57 published milestones for 2 to 5 years, based on the CDC "Learn the Signs.
+Act Early." list, in Uzbek, Russian and English. Their advice texts are empty until the content team
+writes them.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/admin/milestones` | create a milestone |
+| GET | `/v1/admin/milestones` | milestones in every status: `domain`, `age_months`, `status`, `q`, `limit`, `offset` |
+| GET | `/v1/admin/milestones/{id}` | one milestone in any status |
+| PATCH | `/v1/admin/milestones/{id}` | change some fields, including the status |
+| DELETE | `/v1/admin/milestones/{id}` | soft-delete a milestone |
+| GET | `/v1/children/{id}/milestones` | the child's milestones of one stage with ticks (`age_months`) |
+| PUT | `/v1/children/{id}/milestones/{milestone_id}` | mark it achieved ("O‘zlashtirdi deb belgilash") |
+| DELETE | `/v1/children/{id}/milestones/{milestone_id}` | remove the mark |
+| GET | `/v1/milestones/{id}` | one published milestone with its advice and activities (`child_id`) |
+| GET | `/v1/children/{id}/report` | the monthly report (Birga Pro, `month=2026-10`) |
+
+Milestone object:
+
+```json
+{"id": "...", "domain": "communication", "age_months": 48, "sort_order": 1,
+ "text_uz": "4 va undan ko‘p so‘zli gaplar tuzadi", "text_ru": "Говорит предложениями из 4 и более слов",
+ "text_en": "Says sentences with four or more words",
+ "meaning_uz": "", "meaning_ru": "", "meaning_en": "",
+ "how_to_uz": "", "how_to_ru": "", "how_to_en": "",
+ "specialist_uz": "", "specialist_ru": "", "specialist_en": "",
+ "activity_ids": [], "has_advice": false, "advice_locked": false, "status": "published",
+ "created_at": "...", "updated_at": "..."}
+```
+
+| Field | Rules |
+|---|---|
+| `domain` | `communication` (Nutq va muloqot), `social` (His-tuyg‘ular va do‘stlik), `thinking` (Fikrlash) or `movement` (Harakat); the app holds the labels |
+| `age_months` | the stage, 2 to 72 (the seed uses 24, 30, 36, 48 and 60); the app makes the label ("3 yosh") |
+| `sort_order` | order within a domain and stage, default 0 |
+| `text_*` | required, trimmed, at most 300 characters |
+| `meaning_*` | "Bu nimani anglatadi", optional, at most 3000 characters |
+| `how_to_*` | "Qanday rivojlantirish", one step per line, optional, at most 3000 characters |
+| `specialist_*` | "Qachon mutaxassisga murojaat qilish kerak", optional, at most 3000 characters |
+| `activity_ids` | "Mos mashg‘ulotlar", up to 10 activity ids; unknown or deleted ids are 422 |
+| `status` | `published`, `in_review` (the default) or `unpublished`; only `published` reaches the app |
+| `has_advice` | read only: any advice text or activity is set, so the app shows the "Maslahat" link |
+| `advice_locked` | read only: the advice exists but was left out because the caller has no Birga Pro |
+
+Every list is ordered by stage, then domain in the order above, then `sort_order`. On `PATCH`
+the required texts cannot be emptied, the advice texts can; `activity_ids`, when sent, replaces
+the list. Deleting a milestone keeps the children's marks but no longer shows or counts them.
+
+#### A child's milestones
+
+`GET /v1/children/{id}/milestones?age_months=48`:
+
+```json
+{"age_months": 48, "stages": [24, 30, 36, 48, 60], "achieved": 5, "total": 13,
+ "domains": [{"domain": "communication", "milestones": [{milestone object, "achieved": true, "achieved_at": "2026-10-20T08:00:00Z"}]},
+             {"domain": "social", "milestones": []}, {"domain": "thinking", "milestones": []}, {"domain": "movement", "milestones": []}]}
+```
+
+- Without `age_months`, the stage is the child's: the highest stage at or below the child's age
+  (`age` × 12 months). A child younger than every stage gets the first one. `age_months` outside
+  2..72 is 422.
+- `stages` lists the stages that have published milestones, for the stage picker.
+- `domains` always holds the four domains in order. `achieved` and `total` count the stage.
+- Without Birga Pro the advice fields are empty and `activity_ids` is `[]`; `has_advice` and
+  `advice_locked` tell the app to show a locked "Maslahat".
+
+`PUT /v1/children/{id}/milestones/{milestone_id}` marks a published milestone for the child,
+on any plan; marking again keeps the first time. `DELETE` removes the mark. The marks are the
+child's, so every parent of the child sees them. 404 for a child that is not the caller's or a
+milestone that is unknown or not published.
+
+#### One milestone ("Maslahat")
+
+`GET /v1/milestones/{id}?child_id=` returns a published milestone with `achieved` and
+`achieved_at` for that child (`false` and `null` without `child_id`) and `activities`, the
+related published activities as [activity objects](#activity-object). Without Birga Pro the
+advice fields are empty and `activities` is `[]`. 404 for an unknown or unpublished milestone;
+`child_id` must be one of the caller's children (404) and a UUID (422).
+
+#### Monthly report
+
+`GET /v1/children/{id}/report?month=2026-10` (Birga Pro, Figma 44):
+`{"month": "2026-10", "new_milestones": 3, "completions": 26}`. `new_milestones` counts the
+milestones marked in that month and `completions` the activities done, both in Uzbekistan time.
+Without `month` it is the current month. A month not shaped like `2026-10` is 422; free users
+get 403.
 
 ### OTP (public)
 
@@ -1131,6 +1413,7 @@ user also deletes their children that have no other parent, and unlinks them fro
 | GET | `/v1/admin/users/{id}` | one user |
 | PATCH | `/v1/admin/users/{id}` | change some fields of a user |
 | DELETE | `/v1/admin/users/{id}` | soft-delete a user; `data` is `null` |
+| PUT | `/v1/admin/users/{id}/pro` | give [Birga Pro](#birga-pro) until a date, or end it |
 
 Create body (only `phone_number` is required):
 
@@ -1189,6 +1472,8 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `agreed_on_conditions` | bool | consent given at sign-up (or later through `PATCH /v1/me`); `false` for older users and users created by an admin |
 | `reminder_enabled` | bool | daily reminder on or off, `false` by default |
 | `reminder_time` | string | daily reminder time, `HH:MM` in Uzbekistan time, `"18:00"` by default |
+| `plan` | string | `pro` while the user has [Birga Pro](#birga-pro), otherwise `free`. On `/v1/me` it also counts the `paid_user` and `admin` roles; in admin user lists it follows `pro_until` only |
+| `pro_until` | RFC 3339 timestamp or `null` | when Pro given by date ends; `null` when never given |
 | `created_at`, `updated_at` | RFC 3339 timestamp | `updated_at` changes on every update and on delete |
 
 `deleted_at` is never returned: deleted users are not returned at all.
@@ -1211,6 +1496,8 @@ Deleted goals are never returned, so `deleted_at` is not part of the object.
 | `title_uz`, `title_ru`, `title_en` | string | the API returns every language; the app and dashboard show the one the user picked |
 | `description_uz`, `description_ru`, `description_en` | string | `title_en` and `description_en` are `""` for activities created before English was added (`000015`) until an admin fills them in |
 | `main_idea_uz`, `main_idea_ru`, `main_idea_en` | string | the "Katta g'oya" / "Главная идея" / "Big idea" box on the activity page: what the activity teaches. Optional, `""` until an admin fills it in; the app hides the box when the text for the user's language is empty |
+| `easier_uz`, `easier_ru`, `easier_en` | string | the "Osonroq" variant (Figma 41, a Birga Pro box in the app); `""` when there is none |
+| `harder_uz`, `harder_ru`, `harder_en` | string | the "Qiyinroq" variant; `""` when there is none. The API always returns both; the app shows them to Pro users and a locked box to the others |
 | `goal_ids` | array of UUID strings | the [goals](#goals) the activity serves; normally 1 to 5, empty only if its goals were deleted |
 | `min_age`, `max_age` | int | years, inclusive |
 | `duration_minutes` | int | |
@@ -1232,9 +1519,11 @@ Soft-deleted activities are never returned, so `deleted_at` is not part of the o
 | `expected_read_time` | int | minutes |
 | `min_age`, `max_age` | int | years, inclusive (the "2–5 yosh" tag) |
 | `goal_id` | UUID string | the [goal](#goals) the article serves (the tag, e.g. "Xulq-atvor") |
+| `topic_id` | UUID string or `null` | optional [topic](#topics) tag (e.g. "Uyqu"); when set the app shows it instead of the goal name. Create: omitted, `null` or `""` means none; update: `""` removes it, omitted or `null` keeps it |
 | `status` | string | `published`, `in_review` or `unpublished` |
 | `created_at`, `updated_at` | RFC 3339 timestamp | |
 | `is_read` | bool | only on the signed-in endpoints: whether this user marked it read |
+| `locked` | bool | only on `GET /v1/articles`: `true` when the article does not open for a free-plan user (texts are empty then) |
 
 Soft-deleted articles are never returned, so `deleted_at` is not part of the object.
 
@@ -1247,6 +1536,7 @@ Soft-deleted articles are never returned, so `deleted_at` is not part of the obj
 | `video_id` | UUID string | the uploaded video |
 | `video_url` | string | `/v1/media/{video_id}`; play it from the API base address |
 | `goal_id` | UUID string | the [goal](#goals) the video serves (the tag, e.g. "Nutq") |
+| `topic_id` | UUID string or `null` | optional [topic](#topics) tag, same rules as on articles; also on the `next` previews |
 | `min_age`, `max_age` | int | years, inclusive ("3–5 yosh") |
 | `duration` | number | minutes, a decimal (`4.2` is 4:12) |
 | `suggestion_uz`, `suggestion_ru`, `suggestion_en` | string | the "Tavsiya" line; `""` when there is none |

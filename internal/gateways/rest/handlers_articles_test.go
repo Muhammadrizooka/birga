@@ -20,12 +20,13 @@ type fakeArticles struct {
 	readID     string
 	deletedID  string
 	noTomorrow bool
+	pro        bool
 	err        error
 }
 
 func (f *fakeArticles) useCases() ArticleUseCases {
 	return ArticleUseCases{
-		Creator: articleCreatorFunc(f.create), Lister: articleListerFunc(f.list), Getter: articleGetterFunc(f.get),
+		Creator: articleCreatorFunc(f.create), Lister: articleListerFunc(f.list), Getter: fakeArticleGetter{f},
 		Updater: articleUpdaterFunc(f.update), Deleter: articleDeleterFunc(f.delete), Reader: articleReaderFunc(f.read),
 		Daily: f,
 	}
@@ -91,7 +92,6 @@ func (f *fakeArticles) History(_ context.Context, userID string, limit, offset i
 type (
 	articleCreatorFunc func(context.Context, domain.Article) (domain.Article, error)
 	articleListerFunc  func(context.Context, domain.ArticleFilter) ([]domain.Article, int, error)
-	articleGetterFunc  func(context.Context, string, string) (domain.Article, error)
 	articleUpdaterFunc func(context.Context, string, domain.ArticleUpdate) (domain.Article, error)
 	articleDeleterFunc func(context.Context, string) error
 	articleReaderFunc  func(context.Context, string, string) error
@@ -103,10 +103,6 @@ func (f articleCreatorFunc) Execute(ctx context.Context, a domain.Article) (doma
 
 func (f articleListerFunc) Execute(ctx context.Context, fl domain.ArticleFilter) ([]domain.Article, int, error) {
 	return f(ctx, fl)
-}
-
-func (f articleGetterFunc) Execute(ctx context.Context, id, readerID string) (domain.Article, error) {
-	return f(ctx, id, readerID)
 }
 
 func (f articleUpdaterFunc) Execute(ctx context.Context, id string, u domain.ArticleUpdate) (domain.Article, error) {
@@ -175,8 +171,22 @@ func TestArticles_App(t *testing.T) {
 		t.Errorf("is_read not shown: %+v", list)
 	}
 
-	if code, _ := do(t, s, http.MethodGet, "/v1/articles/"+testID, "", auth); code != http.StatusOK || d.arts.readerID != testUserID {
-		t.Errorf("get: %d reader %q", code, d.arts.readerID)
+	if code, _ := do(t, s, http.MethodGet, "/v1/articles/"+testID, "", auth); code != http.StatusOK || d.arts.readerID != testUserID ||
+		d.arts.pro {
+		t.Errorf("get: %d reader %q pro %v", code, d.arts.readerID, d.arts.pro)
+	}
+
+	if code, _ := do(t, s, http.MethodGet, "/v1/articles/"+testID, "", proBearer); code != http.StatusOK || !d.arts.pro {
+		t.Errorf("get as pro: %d", code)
+	}
+
+	if code, _ := do(t, s, http.MethodGet, "/v1/articles?max_minutes=3", "", auth); code != http.StatusOK ||
+		d.arts.filter.LockFor != testUserID || d.arts.filter.MaxMinutes != 3 {
+		t.Errorf("free list: %d %+v", code, d.arts.filter)
+	}
+
+	if code, _ := do(t, s, http.MethodGet, "/v1/articles", "", proBearer); code != http.StatusOK || d.arts.filter.LockFor != "" {
+		t.Errorf("pro list: %d %+v", code, d.arts.filter)
 	}
 
 	if code, _ := do(t, s, http.MethodPost, "/v1/articles/"+testID+"/read", "", auth); code != http.StatusOK ||
@@ -253,4 +263,16 @@ func mustJSON(t *testing.T, data any) map[string]json.RawMessage {
 	mustDecode(t, data, &m)
 
 	return m
+}
+
+type fakeArticleGetter struct{ f *fakeArticles }
+
+func (g fakeArticleGetter) Execute(ctx context.Context, id, readerID string) (domain.Article, error) {
+	return g.f.get(ctx, id, readerID)
+}
+
+func (g fakeArticleGetter) ForUser(ctx context.Context, userID string, pro bool, id string) (domain.Article, error) {
+	g.f.pro = pro
+
+	return g.f.get(ctx, id, userID)
 }

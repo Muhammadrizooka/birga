@@ -29,6 +29,7 @@ type dbPost struct {
 	TitleEn      string    `db:"title_en"`
 	VideoID      string    `db:"video_id"`
 	GoalID       string    `db:"goal_id"`
+	TopicID      *string   `db:"topic_id"`
 	MinAge       int16     `db:"min_age"`
 	MaxAge       int16     `db:"max_age"`
 	Duration     float64   `db:"duration"`
@@ -45,7 +46,7 @@ type dbPost struct {
 
 // postColumns selects from "posts p"; duration is read as float8.
 const postColumns = `
-	p.id, p.title_uz, p.title_ru, p.title_en, p.video_id, p.goal_id, p.min_age, p.max_age,
+	p.id, p.title_uz, p.title_ru, p.title_en, p.video_id, p.goal_id, p.topic_id, p.min_age, p.max_age,
 	p.duration::float8 AS duration, p.suggestion_uz, p.suggestion_ru, p.suggestion_en,
 	p.questions_uz, p.questions_ru, p.questions_en, p.status, p.created_at, p.updated_at`
 
@@ -55,13 +56,13 @@ func (r *postRepo) Create(ctx context.Context, p domain.Post) (domain.Post, erro
 	q := `
 		INSERT INTO posts AS p (
 			title_uz, title_ru, title_en, video_id, goal_id, min_age, max_age, duration,
-			suggestion_uz, suggestion_ru, suggestion_en, questions_uz, questions_ru, questions_en, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			suggestion_uz, suggestion_ru, suggestion_en, questions_uz, questions_ru, questions_en, status, topic_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING ` + postColumns
 
 	return r.one(ctx, l, q,
 		p.TitleUz, p.TitleRu, p.TitleEn, p.VideoID, p.GoalID, p.MinAge, p.MaxAge, p.Duration,
-		p.SuggestionUz, p.SuggestionRu, p.SuggestionEn, p.QuestionsUz, p.QuestionsRu, p.QuestionsEn, p.Status,
+		p.SuggestionUz, p.SuggestionRu, p.SuggestionEn, p.QuestionsUz, p.QuestionsRu, p.QuestionsEn, p.Status, topicOrNull(p.TopicID),
 	)
 }
 
@@ -135,18 +136,12 @@ func (r *postRepo) List(ctx context.Context, f domain.PostFilter) ([]domain.Post
 
 // WasDaily reports whether the post was the user's daily video on day or before.
 func (r *postRepo) WasDaily(ctx context.Context, userID, postID string, day time.Time) (bool, error) {
-	var ok bool
+	return r.daily().wasDaily(ctx, userID, postID, day)
+}
 
-	if err := r.store.sqlClientByCtx(ctx).QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM user_daily_posts WHERE user_id = $1 AND post_id = $2 AND day <= $3)`,
-		userID, postID, day,
-	).Scan(&ok); err != nil {
-		logger.FromCtx(ctx, "postRepo.WasDaily").Error("sqlClient.QueryRow", zap.Error(err))
-
-		return false, errs.Errf(errs.ErrInternal, "%s", err.Error())
-	}
-
-	return ok, nil
+// DailyIDs returns which of ids were the user's daily video on day or earlier.
+func (r *postRepo) DailyIDs(ctx context.Context, userID string, ids []string, day time.Time) (map[string]bool, error) {
+	return r.daily().dailyIDs(ctx, userID, ids, day)
 }
 
 func (r *postRepo) daily() dailyPicks {
@@ -266,6 +261,8 @@ func (r *postRepo) one(ctx context.Context, l *zap.Logger, q string, args ...any
 		switch {
 		case pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "posts_video_id_fkey":
 			return domain.Post{}, errs.ErrVideoNotFound
+		case pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "posts_topic_id_fkey":
+			return domain.Post{}, errs.ErrUnknownTopic
 		case pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "posts_goal_id_fkey":
 			return domain.Post{}, errs.ErrUnknownGoals
 		case pgErr.Code == pgCheckViolation && pgErr.ConstraintName == "posts_age_range_chk":
@@ -308,6 +305,14 @@ func postWhere(f domain.PostFilter) (string, []any) {
 		add(func(n string) string { return "p.goal_id = " + n + "::uuid" }, f.GoalID)
 	}
 
+	if f.TopicID != "" {
+		add(func(n string) string { return "p.topic_id = " + n + "::uuid" }, f.TopicID)
+	}
+
+	if f.MaxMinutes > 0 {
+		add(func(n string) string { return "p.duration <= " + n }, f.MaxMinutes)
+	}
+
 	if f.Age > 0 {
 		add(func(n string) string { return "p.min_age <= " + n + " AND p.max_age >= " + n }, f.Age)
 	}
@@ -342,6 +347,10 @@ func postSet(upd domain.PostUpdate) (string, []any) {
 		}
 	}
 
+	if upd.TopicID != nil {
+		add("topic_id", nullIfEmpty(*upd.TopicID))
+	}
+
 	if upd.MinAge != nil {
 		add("min_age", *upd.MinAge)
 	}
@@ -365,6 +374,7 @@ func (p dbPost) toDomain() domain.Post {
 		TitleEn:      p.TitleEn,
 		VideoID:      p.VideoID,
 		GoalID:       p.GoalID,
+		TopicID:      p.TopicID,
 		MinAge:       int(p.MinAge),
 		MaxAge:       int(p.MaxAge),
 		Duration:     p.Duration,

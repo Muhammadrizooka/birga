@@ -19,6 +19,8 @@ const (
 	// userIDKey and userRoleKey hold the signed-in user's id and role in the gin context, set by userAuth.
 	userIDKey   = "user_id"
 	userRoleKey = "user_role"
+	// userProKey holds whether the signed-in user has Birga Pro.
+	userProKey = "user_pro"
 )
 
 // adminAuth guards content-management endpoints. A request with an Authorization header must carry
@@ -78,6 +80,7 @@ func (s *Server) userAuth(roles ...domain.UserRole) gin.HandlerFunc {
 
 		c.Set(userIDKey, p.UserID)
 		c.Set(userRoleKey, p.Role)
+		c.Set(userProKey, p.Pro)
 		c.Next()
 	}
 }
@@ -85,6 +88,16 @@ func (s *Server) userAuth(roles ...domain.UserRole) gin.HandlerFunc {
 // currentUserID returns the id userAuth stored; it is empty on routes without userAuth.
 func currentUserID(c *gin.Context) string {
 	return c.GetString(userIDKey)
+}
+
+// currentPrincipal returns the signed-in user as userAuth stored it.
+func currentPrincipal(c *gin.Context) domain.Principal {
+	return domain.Principal{UserID: currentUserID(c), Role: currentUserRole(c), Pro: currentUserPro(c)}
+}
+
+// currentUserPro reports whether the signed-in user has Birga Pro; false on routes without userAuth.
+func currentUserPro(c *gin.Context) bool {
+	return c.GetBool(userProKey)
 }
 
 // currentUserRole returns the role userAuth stored; it is empty on routes without userAuth.

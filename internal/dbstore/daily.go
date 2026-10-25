@@ -16,8 +16,12 @@ import (
 // table and column names are fixed fragments set in code; values never enter the SQL text.
 type dailyPicks struct {
 	store sqlClientProvider
-	// content is the content table: id, goal_id, min_age, max_age, status, created_at, deleted_at.
+	// content is the content table: id, goal_id (or topicColumn), min_age, max_age, status,
+	// created_at, deleted_at.
 	content string
+	// topicColumn, when set, is the column the days rotate through instead of goal_id, and the
+	// children's goals are not matched (tips have topics, not goals).
+	topicColumn string
 	// daily is the per-day table: user_id, day, <idColumn>, created_at.
 	daily    string
 	idColumn string
@@ -63,13 +67,19 @@ func (d dailyPicks) set(ctx context.Context, userID string, day time.Time, id st
 }
 
 // pick chooses the next daily item for the user among published items, leaving out the ids in
-// exclude. Preference, in order: the goal is one of the goals of the user's children; the age
+// exclude. Preference, in order: the goal is one of the goals of the user's children (unless
+// topicColumn is set); the age
 // range fits one of the children; not shown as a daily item before (nor finished, when reads is
 // set); the item shown longest ago; the goal shown longest ago; the oldest item. ok is false when
 // no published item is left.
 func (d dailyPicks) pick(ctx context.Context, userID string, exclude []string) (string, bool, error) {
 	if exclude == nil {
 		exclude = []string{}
+	}
+
+	group, goalOrder := `goal_id`, `(c.goal_id IN (SELECT goal_id FROM kid_goals)) DESC,`
+	if d.topicColumn != "" {
+		group, goalOrder = d.topicColumn, ``
 	}
 
 	seen, readsJoin := `s.item_id IS NOT NULL`, ``
@@ -90,16 +100,16 @@ func (d dailyPicks) pick(ctx context.Context, userID string, exclude []string) (
 			WHERE user_id = $1 GROUP BY ` + d.idColumn + `
 		),
 		goal_shown AS (
-			SELECT x.goal_id, MAX(dd.day) AS last_day
+			SELECT x.` + group + ` AS group_id, MAX(dd.day) AS last_day
 			FROM ` + d.daily + ` dd JOIN ` + d.content + ` x ON x.id = dd.` + d.idColumn + `
-			WHERE dd.user_id = $1 GROUP BY x.goal_id
+			WHERE dd.user_id = $1 GROUP BY x.` + group + `
 		)
 		SELECT c.id FROM ` + d.content + ` c
 		LEFT JOIN shown s ON s.item_id = c.id
-		LEFT JOIN goal_shown gs ON gs.goal_id = c.goal_id` + readsJoin + `
+		LEFT JOIN goal_shown gs ON gs.group_id = c.` + group + readsJoin + `
 		WHERE c.` + publishedLive + ` AND c.id <> ALL($2::uuid[])
 		ORDER BY
-			(c.goal_id IN (SELECT goal_id FROM kid_goals)) DESC,
+			` + goalOrder + `
 			EXISTS (SELECT 1 FROM kids k WHERE k.age BETWEEN c.min_age AND c.max_age) DESC,
 			` + seen + `,
 			s.last_day NULLS FIRST,
@@ -124,4 +134,49 @@ func (d dailyPicks) oneID(ctx context.Context, name, q string, args ...any) (str
 
 		return "", false, errs.Errf(errs.ErrInternal, "%s", err.Error())
 	}
+}
+
+// wasDaily reports whether id was the user's item on day or an earlier day.
+func (d dailyPicks) wasDaily(ctx context.Context, userID, id string, day time.Time) (bool, error) {
+	var ok bool
+
+	q := `SELECT EXISTS (SELECT 1 FROM ` + d.daily + ` WHERE user_id = $1 AND ` + d.idColumn + ` = $2 AND day <= $3)`
+	if err := d.store.sqlClientByCtx(ctx).QueryRow(ctx, q, userID, id, day).Scan(&ok); err != nil {
+		logger.FromCtx(ctx, "dailyPicks.wasDaily").Error("sqlClient.QueryRow", zap.Error(err), zap.String("table", d.daily))
+
+		return false, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return ok, nil
+}
+
+// dailyIDs returns which of ids were the user's item on day or an earlier day.
+func (d dailyPicks) dailyIDs(ctx context.Context, userID string, ids []string, day time.Time) (map[string]bool, error) {
+	out := make(map[string]bool, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	q := `SELECT DISTINCT ` + d.idColumn + `::text FROM ` + d.daily + `
+		WHERE user_id = $1 AND ` + d.idColumn + ` = ANY($2::uuid[]) AND day <= $3`
+
+	rows, err := d.store.sqlClientByCtx(ctx).Query(ctx, q, userID, ids, day)
+	if err != nil {
+		logger.FromCtx(ctx, "dailyPicks.dailyIDs").Error("sqlClient.Query", zap.Error(err), zap.String("table", d.daily))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	shown, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		logger.FromCtx(ctx, "dailyPicks.dailyIDs").Error("pgx.CollectRows", zap.Error(err))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	for _, id := range shown {
+		out[id] = true
+	}
+
+	return out, nil
 }

@@ -171,7 +171,7 @@ func parentAndChild(t *testing.T, s *DBStore, ctx context.Context, age int) (dom
 		t.Fatalf("Create user: %v", err)
 	}
 
-	child, err := s.Child().Create(ctx, domain.Child{Name: "Laylo", Age: age, Gender: domain.GenderFemale})
+	child, err := s.Child().Create(ctx, domain.Child{Name: "Laylo", AgeMonths: age * 12, Gender: domain.GenderFemale})
 	if err != nil {
 		t.Fatalf("Create child: %v", err)
 	}

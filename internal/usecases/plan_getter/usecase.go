@@ -197,7 +197,7 @@ func (uc *UseCase) repair(ctx context.Context, child domain.Child, plan domain.P
 func newPick(child domain.Child, n int) domain.PlanPick {
 	return domain.PlanPick{
 		ChildID:      child.ID,
-		Age:          min(max(child.Age, domain.MinChildAge), domain.MaxChildAge),
+		Age:          min(max(child.AgeYears(), domain.MinChildAge), domain.MaxChildAge),
 		ChildGoalIDs: child.GoalIDs,
 		ExcludeIDs:   make([]string, 0, domain.PlanLength),
 		Seed:         strconv.Itoa(n),

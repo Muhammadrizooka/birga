@@ -40,6 +40,9 @@ type Request struct {
 	ChildID    string
 	ActivityID string
 	Note       *string
+	// Pro is whether the caller has Birga Pro. Without it only the child's plan day of today can be
+	// recorded (one activity a day on the free plan); other activities are errs.ErrNeedsPro.
+	Pro bool
 }
 
 // UseCase records that a child completed an activity today.
@@ -62,7 +65,9 @@ func New(l logger.Logger, tx txRunner, children childRepo, activities activityRe
 // completion for today (Uzbekistan time). Repeating it the same day returns the same completion and
 // replaces the note when a new one is given. A blank note is stored as no note. When the activity
 // is the open day of the child's plan and no plan day was done today yet, the day is marked done
-// and counts toward the child's streak; Completion.PlanDay then names it.
+// and counts toward the child's streak; Completion.PlanDay then names it. On the free plan
+// (req.Pro false) any other new completion is errs.ErrNeedsPro; repeating today's completion to
+// change its note still works.
 func (uc *UseCase) Execute(ctx context.Context, req Request) (domain.Completion, error) {
 	if req.Note != nil {
 		v := strings.TrimSpace(*req.Note)
@@ -118,6 +123,11 @@ func (uc *UseCase) Execute(ctx context.Context, req Request) (domain.Completion,
 
 		if day > 0 {
 			c.PlanDay = &day
+		}
+
+		// Returning an error rolls the new completion back.
+		if day == 0 && created && !req.Pro {
+			return errs.ErrNeedsPro
 		}
 
 		return nil

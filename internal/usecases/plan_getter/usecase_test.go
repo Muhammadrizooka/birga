@@ -31,7 +31,7 @@ type fakeChildren struct {
 }
 
 func (f fakeChildren) GetForParent(_ context.Context, id, _ string) (domain.Child, error) {
-	return domain.Child{ID: id, Age: 9, GoalIDs: f.goals}, f.err
+	return domain.Child{ID: id, AgeMonths: 108, GoalIDs: f.goals}, f.err
 }
 
 // fakePlans serves a catalogue of n activities a0..a(n-1) and keeps one current plan.
@@ -245,7 +245,7 @@ func TestExecute_Errors(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	f := &fakePlans{n: 10}
-	if err := newUseCase(f, "A").Start(context.Background(), domain.Child{ID: "c1", Age: 3, GoalIDs: []string{"A"}}); err != nil || f.created != 1 {
+	if err := newUseCase(f, "A").Start(context.Background(), domain.Child{ID: "c1", AgeMonths: 36, GoalIDs: []string{"A"}}); err != nil || f.created != 1 {
 		t.Fatalf("Start: %v, created %d", err, f.created)
 	}
 

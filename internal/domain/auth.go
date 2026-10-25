@@ -74,6 +74,8 @@ type UserAuth struct {
 	Role             UserRole
 	AccessTokenHash  string
 	RefreshTokenHash string
+	// ProUntil is users.pro_until, read with the auth row so every request knows the plan.
+	ProUntil *time.Time
 }
 
 // TokenClaims is what the API reads back from a valid token.
@@ -87,6 +89,8 @@ type TokenClaims struct {
 type Principal struct {
 	UserID string
 	Role   UserRole
+	// Pro tells whether the user has Birga Pro now (IsPro).
+	Pro bool
 }
 
 // HashToken returns the stored form of a token, so a database leak does not leak usable tokens.

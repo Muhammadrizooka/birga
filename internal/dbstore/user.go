@@ -27,21 +27,22 @@ type userRepo struct {
 }
 
 type dbUser struct {
-	ID                 string    `db:"id"`
-	Name               *string   `db:"name"`
-	Username           *string   `db:"username"`
-	PhoneNumber        *string   `db:"phone_number"`
-	PhotoID            *string   `db:"photo_id"`
-	Relationship       *string   `db:"relationship"`
-	AgreedOnConditions bool      `db:"agreed_on_conditions"`
-	ReminderEnabled    bool      `db:"reminder_enabled"`
-	ReminderTime       string    `db:"reminder_time"`
-	CreatedAt          time.Time `db:"created_at"`
-	UpdatedAt          time.Time `db:"updated_at"`
+	ID                 string     `db:"id"`
+	Name               *string    `db:"name"`
+	Username           *string    `db:"username"`
+	PhoneNumber        *string    `db:"phone_number"`
+	PhotoID            *string    `db:"photo_id"`
+	Relationship       *string    `db:"relationship"`
+	AgreedOnConditions bool       `db:"agreed_on_conditions"`
+	ReminderEnabled    bool       `db:"reminder_enabled"`
+	ReminderTime       string     `db:"reminder_time"`
+	ProUntil           *time.Time `db:"pro_until"`
+	CreatedAt          time.Time  `db:"created_at"`
+	UpdatedAt          time.Time  `db:"updated_at"`
 }
 
 const userColumns = `id, name, username, phone_number, photo_id, relationship, ` +
-	`agreed_on_conditions, reminder_enabled, reminder_time, created_at, updated_at`
+	`agreed_on_conditions, reminder_enabled, reminder_time, pro_until, created_at, updated_at`
 
 func (r *userRepo) Create(ctx context.Context, u domain.User) (domain.User, error) {
 	l := logger.FromCtx(ctx, "userRepo.Create")
@@ -111,6 +112,15 @@ func (r *userRepo) Update(ctx context.Context, id string, upd domain.UserUpdate)
 	)
 
 	return r.one(ctx, l, q, append(args, id)...)
+}
+
+// SetProUntil sets or clears (nil) the date Birga Pro given by hand ends.
+func (r *userRepo) SetProUntil(ctx context.Context, id string, until *time.Time) (domain.User, error) {
+	l := logger.FromCtx(ctx, "userRepo.SetProUntil").With(zap.String("id", id))
+
+	q := `UPDATE users SET pro_until = $1, ` + setUpdatedAt + ` WHERE id = $2 AND deleted_at IS NULL RETURNING ` + userColumns
+
+	return r.one(ctx, l, q, until, id)
 }
 
 // one runs q, which returns at most one user row (SELECT, or a write with RETURNING). No row means ErrUserNotFound;
@@ -252,6 +262,7 @@ func (u dbUser) toDomain() domain.User {
 		AgreedOnConditions: u.AgreedOnConditions,
 		ReminderEnabled:    u.ReminderEnabled,
 		ReminderTime:       u.ReminderTime,
+		ProUntil:           u.ProUntil,
 		CreatedAt:          u.CreatedAt,
 		UpdatedAt:          u.UpdatedAt,
 	}

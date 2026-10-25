@@ -160,7 +160,7 @@ func TestUploadMedia_Errors(t *testing.T) {
 }
 
 func TestUploadMedia_Disabled(t *testing.T) {
-	s := New(config.Application{}, nil, &fakeHealth{}, &fakeCreator{}, &fakeLister{}, &fakeGetter{}, ActivityEditUseCases{}, GoalUseCases{}, ChildActivityUseCases{}, UserUseCases{}, MeUseCases{}, OTPUseCases{}, AuthUseCases{}, ArticleUseCases{}, PostUseCases{}, nil)
+	s := New(config.Application{}, nil, &fakeHealth{}, &fakeCreator{}, &fakeLister{}, &fakeGetter{}, ActivityEditUseCases{}, GoalUseCases{}, ChildActivityUseCases{}, UserUseCases{}, MeUseCases{}, OTPUseCases{}, AuthUseCases{}, ArticleUseCases{}, PostUseCases{}, TipUseCases{}, nil, nil)
 
 	ct, b := multipartBody(t, []byte("x"), "")
 	if code, r := doRaw(t, s, ct, b); code != http.StatusServiceUnavailable || r.ErrorCode != _errCodeUnavailable {

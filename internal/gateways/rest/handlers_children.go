@@ -111,6 +111,7 @@ func (s *Server) CompleteActivity() gin.HandlerFunc {
 			ChildID:    childID,
 			ActivityID: req.ActivityID,
 			Note:       req.Note,
+			Pro:        currentUserPro(c),
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -337,7 +338,11 @@ func toStreakView(s domain.Streak) streakView {
 
 // CreateChildRequest is the body of POST /v1/children.
 type CreateChildRequest struct {
-	Name    string  `json:"name" example:"Amir"`
+	Name string `json:"name" example:"Amir"`
+	// AgeMonths is the child's age in months: 1..11, then 12..84 in steps of 6, then 96..144
+	// in steps of 12.
+	AgeMonths *int `json:"age_months" example:"48"`
+	// Age is the old field in whole years, read only when age_months is missing.
 	Age     *int    `json:"age" example:"4"`
 	Gender  string  `json:"gender" example:"male" enums:"male,female"`
 	PhotoID *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
@@ -350,7 +355,10 @@ type CreateChildRequest struct {
 // @Description - creates the child profile and links it to the caller in the same transaction;
 // @Description   the caller is the child's first parent
 // @Description - any signed-in role (user, paid_user, admin) may add children
-// @Description - name is required, at most 100 characters; age is required, 0..18; gender is male or female
+// @Description - name is required, at most 100 characters; gender is male or female
+// @Description - age_months is required: 1..11 months, then half years 12..84 (12, 18, 24 ... 84),
+// @Description   then whole years 96..144; anything else is 422. The old field age (whole years)
+// @Description   is still read when age_months is missing
 // @Description - photo_id is an optional id from POST /v1/media (422 if unknown)
 // @Description - goal_ids is required: 1 to 20 goal ids from GET /v1/goals, repeats stored once;
 // @Description   an id that is not an active goal: 422
@@ -376,18 +384,19 @@ func (s *Server) CreateChild() gin.HandlerFunc {
 			return
 		}
 
-		if req.Age == nil {
-			Return(c, nil, errs.Errf(errs.ErrValidation, "age is required"))
+		ageMonths := ageMonthsOf(req.AgeMonths, req.Age)
+		if ageMonths == nil {
+			Return(c, nil, errs.Errf(errs.ErrValidation, "age_months is required"))
 
 			return
 		}
 
-		child, err := s.childCreator.Execute(c.Request.Context(), currentUserID(c), domain.Child{
-			Name:    req.Name,
-			Age:     *req.Age,
-			Gender:  req.Gender,
-			PhotoID: req.PhotoID,
-			GoalIDs: req.GoalIDs,
+		child, err := s.childCreator.Execute(c.Request.Context(), currentUserID(c), currentUserPro(c), domain.Child{
+			Name:      req.Name,
+			AgeMonths: *ageMonths,
+			Gender:    req.Gender,
+			PhotoID:   req.PhotoID,
+			GoalIDs:   req.GoalIDs,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -433,8 +442,11 @@ func (s *Server) GetChild() gin.HandlerFunc {
 }
 
 type childView struct {
-	ID      string  `json:"id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
-	Name    string  `json:"name" example:"Amir"`
+	ID   string `json:"id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	Name string `json:"name" example:"Amir"`
+	// AgeMonths is the child's age in months.
+	AgeMonths int `json:"age_months" example:"54"`
+	// Age is the age in whole years (age_months / 12, rounded down), kept for old clients.
 	Age     int     `json:"age" example:"4"`
 	Gender  string  `json:"gender" example:"male"`
 	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
@@ -449,7 +461,8 @@ func toChildView(c domain.Child) childView {
 	return childView{
 		ID:        c.ID,
 		Name:      c.Name,
-		Age:       c.Age,
+		AgeMonths: c.AgeMonths,
+		Age:       c.AgeYears(),
 		Gender:    c.Gender,
 		PhotoID:   c.PhotoID,
 		PhotoURL:  photoURL(c.PhotoID),
@@ -462,7 +475,10 @@ func toChildView(c domain.Child) childView {
 // UpdateChildRequest is the body of PATCH /v1/children/{id}. Omitted or null fields are kept;
 // "" clears photo_id.
 type UpdateChildRequest struct {
-	Name    *string `json:"name" example:"Amir"`
+	Name *string `json:"name" example:"Amir"`
+	// AgeMonths is the child's age in months (same steps as POST /v1/children).
+	AgeMonths *int `json:"age_months" example:"60"`
+	// Age is the old field in whole years, read only when age_months is missing.
 	Age     *int    `json:"age" example:"5"`
 	Gender  *string `json:"gender" example:"male" enums:"male,female"`
 	PhotoID *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
@@ -474,7 +490,8 @@ type UpdateChildRequest struct {
 // @Summary edits one of the signed-in user's children
 // @Description - only the child's parents can edit it; any other id, or a deleted child, is 404
 // @Description - omitted or null fields are kept; the add-child rules apply to the given ones:
-// @Description   name 1..100 characters, age 0..18, gender male or female, photo_id from POST /v1/media
+// @Description   name 1..100 characters, age_months (or the old age in years), gender male or
+// @Description   female, photo_id from POST /v1/media
 // @Description   ("" clears it, an unknown id is 422)
 // @Description - goal_ids replaces the child's goals (1 to 20 active goal ids, 422 otherwise); the
 // @Description   current plan keeps its days, the next plan uses the new goals
@@ -509,11 +526,11 @@ func (s *Server) UpdateChild() gin.HandlerFunc {
 		}
 
 		child, err := s.childUpdater.Execute(c.Request.Context(), currentUserID(c), childID, domain.ChildUpdate{
-			Name:    req.Name,
-			Age:     req.Age,
-			Gender:  req.Gender,
-			PhotoID: req.PhotoID,
-			GoalIDs: req.GoalIDs,
+			Name:      req.Name,
+			AgeMonths: ageMonthsOf(req.AgeMonths, req.Age),
+			Gender:    req.Gender,
+			PhotoID:   req.PhotoID,
+			GoalIDs:   req.GoalIDs,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -643,4 +660,19 @@ func toPlanView(p domain.Plan) planView {
 	}
 
 	return v
+}
+
+// ageMonthsOf picks age_months, or the old age field in years turned into months.
+func ageMonthsOf(months, years *int) *int {
+	if months != nil {
+		return months
+	}
+
+	if years != nil {
+		m := *years * 12
+
+		return &m
+	}
+
+	return nil
 }

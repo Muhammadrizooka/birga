@@ -72,7 +72,9 @@ func (f *fakeAuth) check(token string) (domain.Principal, error) {
 	case "good":
 		return domain.Principal{UserID: testUserID, Role: domain.UserRoleUser}, nil
 	case "admin":
-		return domain.Principal{UserID: testUserID, Role: domain.UserRoleAdmin}, nil
+		return domain.Principal{UserID: testUserID, Role: domain.UserRoleAdmin, Pro: true}, nil
+	case "pro":
+		return domain.Principal{UserID: testUserID, Role: domain.UserRoleUser, Pro: true}, nil
 	default:
 		return domain.Principal{}, errs.Errf(errs.ErrUnauthorized, "invalid token")
 	}

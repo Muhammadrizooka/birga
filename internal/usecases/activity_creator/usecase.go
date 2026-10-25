@@ -50,6 +50,9 @@ func (uc *UseCase) Execute(ctx context.Context, a domain.Activity) (domain.Activ
 	a.MainIdeaUz = strings.TrimSpace(a.MainIdeaUz)
 	a.MainIdeaRu = strings.TrimSpace(a.MainIdeaRu)
 	a.MainIdeaEn = strings.TrimSpace(a.MainIdeaEn)
+	for _, s := range []*string{&a.EasierUz, &a.EasierRu, &a.EasierEn, &a.HarderUz, &a.HarderRu, &a.HarderEn} {
+		*s = strings.TrimSpace(*s)
+	}
 	a.GoalIDs = domain.NormalizeIDs(a.GoalIDs)
 
 	if err := validate(a); err != nil {

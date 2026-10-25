@@ -21,6 +21,7 @@ func (s *Server) endpoints() {
 		// Open without a token: the app shows the goals on the sign-up screen.
 		v1.GET("/goals", s.ListGoals())
 		v1.GET("/goals/:id", s.GetGoal())
+		v1.GET("/topics", s.ListTopics())
 
 		v1.POST("/otp/send", s.SendOTP())
 		v1.POST("/otp/verify", s.VerifyOTP())
@@ -35,6 +36,11 @@ func (s *Server) endpoints() {
 	}
 
 	v1.POST("/auth/logout", s.userAuth(), s.Logout())
+	v1.GET("/pro", s.userAuth(), s.GetProOffer())
+	v1.POST("/pro/purchase", s.userAuth(), s.PurchasePro())
+	v1.GET("/tips", s.userAuth(), s.ListTips())
+	v1.GET("/activities/:id/similar", s.userAuth(), s.GetSimilarActivities())
+	v1.GET("/milestones/:id", s.userAuth(), s.GetMilestone())
 
 	// Every signed-in role may manage its own children; ownership is checked per child in the use cases.
 	v1.POST("/children",
@@ -53,6 +59,7 @@ func (s *Server) endpoints() {
 		me.GET("/articles/daily", s.GetDailyArticle())
 		me.GET("/posts", s.ListMyPosts())
 		me.GET("/posts/daily", s.GetDailyPost())
+		me.GET("/tips/daily", s.GetDailyTip())
 	}
 
 	articles := v1.Group("/articles", s.userAuth())
@@ -75,6 +82,12 @@ func (s *Server) endpoints() {
 		child.GET("/plan", s.GetPlan())
 		child.POST("/plan", s.RestartPlan())
 		child.GET("/recommendation", s.RecommendActivity())
+		child.GET("/today", s.GetToday())
+		child.POST("/today/extras", s.AddTodayExtra())
+		child.GET("/milestones", s.GetChildMilestones())
+		child.PUT("/milestones/:milestone_id", s.MarkMilestone())
+		child.DELETE("/milestones/:milestone_id", s.UnmarkMilestone())
+		child.GET("/report", s.GetMonthlyReport())
 		child.POST("/completions", s.CompleteActivity())
 		child.GET("/completions", s.ListCompletions())
 		child.GET("/streak", s.GetStreak())
@@ -101,6 +114,22 @@ func (s *Server) endpoints() {
 		admin.PATCH("/posts/:id", s.UpdatePost())
 		admin.DELETE("/posts/:id", s.DeletePost())
 
+		admin.POST("/tips", s.CreateTip())
+		admin.GET("/tips", s.AdminListTips())
+		admin.GET("/tips/:id", s.AdminGetTip())
+		admin.PATCH("/tips/:id", s.UpdateTip())
+		admin.DELETE("/tips/:id", s.DeleteTip())
+
+		admin.POST("/milestones", s.CreateMilestone())
+		admin.GET("/milestones", s.AdminListMilestones())
+		admin.GET("/milestones/:id", s.AdminGetMilestone())
+		admin.PATCH("/milestones/:id", s.UpdateMilestone())
+		admin.DELETE("/milestones/:id", s.DeleteMilestone())
+
+		admin.POST("/topics", s.CreateTopic())
+		admin.PATCH("/topics/:id", s.UpdateTopic())
+		admin.DELETE("/topics/:id", s.DeleteTopic())
+
 		admin.POST("/media", s.AdminUploadMedia())
 
 		admin.POST("/goals", s.CreateGoal())
@@ -112,5 +141,6 @@ func (s *Server) endpoints() {
 		admin.GET("/users/:id", s.GetUser())
 		admin.PATCH("/users/:id", s.UpdateUser())
 		admin.DELETE("/users/:id", s.DeleteUser())
+		admin.PUT("/users/:id/pro", s.SetUserPro())
 	}
 }

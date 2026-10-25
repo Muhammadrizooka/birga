@@ -38,12 +38,17 @@ type Article struct {
 	MinAge      int
 	MaxAge      int
 	GoalID      string
-	Status      string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// TopicID is the optional topic tag; nil means none.
+	TopicID   *string
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 	// IsRead tells whether the signed-in user marked the article read. It is only filled on
 	// user-scoped reads.
 	IsRead bool
+	// Locked is set on app lists for a free-plan user: the article was never their daily article,
+	// so it does not open (GET /v1/articles/{id} is 403).
+	Locked bool
 }
 
 // ArticleUpdate is a partial update. A nil field is left unchanged; PhotoID pointing to "" clears
@@ -63,24 +68,31 @@ type ArticleUpdate struct {
 	MinAge      *int
 	MaxAge      *int
 	GoalID      *string
-	Status      *string
+	// TopicID pointing to "" removes the topic.
+	TopicID *string
+	Status  *string
 }
 
 // IsEmpty reports whether the update changes nothing.
 func (u ArticleUpdate) IsEmpty() bool {
 	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.BodyUz == nil && u.BodyRu == nil &&
 		u.BodyEn == nil && u.TipUz == nil && u.TipRu == nil && u.TipEn == nil && u.PhotoID == nil &&
-		u.ReadMinutes == nil && u.MinAge == nil && u.MaxAge == nil && u.GoalID == nil && u.Status == nil
+		u.ReadMinutes == nil && u.MinAge == nil && u.MaxAge == nil && u.GoalID == nil && u.TopicID == nil && u.Status == nil
 }
 
 // ArticleFilter narrows an article listing. Zero values mean "no filter".
 type ArticleFilter struct {
-	Age    int
-	GoalID string
+	Age     int
+	GoalID  string
+	TopicID string
 	// Search matches articles whose title in any language contains it, ignoring case.
 	Search string
 	// Status is one of the article statuses; empty lists all.
 	Status string
+	// MaxMinutes keeps articles of at most this expected read time.
+	MaxMinutes int
+	// LockFor, when set, marks the articles that were never this user's daily article as Locked.
+	LockFor string
 	// ReaderID, when set, fills Article.IsRead for that user.
 	ReaderID string
 	Limit    int

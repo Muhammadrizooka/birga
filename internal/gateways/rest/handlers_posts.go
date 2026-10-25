@@ -16,8 +16,10 @@ type CreatePostRequest struct {
 	TitleEn string `json:"title_en" example:"The colours song"`
 	VideoID string `json:"video_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	GoalID  string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
-	MinAge  int    `json:"min_age" example:"3" minimum:"2" maximum:"6"`
-	MaxAge  int    `json:"max_age" example:"5" minimum:"2" maximum:"6"`
+	// TopicID is the optional topic tag from GET /v1/topics; null means none.
+	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
+	MinAge  int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
+	MaxAge  int     `json:"max_age" example:"5" minimum:"2" maximum:"6"`
 	// Duration is in minutes, a decimal: 4.2 is 4:12.
 	Duration     float64 `json:"duration" example:"4.2"`
 	SuggestionUz string  `json:"suggestion_uz" example:"2–4 yoshda ekran oldida kuniga 1 soatdan kam vaqt. Videoni birga ko‘ring."`
@@ -35,6 +37,7 @@ type CreatePostRequest struct {
 // @Description   questions_* ("ask after watching" box, one question per line) are optional, "" hides them
 // @Description - video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)
 // @Description - goal_id is one active goal from GET /v1/goals (422 if unknown)
+// @Description - topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)
 // @Description - duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600
 // @Description - min_age/max_age are child ages within 2..6
 // @Description - status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app
@@ -64,6 +67,7 @@ func (s *Server) CreatePost() gin.HandlerFunc {
 			TitleEn:      req.TitleEn,
 			VideoID:      req.VideoID,
 			GoalID:       req.GoalID,
+			TopicID:      req.TopicID,
 			MinAge:       req.MinAge,
 			MaxAge:       req.MaxAge,
 			Duration:     req.Duration,
@@ -93,7 +97,9 @@ func (s *Server) CreatePost() gin.HandlerFunc {
 // @Param q query string false "text the title (any language) contains, ignoring case (at most 100 characters)"
 // @Param status query string false "published, in_review or unpublished; omitted lists all" Enums(published, in_review, unpublished)
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
+// @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
+// @Param max_minutes query int false "at most this many minutes"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.postListView}
@@ -161,11 +167,13 @@ func (s *Server) AdminGetPost() gin.HandlerFunc {
 
 // UpdatePostRequest is the body of PATCH /v1/admin/posts/{id}. Omitted or null fields are left unchanged.
 type UpdatePostRequest struct {
-	TitleUz      *string  `json:"title_uz" example:"Ranglar qo‘shig‘i"`
-	TitleRu      *string  `json:"title_ru" example:"Песня о цветах"`
-	TitleEn      *string  `json:"title_en" example:"The colours song"`
-	VideoID      *string  `json:"video_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
-	GoalID       *string  `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	TitleUz *string `json:"title_uz" example:"Ranglar qo‘shig‘i"`
+	TitleRu *string `json:"title_ru" example:"Песня о цветах"`
+	TitleEn *string `json:"title_en" example:"The colours song"`
+	VideoID *string `json:"video_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	GoalID  *string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	// TopicID "" removes the topic; omitted or null keeps it.
+	TopicID      *string  `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
 	MinAge       *int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge       *int     `json:"max_age" example:"5" minimum:"2" maximum:"6"`
 	Duration     *float64 `json:"duration" example:"4.2"`
@@ -219,6 +227,7 @@ func (s *Server) UpdatePost() gin.HandlerFunc {
 			TitleEn:      req.TitleEn,
 			VideoID:      req.VideoID,
 			GoalID:       req.GoalID,
+			TopicID:      req.TopicID,
 			MinAge:       req.MinAge,
 			MaxAge:       req.MaxAge,
 			Duration:     req.Duration,
@@ -274,7 +283,9 @@ func (s *Server) DeletePost() gin.HandlerFunc {
 // @Produce json
 // @Param q query string false "text the title (any language) contains, ignoring case (at most 100 characters)"
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
+// @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
+// @Param max_minutes query int false "at most this many minutes"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.postTeaserListView}
@@ -291,6 +302,9 @@ func (s *Server) ListPosts() gin.HandlerFunc {
 		}
 
 		f.Status = domain.ArticleStatusPublished
+		if !currentUserPro(c) {
+			f.LockFor = currentUserID(c)
+		}
 
 		items, total, err := s.postLister.Execute(c.Request.Context(), f)
 		if err != nil {
@@ -310,8 +324,8 @@ func (s *Server) ListPosts() gin.HandlerFunc {
 
 // GetPost godoc swagger
 // @Summary returns a published video post with its video
-// @Description Roles user and unverified_user (the free plan) may open only posts that were their daily video,
-// @Description today or earlier (403 otherwise); paid_user and admin may open every published post.
+// @Description Users without Birga Pro may open only posts that were their daily video, today or earlier
+// @Description (403 otherwise); Pro users may open every published post.
 // @Tags posts
 // @Security BearerAuth
 // @Produce json
@@ -332,7 +346,7 @@ func (s *Server) GetPost() gin.HandlerFunc {
 			return
 		}
 
-		p, err := s.postGetter.ForUser(c.Request.Context(), currentUserID(c), currentUserRole(c), id)
+		p, err := s.postGetter.ForUser(c.Request.Context(), currentUserID(c), currentUserPro(c), id)
 		if err != nil {
 			Return(c, nil, err)
 
@@ -370,7 +384,9 @@ func (s *Server) GetDailyPost() gin.HandlerFunc {
 			Day: d.Today.Day.Format(time.DateOnly), Post: toPostView(d.Today.Post), Next: make([]postTeaserView, 0, len(d.Next)),
 		}
 		for i := range d.Next {
-			v.Next = append(v.Next, toPostTeaserView(d.Next[i]))
+			next := toPostTeaserView(d.Next[i])
+			next.Locked = !currentUserPro(c)
+			v.Next = append(v.Next, next)
 		}
 
 		Return(c, v, nil)
@@ -419,7 +435,10 @@ func (s *Server) ListMyPosts() gin.HandlerFunc {
 func postFilter(c *gin.Context) (domain.PostFilter, bool) {
 	f, ok := articleFilter(c)
 
-	return domain.PostFilter{Age: f.Age, GoalID: f.GoalID, Search: f.Search, Limit: f.Limit, Offset: f.Offset}, ok
+	return domain.PostFilter{
+		Age: f.Age, GoalID: f.GoalID, TopicID: f.TopicID, Search: f.Search, MaxMinutes: float64(f.MaxMinutes),
+		Limit: f.Limit, Offset: f.Offset,
+	}, ok
 }
 
 type postView struct {
@@ -431,8 +450,10 @@ type postView struct {
 	// VideoURL plays the video without a token: it redirects (302) to a short-lived link.
 	VideoURL string `json:"video_url" example:"/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	GoalID   string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
-	MinAge   int    `json:"min_age" example:"3"`
-	MaxAge   int    `json:"max_age" example:"5"`
+	// TopicID is the optional topic tag from GET /v1/topics; null means none.
+	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
+	MinAge  int     `json:"min_age" example:"3"`
+	MaxAge  int     `json:"max_age" example:"5"`
 	// Duration is in minutes, a decimal: 4.2 is 4:12.
 	Duration     float64   `json:"duration" example:"4.2"`
 	SuggestionUz string    `json:"suggestion_uz"`
@@ -448,14 +469,19 @@ type postView struct {
 
 // postTeaserView is a post without its video and texts, for locked or browsing lists.
 type postTeaserView struct {
-	ID       string  `json:"id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
-	TitleUz  string  `json:"title_uz" example:"Hayvonlar ovozi"`
-	TitleRu  string  `json:"title_ru" example:"Голоса животных"`
-	TitleEn  string  `json:"title_en" example:"Animal sounds"`
-	GoalID   string  `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	ID      string `json:"id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
+	TitleUz string `json:"title_uz" example:"Hayvonlar ovozi"`
+	TitleRu string `json:"title_ru" example:"Голоса животных"`
+	TitleEn string `json:"title_en" example:"Animal sounds"`
+	GoalID  string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	// TopicID is the optional topic tag from GET /v1/topics; null means none.
+	TopicID  *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
 	MinAge   int     `json:"min_age" example:"3"`
 	MaxAge   int     `json:"max_age" example:"5"`
 	Duration float64 `json:"duration" example:"3.67"`
+	// Locked is true for a user without Birga Pro when the post does not open for them: on
+	// GET /v1/posts the posts that were never their daily video, and every "next" video.
+	Locked bool `json:"locked" example:"true"`
 }
 
 type postListView struct {
@@ -500,6 +526,7 @@ func toPostView(p domain.Post) postView {
 		VideoID:      p.VideoID,
 		VideoURL:     mediaPath(p.VideoID),
 		GoalID:       p.GoalID,
+		TopicID:      p.TopicID,
 		MinAge:       p.MinAge,
 		MaxAge:       p.MaxAge,
 		Duration:     p.Duration,
@@ -518,6 +545,7 @@ func toPostView(p domain.Post) postView {
 func toPostTeaserView(p domain.Post) postTeaserView {
 	return postTeaserView{
 		ID: p.ID, TitleUz: p.TitleUz, TitleRu: p.TitleRu, TitleEn: p.TitleEn,
-		GoalID: p.GoalID, MinAge: p.MinAge, MaxAge: p.MaxAge, Duration: p.Duration,
+		GoalID:  p.GoalID,
+		TopicID: p.TopicID, MinAge: p.MinAge, MaxAge: p.MaxAge, Duration: p.Duration, Locked: p.Locked,
 	}
 }

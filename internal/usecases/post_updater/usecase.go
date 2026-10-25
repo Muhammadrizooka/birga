@@ -65,6 +65,10 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.PostUpdate
 		return domain.Post{}, err
 	}
 
+	if !domain.NormalizeTopicID(upd.TopicID) {
+		return domain.Post{}, errs.Errf(errs.ErrValidation, "topic_id must be a topic id (UUID) from GET /v1/topics, or \"\" for none")
+	}
+
 	if err := postcreator.CheckRefs(ctx, uc.goals, uc.media, upd.GoalID, upd.VideoID); err != nil {
 		return domain.Post{}, err
 	}

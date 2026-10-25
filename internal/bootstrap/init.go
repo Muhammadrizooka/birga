@@ -32,17 +32,20 @@ import (
 	childcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/child_creator"
 	childgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/child_getter"
 	childlister "gitlab.com/loyihalar/birga/backend/internal/usecases/child_lister"
+	childmilestones "gitlab.com/loyihalar/birga/backend/internal/usecases/child_milestones"
 	childupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/child_updater"
 	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	dailyarticle "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_article"
 	dailypost "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_post"
+	dailytip "gitlab.com/loyihalar/birga/backend/internal/usecases/daily_tip"
 	goalcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_creator"
 	goaldeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_deleter"
 	goalgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_getter"
 	goallister "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_lister"
 	goalupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_updater"
 	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
+	milestonemanager "gitlab.com/loyihalar/birga/backend/internal/usecases/milestone_manager"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
 	passwordresetter "gitlab.com/loyihalar/birga/backend/internal/usecases/password_resetter"
@@ -52,10 +55,14 @@ import (
 	postgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/post_getter"
 	postlister "gitlab.com/loyihalar/birga/backend/internal/usecases/post_lister"
 	postupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/post_updater"
+	proplan "gitlab.com/loyihalar/birga/backend/internal/usecases/pro_plan"
 	profileupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/profile_updater"
 	streakgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/streak_getter"
+	tipmanager "gitlab.com/loyihalar/birga/backend/internal/usecases/tip_manager"
+	todaylist "gitlab.com/loyihalar/birga/backend/internal/usecases/today_list"
 	tokenchecker "gitlab.com/loyihalar/birga/backend/internal/usecases/token_checker"
 	tokenrefresher "gitlab.com/loyihalar/birga/backend/internal/usecases/token_refresher"
+	topicmanager "gitlab.com/loyihalar/birga/backend/internal/usecases/topic_manager"
 	usercreator "gitlab.com/loyihalar/birga/backend/internal/usecases/user_creator"
 	userdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_deleter"
 	usergetter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_getter"
@@ -254,6 +261,9 @@ type useCases struct {
 	completionRecorder *completionrecorder.UseCase
 	completionLister   *completionlister.UseCase
 	streakGetter       *streakgetter.UseCase
+	todayList          *todaylist.UseCase
+	milestoneManager   *milestonemanager.UseCase
+	childMilestones    *childmilestones.UseCase
 
 	userCreator *usercreator.UseCase
 	userLister  *userlister.UseCase
@@ -278,6 +288,11 @@ type useCases struct {
 	postUpdater *postupdater.UseCase
 	postDeleter *postdeleter.UseCase
 	dailyPost   *dailypost.UseCase
+
+	topicManager *topicmanager.UseCase
+	tipManager   *tipmanager.UseCase
+	dailyTip     *dailytip.UseCase
+	proPlan      *proplan.UseCase
 
 	otpSender   *otpsender.UseCase
 	otpVerifier *otpverifier.UseCase
@@ -331,6 +346,11 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 			store, store.Child(), store.Activity(), store.Completion(), store.Plan()),
 		completionLister: completionlister.New(l.Named("usecase.completion_lister"), store.Child(), store.Completion()),
 		streakGetter:     streakgetter.New(l.Named("usecase.streak_getter"), store.Child(), store.Plan()),
+		todayList: todaylist.New(l.Named("usecase.today_list"),
+			store.Child(), planGetter, store.Activity(), store.Extra(), store.Goal()),
+		milestoneManager: milestonemanager.New(l.Named("usecase.milestone_manager"), store.Milestone(), store.Activity()),
+		childMilestones: childmilestones.New(l.Named("usecase.child_milestones"),
+			store.Child(), store.Milestone(), store.Activity(), store.Completion()),
 
 		userCreator: usercreator.New(l.Named("usecase.user_creator"), store.User()),
 		userLister:  userlister.New(l.Named("usecase.user_lister"), store.User()),
@@ -347,6 +367,11 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		articleDeleter: articledeleter.New(l.Named("usecase.article_deleter"), store.Article()),
 		articleReader:  articlereader.New(l.Named("usecase.article_reader"), store.Article()),
 		dailyArticle:   dailyarticle.New(l.Named("usecase.daily_article"), store, store.Article()),
+
+		topicManager: topicmanager.New(l.Named("usecase.topic_manager"), store.Topic()),
+		tipManager:   tipmanager.New(l.Named("usecase.tip_manager"), store.Tip(), store.Topic()),
+		dailyTip:     dailytip.New(l.Named("usecase.daily_tip"), store, store.Tip()),
+		proPlan:      proplan.New(l.Named("usecase.pro_plan"), store.User(), cfg.ProPriceUZS),
 
 		postCreator: postcreator.New(l.Named("usecase.post_creator"), store.Post(), store.Goal(), store.Media()),
 		postLister:  postlister.New(l.Named("usecase.post_lister"), store.Post()),
@@ -407,6 +432,10 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Recorder: ucs.completionRecorder,
 			Lister:   ucs.completionLister,
 			Streak:   ucs.streakGetter,
+			Today:    ucs.todayList,
+
+			Milestones:      ucs.milestoneManager,
+			ChildMilestones: ucs.childMilestones,
 		},
 		rest.UserUseCases{
 			Creator: ucs.userCreator,
@@ -450,6 +479,12 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Deleter: ucs.postDeleter,
 			Daily:   ucs.dailyPost,
 		},
+		rest.TipUseCases{
+			Topics: ucs.topicManager,
+			Tips:   ucs.tipManager,
+			Daily:  ucs.dailyTip,
+		},
+		ucs.proPlan,
 		media,
 	)
 

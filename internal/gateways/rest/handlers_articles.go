@@ -26,13 +26,16 @@ type CreateArticleRequest struct {
 	MinAge           int    `json:"min_age" example:"2" minimum:"2" maximum:"6"`
 	MaxAge           int    `json:"max_age" example:"5" minimum:"2" maximum:"6"`
 	GoalID           string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
-	Status           string `json:"status" example:"in_review" enums:"published,in_review,unpublished"`
+	// TopicID is the optional topic tag from GET /v1/topics; null means none.
+	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
+	Status  string  `json:"status" example:"in_review" enums:"published,in_review,unpublished"`
 }
 
 // CreateArticle godoc swagger
 // @Summary creates an article
 // @Description - title and article_body are required in Uzbek, Russian and English; tip_* is optional ("" = no tip box)
 // @Description - goal_id is one active goal from GET /v1/goals (422 if unknown)
+// @Description - topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)
 // @Description - photo_id is an optional id from POST /v1/media (422 if unknown)
 // @Description - expected_read_time is in minutes (1..60); min_age/max_age are child ages within 2..6
 // @Description - status is published, in_review or unpublished; omitted means in_review. Only published articles reach the app
@@ -71,6 +74,7 @@ func (s *Server) CreateArticle() gin.HandlerFunc {
 			MinAge:      req.MinAge,
 			MaxAge:      req.MaxAge,
 			GoalID:      req.GoalID,
+			TopicID:     req.TopicID,
 			Status:      req.Status,
 		})
 		if err != nil {
@@ -91,7 +95,9 @@ func (s *Server) CreateArticle() gin.HandlerFunc {
 // @Param q query string false "text the title (any language) contains, ignoring case (at most 100 characters)"
 // @Param status query string false "published, in_review or unpublished; omitted lists all" Enums(published, in_review, unpublished)
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
+// @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
+// @Param max_minutes query int false "at most this many minutes"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.articleListView}
@@ -175,7 +181,9 @@ type UpdateArticleRequest struct {
 	MinAge           *int    `json:"min_age" example:"2" minimum:"2" maximum:"6"`
 	MaxAge           *int    `json:"max_age" example:"5" minimum:"2" maximum:"6"`
 	GoalID           *string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
-	Status           *string `json:"status" example:"published" enums:"published,in_review,unpublished"`
+	// TopicID "" removes the topic; omitted or null keeps it.
+	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
+	Status  *string `json:"status" example:"published" enums:"published,in_review,unpublished"`
 }
 
 // UpdateArticle godoc swagger
@@ -228,6 +236,7 @@ func (s *Server) UpdateArticle() gin.HandlerFunc {
 			MinAge:      req.MinAge,
 			MaxAge:      req.MaxAge,
 			GoalID:      req.GoalID,
+			TopicID:     req.TopicID,
 			Status:      req.Status,
 		})
 		if err != nil {
@@ -268,13 +277,16 @@ func (s *Server) DeleteArticle() gin.HandlerFunc {
 
 // ListArticles godoc swagger
 // @Summary lists published articles
-// @Description Each item says whether the signed-in user marked it read (is_read).
+// @Description Each item says whether the signed-in user marked it read (is_read). Without Birga Pro, articles that
+// @Description were never the user's daily article have locked=true.
 // @Tags articles
 // @Security BearerAuth
 // @Produce json
 // @Param q query string false "text the title (any language) contains, ignoring case (at most 100 characters)"
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
+// @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
+// @Param max_minutes query int false "at most this many minutes"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.userArticleListView}
@@ -292,6 +304,10 @@ func (s *Server) ListArticles() gin.HandlerFunc {
 
 		f.Status = domain.ArticleStatusPublished
 		f.ReaderID = currentUserID(c)
+
+		if !currentUserPro(c) {
+			f.LockFor = currentUserID(c)
+		}
 
 		items, total, err := s.articleLister.Execute(c.Request.Context(), f)
 		if err != nil {
@@ -311,6 +327,7 @@ func (s *Server) ListArticles() gin.HandlerFunc {
 
 // GetArticle godoc swagger
 // @Summary returns a published article
+// @Description Without Birga Pro only the user's daily articles of today or earlier open (403 otherwise).
 // @Tags articles
 // @Security BearerAuth
 // @Produce json
@@ -330,7 +347,7 @@ func (s *Server) GetArticle() gin.HandlerFunc {
 			return
 		}
 
-		a, err := s.articleGetter.Execute(c.Request.Context(), id, currentUserID(c))
+		a, err := s.articleGetter.ForUser(c.Request.Context(), currentUserID(c), currentUserPro(c), id)
 		if err != nil {
 			Return(c, nil, err)
 
@@ -458,12 +475,21 @@ func articleFilter(c *gin.Context) (domain.ArticleFilter, bool) {
 		return domain.ArticleFilter{}, false
 	}
 
+	maxMinutes, err := parseOptionalInt(c, "max_minutes")
+	if err != nil {
+		Return(c, nil, err)
+
+		return domain.ArticleFilter{}, false
+	}
+
 	return domain.ArticleFilter{
-		Age:    age,
-		GoalID: c.Query("goal_id"),
-		Search: c.Query("q"),
-		Limit:  limit,
-		Offset: offset,
+		MaxMinutes: maxMinutes,
+		Age:        age,
+		GoalID:     c.Query("goal_id"),
+		TopicID:    c.Query("topic_id"),
+		Search:     c.Query("q"),
+		Limit:      limit,
+		Offset:     offset,
 	}, true
 }
 
@@ -482,13 +508,15 @@ type articleView struct {
 	// PhotoURL is where the app loads the photo from (GET, no token); null without a photo.
 	PhotoURL *string `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	// ExpectedReadTime is in minutes.
-	ExpectedReadTime int       `json:"expected_read_time" example:"3"`
-	MinAge           int       `json:"min_age" example:"2"`
-	MaxAge           int       `json:"max_age" example:"5"`
-	GoalID           string    `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
-	Status           string    `json:"status" example:"published" enums:"published,in_review,unpublished"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ExpectedReadTime int    `json:"expected_read_time" example:"3"`
+	MinAge           int    `json:"min_age" example:"2"`
+	MaxAge           int    `json:"max_age" example:"5"`
+	GoalID           string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	// TopicID is the optional topic tag from GET /v1/topics; null means none.
+	TopicID   *string   `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
+	Status    string    `json:"status" example:"published" enums:"published,in_review,unpublished"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // userArticleView is an article as the app sees it.
@@ -496,6 +524,9 @@ type userArticleView struct {
 	articleView
 	// IsRead tells whether the signed-in user marked the article read.
 	IsRead bool `json:"is_read" example:"false"`
+	// Locked is true on GET /v1/articles for a user without Birga Pro when the article was never
+	// their daily article: it does not open.
+	Locked bool `json:"locked" example:"false"`
 }
 
 type articleListView struct {
@@ -558,6 +589,7 @@ func toArticleView(a domain.Article) articleView {
 		MinAge:           a.MinAge,
 		MaxAge:           a.MaxAge,
 		GoalID:           a.GoalID,
+		TopicID:          a.TopicID,
 		Status:           a.Status,
 		CreatedAt:        a.CreatedAt,
 		UpdatedAt:        a.UpdatedAt,
@@ -565,7 +597,7 @@ func toArticleView(a domain.Article) articleView {
 }
 
 func toUserArticleView(a domain.Article) userArticleView {
-	return userArticleView{articleView: toArticleView(a), IsRead: a.IsRead}
+	return userArticleView{articleView: toArticleView(a), IsRead: a.IsRead, Locked: a.Locked}
 }
 
 func toArticleTeaserView(a domain.Article) articleTeaserView {

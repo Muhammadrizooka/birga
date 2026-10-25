@@ -14,12 +14,13 @@ var (
 	ErrActivityNotFound = Errf(ErrNotFound, "activity not found")
 	ErrNoRecommendation = Errf(ErrNotFound, "no published activity matches this child's age and the filters")
 
-	ErrArticleNotFound = Errf(ErrNotFound, "article not found")
-	ErrPostNotFound    = Errf(ErrNotFound, "post not found")
-	ErrNoPost          = Errf(ErrNotFound, "no published video yet")
-	ErrPostNotOpened   = Errf(ErrForbidden, "this video was not your daily video, the free plan opens one video a day")
-	ErrVideoNotFound   = Errf(ErrValidation, "video_id is not an uploaded video, upload it to /v1/admin/media first")
-	ErrNoArticle       = Errf(ErrNotFound, "no published article yet")
+	ErrArticleNotFound  = Errf(ErrNotFound, "article not found")
+	ErrPostNotFound     = Errf(ErrNotFound, "post not found")
+	ErrNoPost           = Errf(ErrNotFound, "no published video yet")
+	ErrPostNotOpened    = Errf(ErrForbidden, "this video was not your daily video, the free plan opens one video a day")
+	ErrVideoNotFound    = Errf(ErrValidation, "video_id is not an uploaded video, upload it to /v1/admin/media first")
+	ErrNoArticle        = Errf(ErrNotFound, "no published article yet")
+	ErrArticleNotOpened = Errf(ErrForbidden, "this article was not your daily article, the free plan opens one article a day")
 
 	ErrUserNotFound     = Errf(ErrNotFound, "user not found")
 	ErrUsernameTaken    = Errf(ErrConflict, "username is already taken")
@@ -29,6 +30,14 @@ var (
 	ErrChildNotFound  = Errf(ErrNotFound, "child not found")
 	ErrNoPlanDayToday = Errf(ErrNotFound, "no plan day is open today: today's plan day is done, or the plan is done")
 	ErrPlanNotDone    = Errf(ErrConflict, "the current plan is not done yet, the next plan starts after its last day")
+
+	ErrTopicNotFound  = Errf(ErrNotFound, "topic not found")
+	ErrTopicNameTaken = Errf(ErrConflict, "a topic with this name already exists")
+	ErrUnknownTopic   = Errf(ErrValidation, "topic_id is not an active topic, list them with GET /v1/topics")
+	ErrTipNotFound    = Errf(ErrNotFound, "tip not found")
+	ErrNoTip          = Errf(ErrNotFound, "no published tip yet")
+
+	ErrNeedsPro = Errf(ErrForbidden, "this needs Birga Pro")
 
 	ErrGoalNotFound  = Errf(ErrNotFound, "goal not found")
 	ErrGoalNameTaken = Errf(ErrConflict, "a goal with this name already exists")
@@ -50,4 +59,14 @@ var (
 	ErrMediaUnsupportedTypeOrVideo = Errf(ErrValidation, "unsupported file type, upload a JPEG, PNG or WebP image or an MP4 or WebM video")
 	ErrMediaEmpty                  = Errf(ErrValidation, "file is empty")
 	ErrMediaNotFound               = Errf(ErrNotFound, "media not found")
+)
+
+var (
+	ErrTooManyExtras = Errf(ErrValidation, "a child's day holds at most 10 added activities")
+	ErrNoExtra       = Errf(ErrNotFound, "no other published activity serves this goal at the child's age")
+)
+
+var (
+	ErrMilestoneNotFound = Errf(ErrNotFound, "milestone not found")
+	ErrUnknownActivities = Errf(ErrValidation, "activity_ids contains ids that are not activities")
 )

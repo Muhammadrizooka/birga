@@ -15,7 +15,7 @@ func TestChildRepo_CRUD(t *testing.T) {
 	s := newTestStore(t)
 
 	inRollbackTx(t, s, func(ctx context.Context) {
-		created, err := s.Child().Create(ctx, domain.Child{Name: "Amir", Age: 3, Gender: domain.GenderMale})
+		created, err := s.Child().Create(ctx, domain.Child{Name: "Amir", AgeMonths: 36, Gender: domain.GenderMale})
 		if err != nil {
 			t.Fatalf("Create: %v", err)
 		}
@@ -25,16 +25,16 @@ func TestChildRepo_CRUD(t *testing.T) {
 		}
 
 		got, err := s.Child().Get(ctx, created.ID)
-		if err != nil || got.Name != "Amir" || got.Age != 3 {
+		if err != nil || got.Name != "Amir" || got.AgeMonths != 36 {
 			t.Fatalf("Get: %+v, %v", got, err)
 		}
 
-		updated, err := s.Child().Update(ctx, created.ID, domain.ChildUpdate{Age: intPtr(4), Gender: strPtr(domain.GenderFemale)})
+		updated, err := s.Child().Update(ctx, created.ID, domain.ChildUpdate{AgeMonths: intPtr(54), Gender: strPtr(domain.GenderFemale)})
 		if err != nil {
 			t.Fatalf("Update: %v", err)
 		}
 
-		if updated.Name != "Amir" || updated.Age != 4 || updated.Gender != domain.GenderFemale {
+		if updated.Name != "Amir" || updated.AgeMonths != 54 || updated.Gender != domain.GenderFemale {
 			t.Fatalf("unexpected updated child: %+v", updated)
 		}
 	})
@@ -44,7 +44,7 @@ func TestChildRepo_SoftDelete(t *testing.T) {
 	s := newTestStore(t)
 
 	inRollbackTx(t, s, func(ctx context.Context) {
-		created, err := s.Child().Create(ctx, domain.Child{Name: "Amir", Age: 3, Gender: domain.GenderMale})
+		created, err := s.Child().Create(ctx, domain.Child{Name: "Amir", AgeMonths: 36, Gender: domain.GenderMale})
 		if err != nil {
 			t.Fatalf("Create: %v", err)
 		}
@@ -85,9 +85,9 @@ func TestChildRepo_Invalid(t *testing.T) {
 			}
 		}
 
-		check("age", domain.Child{Name: "a", Age: 30, Gender: domain.GenderMale}, errs.ErrValidation)
-		check("gender", domain.Child{Name: "a", Age: 3, Gender: "x"}, errs.ErrValidation)
-		check("photo", domain.Child{Name: "a", Age: 3, Gender: domain.GenderMale,
+		check("age", domain.Child{Name: "a", AgeMonths: 360, Gender: domain.GenderMale}, errs.ErrValidation)
+		check("gender", domain.Child{Name: "a", AgeMonths: 36, Gender: "x"}, errs.ErrValidation)
+		check("photo", domain.Child{Name: "a", AgeMonths: 36, Gender: domain.GenderMale,
 			PhotoID: strPtr("00000000-0000-0000-0000-000000000000")}, errs.ErrPhotoNotFound)
 	})
 }
@@ -115,11 +115,11 @@ func family(ctx context.Context, t *testing.T, s *DBStore) (mom, dad domain.User
 		t.Fatalf("Create dad: %v", err)
 	}
 
-	if shared, err = s.Child().Create(ctx, domain.Child{Name: "First", Age: 5, Gender: domain.GenderFemale}); err != nil {
+	if shared, err = s.Child().Create(ctx, domain.Child{Name: "First", AgeMonths: 60, Gender: domain.GenderFemale}); err != nil {
 		t.Fatalf("Create shared: %v", err)
 	}
 
-	if momsOnly, err = s.Child().Create(ctx, domain.Child{Name: "Second", Age: 2, Gender: domain.GenderMale}); err != nil {
+	if momsOnly, err = s.Child().Create(ctx, domain.Child{Name: "Second", AgeMonths: 24, Gender: domain.GenderMale}); err != nil {
 		t.Fatalf("Create momsOnly: %v", err)
 	}
 

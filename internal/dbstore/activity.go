@@ -32,6 +32,12 @@ type dbActivity struct {
 	MainIdeaUz      string    `db:"main_idea_uz"`
 	MainIdeaRu      string    `db:"main_idea_ru"`
 	MainIdeaEn      string    `db:"main_idea_en"`
+	EasierUz        string    `db:"easier_uz"`
+	EasierRu        string    `db:"easier_ru"`
+	EasierEn        string    `db:"easier_en"`
+	HarderUz        string    `db:"harder_uz"`
+	HarderRu        string    `db:"harder_ru"`
+	HarderEn        string    `db:"harder_en"`
 	GoalIDs         []string  `db:"goal_ids"`
 	MinAge          int16     `db:"min_age"`
 	MaxAge          int16     `db:"max_age"`
@@ -43,6 +49,7 @@ type dbActivity struct {
 
 const activityColumns = `
 	id, title_uz, title_ru, title_en, description_uz, description_ru, description_en, main_idea_uz, main_idea_ru, main_idea_en,
+	easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en,
 	goal_ids, min_age, max_age, duration_minutes, is_published, created_at, updated_at`
 
 func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Activity, error) {
@@ -53,14 +60,16 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 		q         = `
 		INSERT INTO activities (
 			title_uz, title_ru, title_en, description_uz, description_ru, description_en,
-			main_idea_uz, main_idea_ru, main_idea_en, goal_ids, min_age, max_age, duration_minutes, is_published
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			main_idea_uz, main_idea_ru, main_idea_en, easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en,
+			goal_ids, min_age, max_age, duration_minutes, is_published
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		RETURNING ` + activityColumns
 	)
 
 	rows, err := sqlClient.Query(ctx, q,
 		a.TitleUz, a.TitleRu, a.TitleEn, a.DescriptionUz, a.DescriptionRu, a.DescriptionEn,
-		a.MainIdeaUz, a.MainIdeaRu, a.MainIdeaEn, a.GoalIDs,
+		a.MainIdeaUz, a.MainIdeaRu, a.MainIdeaEn,
+		a.EasierUz, a.EasierRu, a.EasierEn, a.HarderUz, a.HarderRu, a.HarderEn, a.GoalIDs,
 		a.MinAge, a.MaxAge, a.DurationMinutes, a.IsPublished,
 	)
 	if err != nil {
@@ -226,6 +235,11 @@ func activityWhere(f domain.ActivityFilter) (string, []any) {
 		conds = append(conds, "min_age <= $"+n+" AND max_age >= $"+n)
 	}
 
+	if f.MaxMinutes > 0 {
+		args = append(args, f.MaxMinutes)
+		conds = append(conds, "duration_minutes <= $"+strconv.Itoa(len(args)))
+	}
+
 	return " WHERE " + strings.Join(conds, " AND "), args
 }
 
@@ -280,6 +294,18 @@ func activitySet(upd domain.ActivityUpdate) (string, []any) {
 		add("main_idea_en", *upd.MainIdeaEn)
 	}
 
+	for _, f := range []struct {
+		column string
+		value  *string
+	}{
+		{"easier_uz", upd.EasierUz}, {"easier_ru", upd.EasierRu}, {"easier_en", upd.EasierEn},
+		{"harder_uz", upd.HarderUz}, {"harder_ru", upd.HarderRu}, {"harder_en", upd.HarderEn},
+	} {
+		if f.value != nil {
+			add(f.column, *f.value)
+		}
+	}
+
 	if upd.GoalIDs != nil {
 		add("goal_ids", upd.GoalIDs)
 	}
@@ -315,6 +341,12 @@ func (a dbActivity) toDomain() domain.Activity {
 		MainIdeaUz:      a.MainIdeaUz,
 		MainIdeaRu:      a.MainIdeaRu,
 		MainIdeaEn:      a.MainIdeaEn,
+		EasierUz:        a.EasierUz,
+		EasierRu:        a.EasierRu,
+		EasierEn:        a.EasierEn,
+		HarderUz:        a.HarderUz,
+		HarderRu:        a.HarderRu,
+		HarderEn:        a.HarderEn,
 		GoalIDs:         nonNil(a.GoalIDs),
 		MinAge:          int(a.MinAge),
 		MaxAge:          int(a.MaxAge),
@@ -332,4 +364,89 @@ func nonNil(ids []string) []string {
 	}
 
 	return ids
+}
+
+// Similar returns published activities sharing a goal with f.ActivityID, not that activity. With
+// f.ChildID they fit f.Age and the ones the child never did (then did longest ago) come first;
+// without it they overlap f.MinAge..f.MaxAge. Then more shared goals, then newest first.
+func (r *activityRepo) Similar(ctx context.Context, f domain.SimilarFilter) ([]domain.Activity, error) {
+	l := logger.FromCtx(ctx, "activityRepo.Similar").With(zap.String("id", f.ActivityID))
+
+	minAge, maxAge := f.MinAge, f.MaxAge
+	if f.ChildID != "" {
+		minAge, maxAge = f.Age, f.Age
+	}
+
+	q := `
+		SELECT ` + prefixColumns("a", activityColumns) + `
+		FROM activities a
+		LEFT JOIN (
+			SELECT activity_id, MAX(completed_on) AS last_on
+			FROM activity_completions WHERE child_id = $1::uuid
+			GROUP BY activity_id
+		) done ON done.activity_id = a.id
+		WHERE a.is_published AND a.deleted_at IS NULL AND a.id <> $2::uuid AND a.goal_ids && $3::uuid[]
+			AND a.min_age <= $5 AND a.max_age >= $4
+		ORDER BY done.last_on NULLS FIRST,
+			(SELECT COUNT(*) FROM unnest(a.goal_ids) g WHERE g = ANY($3::uuid[])) DESC,
+			a.created_at DESC, a.id
+		LIMIT $6`
+
+	var childID *string
+	if f.ChildID != "" {
+		childID = &f.ChildID
+	}
+
+	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q, childID, f.ActivityID, nonNil(f.GoalIDs), minAge, maxAge, f.Limit)
+	if err != nil {
+		l.Error("sqlClient.Query", zap.Error(err))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	dbRows, err := pgx.CollectRows(rows, pgx.RowToStructByName[dbActivity])
+	if err != nil {
+		l.Error("pgx.CollectRows", zap.Error(err))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	out := make([]domain.Activity, 0, len(dbRows))
+	for i := range dbRows {
+		out = append(out, dbRows[i].toDomain())
+	}
+
+	return out, nil
+}
+
+// ListByIDs returns the activities among ids that are not deleted, in the order of ids. With
+// publishedOnly, unpublished ones are left out too.
+func (r *activityRepo) ListByIDs(ctx context.Context, ids []string, publishedOnly bool) ([]domain.Activity, error) {
+	l := logger.FromCtx(ctx, "activityRepo.ListByIDs")
+
+	q := `SELECT ` + prefixColumns("a", activityColumns) + `
+		FROM activities a
+		WHERE a.id = ANY($1::uuid[]) AND a.deleted_at IS NULL AND (a.is_published OR NOT $2)
+		ORDER BY array_position($1::uuid[], a.id)`
+
+	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q, nonNil(ids), publishedOnly)
+	if err != nil {
+		l.Error("sqlClient.Query", zap.Error(err))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	dbRows, err := pgx.CollectRows(rows, pgx.RowToStructByName[dbActivity])
+	if err != nil {
+		l.Error("pgx.CollectRows", zap.Error(err))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	out := make([]domain.Activity, 0, len(dbRows))
+	for i := range dbRows {
+		out = append(out, dbRows[i].toDomain())
+	}
+
+	return out, nil
 }

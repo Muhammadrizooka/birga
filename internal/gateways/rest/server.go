@@ -12,6 +12,7 @@ import (
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
+	todaylist "gitlab.com/loyihalar/birga/backend/internal/usecases/today_list"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger/ginlog"
 	"gitlab.com/loyihalar/birga/backend/pkg/metrics"
@@ -100,7 +101,7 @@ type streakGetter interface {
 }
 
 type childCreator interface {
-	Execute(ctx context.Context, userID string, c domain.Child) (domain.Child, error)
+	Execute(ctx context.Context, userID string, pro bool, c domain.Child) (domain.Child, error)
 }
 
 type childGetter interface {
@@ -116,6 +117,28 @@ type planGetter interface {
 	Next(ctx context.Context, userID, childID string) (domain.Plan, error)
 }
 
+type milestoneManager interface {
+	Create(ctx context.Context, m domain.Milestone) (domain.Milestone, error)
+	Get(ctx context.Context, id string) (domain.Milestone, error)
+	Update(ctx context.Context, id string, upd domain.MilestoneUpdate) (domain.Milestone, error)
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context, f domain.MilestoneFilter) ([]domain.Milestone, int, error)
+}
+
+type childMilestones interface {
+	List(ctx context.Context, userID string, pro bool, childID string, ageMonths int) (domain.ChildMilestones, error)
+	Get(ctx context.Context, userID string, pro bool, id, childID string) (domain.MilestoneDetail, error)
+	Mark(ctx context.Context, userID, childID, milestoneID string) error
+	Unmark(ctx context.Context, userID, childID, milestoneID string) error
+	Report(ctx context.Context, userID string, pro bool, childID, month string) (domain.MonthlyReport, error)
+}
+
+type todayList interface {
+	Execute(ctx context.Context, userID, childID string) (domain.Today, error)
+	AddExtra(ctx context.Context, req todaylist.ExtraRequest) (domain.DayExtra, error)
+	Similar(ctx context.Context, userID string, pro bool, activityID, childID string, limit int) ([]domain.Activity, error)
+}
+
 // ChildActivityUseCases groups the use cases behind the signed-in /v1/children endpoints.
 type ChildActivityUseCases struct {
 	Creator  childCreator
@@ -125,6 +148,10 @@ type ChildActivityUseCases struct {
 	Recorder completionRecorder
 	Lister   completionLister
 	Streak   streakGetter
+	Today    todayList
+	// Milestones serves the admin milestone CRUD; ChildMilestones the app side.
+	Milestones      milestoneManager
+	ChildMilestones childMilestones
 }
 
 type userCreator interface {
@@ -186,6 +213,7 @@ type articleLister interface {
 
 type articleGetter interface {
 	Execute(ctx context.Context, id, readerID string) (domain.Article, error)
+	ForUser(ctx context.Context, userID string, pro bool, id string) (domain.Article, error)
 }
 
 type articleUpdater interface {
@@ -226,7 +254,7 @@ type postLister interface {
 
 type postGetter interface {
 	Execute(ctx context.Context, id string) (domain.Post, error)
-	ForUser(ctx context.Context, userID string, role domain.UserRole, id string) (domain.Post, error)
+	ForUser(ctx context.Context, userID string, pro bool, id string) (domain.Post, error)
 }
 
 type postUpdater interface {
@@ -250,6 +278,37 @@ type PostUseCases struct {
 	Updater postUpdater
 	Deleter postDeleter
 	Daily   dailyPost
+}
+
+type topicManager interface {
+	Create(ctx context.Context, t domain.Topic) (domain.Topic, error)
+	List(ctx context.Context) ([]domain.Topic, error)
+	Update(ctx context.Context, id string, upd domain.TopicUpdate) (domain.Topic, error)
+	Delete(ctx context.Context, id string) error
+}
+
+type tipManager interface {
+	Create(ctx context.Context, t domain.Tip) (domain.Tip, error)
+	Get(ctx context.Context, id string, appOnly bool) (domain.Tip, error)
+	Update(ctx context.Context, id string, upd domain.TipUpdate) (domain.Tip, error)
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context, f domain.TipFilter) ([]domain.Tip, int, error)
+}
+
+type dailyTip interface {
+	Execute(ctx context.Context, userID string) (domain.DailyTip, error)
+}
+
+type TipUseCases struct {
+	Topics topicManager
+	Tips   tipManager
+	Daily  dailyTip
+}
+
+type proPlan interface {
+	Offer(ctx context.Context, p domain.Principal) (domain.ProOffer, error)
+	Grant(ctx context.Context, userID string, until *time.Time) (domain.User, error)
+	Purchase(ctx context.Context, p domain.Principal, method string) (domain.ProPurchase, error)
 }
 
 type otpSender interface {
@@ -339,6 +398,9 @@ type Server struct {
 	completionRecorder completionRecorder
 	completionLister   completionLister
 	streakGetter       streakGetter
+	today              todayList
+	milestones         milestoneManager
+	childMilestones    childMilestones
 
 	userCreator userCreator
 	userLister  userLister
@@ -360,6 +422,11 @@ type Server struct {
 	postUpdater postUpdater
 	postDeleter postDeleter
 	dailyPost   dailyPost
+
+	topics   topicManager
+	tips     tipManager
+	dailyTip dailyTip
+	pro      proPlan
 
 	profileUpdater   profileUpdater
 	passwordResetter passwordResetter
@@ -396,6 +463,8 @@ func New(cfg config.Application,
 	auth AuthUseCases,
 	articles ArticleUseCases,
 	posts PostUseCases,
+	tips TipUseCases,
+	pro proPlan,
 	media mediaUploader,
 ) *Server {
 	if cfg.IsProduction() {
@@ -445,6 +514,9 @@ func New(cfg config.Application,
 		completionRecorder: childActivities.Recorder,
 		completionLister:   childActivities.Lister,
 		streakGetter:       childActivities.Streak,
+		today:              childActivities.Today,
+		milestones:         childActivities.Milestones,
+		childMilestones:    childActivities.ChildMilestones,
 
 		userCreator: users.Creator,
 		userLister:  users.Lister,
@@ -466,6 +538,11 @@ func New(cfg config.Application,
 		postUpdater: posts.Updater,
 		postDeleter: posts.Deleter,
 		dailyPost:   posts.Daily,
+
+		topics:   tips.Topics,
+		tips:     tips.Tips,
+		dailyTip: tips.Daily,
+		pro:      pro,
 
 		profileUpdater:   me.Updater,
 		passwordResetter: me.Password,

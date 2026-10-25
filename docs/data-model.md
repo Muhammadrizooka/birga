@@ -25,6 +25,8 @@ Rows are soft-deleted by setting `deleted_at`.
 | `main_idea_uz` | `TEXT` | no | `''` | Uzbek "Katta g'oya" text, optional (added by `000018_add_activity_main_idea`) |
 | `main_idea_ru` | `TEXT` | no | `''` | Russian main idea, optional (`000018`) |
 | `main_idea_en` | `TEXT` | no | `''` | English main idea, optional (`000018`) |
+| `easier_uz`, `easier_ru`, `easier_en` | `TEXT` | no | `''` | the "Osonroq" variant (Birga Pro), optional (added by `000021_activity_variants_today_extras`) |
+| `harder_uz`, `harder_ru`, `harder_en` | `TEXT` | no | `''` | the "Qiyinroq" variant (Birga Pro), optional (`000021`) |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) the activity serves; no foreign key, see below |
 | `min_age` | `SMALLINT` | no | | youngest suitable age, years |
 | `max_age` | `SMALLINT` | no | | oldest suitable age, years |
@@ -99,6 +101,7 @@ setting `deleted_at`.
 | `agreed_on_conditions` | `BOOLEAN` | no | `FALSE` | consent to the terms, the tick on the sign-up screen (added by `000012_add_user_consent_and_reminder`); FALSE for older users and users created by an admin |
 | `reminder_enabled` | `BOOLEAN` | no | `FALSE` | daily reminder on or off (`000012`) |
 | `reminder_time` | `VARCHAR(5)` | no | `'18:00'` | daily reminder time, `HH:MM` 24-hour, Uzbekistan time (`000012`); check `users_reminder_time_chk` |
+| `pro_until` | `TIMESTAMPTZ` | yes | | Birga Pro given by date ends at this time (added by `000020_pro_topics_tips`); NULL means never given. Set by `PUT /v1/admin/users/{id}/pro`; read with the auth row on every request (`authRepo.Get`) |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |
@@ -225,7 +228,7 @@ Child profiles. Created by `000006_create_children_tables`. Rows are soft-delete
 |---|---|---|---|---|
 | `id` | `UUID` | no | `gen_random_uuid()` | primary key |
 | `name` | `TEXT` | no | | display name |
-| `age` | `SMALLINT` | no | | age in years, as entered; not advanced automatically |
+| `age` | `DOUBLE PRECISION` | no | | age in years as a fraction (1 month = 1/12, so 18 months is 1.5), as entered; not advanced automatically. `SMALLINT` whole years until `000023_child_age_years_float`. The API speaks months; `dbstore/child.go` converts (`domain.ChildAgeToDB`/`ChildAgeFromDB`) |
 | `gender` | `TEXT` | no | | `male` or `female` |
 | `photo_id` | `UUID` | yes | | references `media(id)` `ON DELETE SET NULL` (constraint `children_photo_id_fkey`), same as `users.photo_id` |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) picked for this child, in the order given (added by `000014_child_goals_and_plans`); no foreign key. The API requires 1 to 20 (`domain.MaxChildGoals`); empty only for a child whose goals were all deleted |
@@ -235,9 +238,10 @@ Child profiles. Created by `000006_create_children_tables`. Rows are soft-delete
 
 Constraints:
 
-- `children_age_chk`: `age BETWEEN 0 AND 18`. Wider than the 2 to 6 activity range
-  (`domain.MinChildAge`/`MaxChildAge`) so a profile stays valid as the child grows;
-  `domain.IsValidChildAge` checks the same 0 to 18 range.
+- `children_age_chk`: `age BETWEEN 0 AND 18`, kept from `000006` for older rows. The API allows
+  less: `domain.IsValidChildAgeMonths` takes 1 to 11 months, half years to 7, whole years to 12
+  (`domain.MaxChildAgeMonths` = 144). Content matching uses whole years clamped to the 2 to 6
+  activity range (`domain.MinChildAge`/`MaxChildAge`).
 - `children_gender_chk`: `gender IN ('male', 'female')` (`domain.IsKnownGender`).
 
 `internal/dbstore/child.go` reads only rows with `deleted_at IS NULL`, maps a failed check to
@@ -454,6 +458,129 @@ The daily pick of articles and posts shares one query (`dbstore/daily.go`, `dail
 
 Repository (`store.Post()`): `Create`, `Get`, `Update`, `Delete`, `List`, `WasDaily`,
 `LockDaily`, `DailyPostID`, `PickDaily`, `SetDailyPost`, `DailyHistory`.
+
+### `topics`
+
+Tags of tips, articles and videos ("Ovqat", "Uyqu"). Created by `000020_pro_topics_tips`, which
+also adds seven starter topics. Same columns and rules as [`goals`](#goals): `id`, `name_uz`,
+`name_ru`, `name_en`, `created_at`, `updated_at`, `deleted_at`; partial unique indexes
+`topics_name_{uz,ru,en}_uniq` on `LOWER(name_*) WHERE deleted_at IS NULL`. Soft delete only, so
+foreign keys from tips, articles and posts stay valid.
+
+`articles.topic_id` and `posts.topic_id` (`UUID`, nullable, references `topics(id)`) are the
+optional topic tag, added by the same migration.
+
+Repository (`store.Topic()`): `Create`, `Get`, `List`, `CountActive`, `Update`, `Delete`.
+
+### `tips`
+
+"Kun maslahati" tips. Created by `000020_pro_topics_tips`. Rows are soft-deleted by setting
+`deleted_at`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | `UUID` | no | `gen_random_uuid()` | primary key |
+| `text_uz`, `text_ru`, `text_en` | `TEXT` | no | | required by the API, at most 500 characters |
+| `topic_id` | `UUID` | no | | references `topics(id)` |
+| `min_age`, `max_age` | `SMALLINT` | no | | `2 <= min_age <= max_age <= 6` (`tips_age_range_chk`) |
+| `status` | `TEXT` | no | `'in_review'` | `published`, `in_review` or `unpublished` (`tips_status_chk`) |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+| `deleted_at` | `TIMESTAMPTZ` | yes | | soft delete |
+
+Partial index `tips_published_topic_idx` on `topic_id WHERE status = 'published' AND deleted_at IS NULL`.
+
+### `user_daily_tips`
+
+The daily tip of each user, one row per local day. Created by `000020_pro_topics_tips`. Same
+shape as [`user_daily_articles`](#user_daily_articles) with `tip_id` referencing `tips(id)`
+`ON DELETE CASCADE`; index `user_daily_tips_tip_idx` on `(user_id, tip_id)`. The rows also decide
+which tips a free-plan user sees unlocked in `GET /v1/tips`. The pick uses `dailyPicks` with
+`topicColumn = "topic_id"`: the days rotate through topics, and the children's goals are not
+matched.
+
+Repository (`store.Tip()`): `Create`, `Get`, `Update`, `Delete`, `List`, `LockDaily`,
+`DailyTipID`, `PickDaily`, `SetDailyTip`.
+
+### `milestones`
+
+Development milestones ("Ko‘nikmalar"). Created by `000022_milestones`, which also seeds 57
+published milestones (2 to 5 years, after the CDC list, in all three languages, advice empty).
+Rows are soft-deleted by setting `deleted_at`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | `UUID` | no | `gen_random_uuid()` | primary key |
+| `domain` | `TEXT` | no | | `communication`, `social`, `thinking` or `movement` (`milestones_domain_chk`) |
+| `age_months` | `SMALLINT` | no | | the stage, 2 to 72 (`milestones_age_chk`) |
+| `sort_order` | `INTEGER` | no | `0` | order within a domain and stage |
+| `text_uz`, `text_ru`, `text_en` | `TEXT` | no | | the milestone |
+| `meaning_uz`, `meaning_ru`, `meaning_en` | `TEXT` | no | `''` | advice: "Bu nimani anglatadi" |
+| `how_to_uz`, `how_to_ru`, `how_to_en` | `TEXT` | no | `''` | advice: "Qanday rivojlantirish", one step per line |
+| `specialist_uz`, `specialist_ru`, `specialist_en` | `TEXT` | no | `''` | advice: when to see a specialist |
+| `activity_ids` | `UUID[]` | no | `'{}'` | related activities; no foreign key, checked by the use case, only published ones are shown |
+| `status` | `TEXT` | no | `'in_review'` | `published`, `in_review` or `unpublished` (`milestones_status_chk`) |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+| `deleted_at` | `TIMESTAMPTZ` | yes | | soft delete |
+
+Index `milestones_published_age_idx` on `(age_months, domain, sort_order)` for published,
+not-deleted rows.
+
+### `child_milestones`
+
+The milestones a parent marked for a child ("O‘zlashtirdi"). Created by `000022_milestones`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `child_id` | `UUID` | no | | `REFERENCES children(id) ON DELETE CASCADE` |
+| `milestone_id` | `UUID` | no | | `REFERENCES milestones(id)` |
+| `user_id` | `UUID` | yes | | the parent who marked it, `REFERENCES users(id) ON DELETE SET NULL` |
+| `achieved_at` | `TIMESTAMPTZ` | no | `NOW()` | when it was marked; the monthly report counts by it |
+
+Primary key `(child_id, milestone_id)`: marking again keeps the first row. Index
+`child_milestones_child_achieved_idx` on `(child_id, achieved_at)`.
+
+Repository (`store.Milestone()`): `Create`, `Get`, `Update`, `Delete`, `List`, `Stages`,
+`ForChild`, `GetForChild`, `Mark`, `Unmark`, `CountAchieved`. `store.Activity().ListByIDs` loads
+the related activities; `store.Completion().CountBetween` counts a month's completions.
+
+### `child_day_extras`
+
+Activities a Pro parent added to a child's list for one local day, next to the plan activity
+("Bugungi reja", Figma 40a and 42). Created by `000021_activity_variants_today_extras`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `child_id` | `UUID` | no | | `REFERENCES children(id) ON DELETE CASCADE` |
+| `day` | `DATE` | no | | the local day (Uzbekistan time) |
+| `activity_id` | `UUID` | no | | `REFERENCES activities(id)`; activities are only soft-deleted |
+| `added_at` | `TIMESTAMPTZ` | no | `clock_timestamp()` | orders the list; `clock_timestamp()` so rows added in one transaction keep their order |
+
+Primary key `(child_id, day, activity_id)`: an activity is on a day's list once. Whether an extra
+is done comes from [`activity_completions`](#activity_completions) on the same day; extras never
+mark a plan day done, so they do not count toward the streak. At most 10 a day, checked by the
+use case.
+
+Repository (`store.Extra()`): `ListDay`, `Add`, `Pick` (a published activity for the child's
+age serving one goal, not in today's list, never done or done longest ago first).
+`store.Activity().Similar` serves `GET /v1/activities/{id}/similar`.
+
+### Sample content (`000024_sample_content`)
+
+Not a table: the migration adds 10 published tips, 10 articles and 10 videos (posts) in Uzbek,
+Russian and English (user request, 2026-10-25), so the library and the daily cards have
+something to show. Real content is made in the dashboard; edit or delete the samples there.
+
+- Ids are fixed (`5a1e0000-...` tips, `5a2e0000-...` articles, `5a3e0000-...` posts, ending in
+  1 to 10), so running it twice adds nothing and the down migration deletes exactly these rows
+  (their daily picks and reads go with them by cascade).
+- Tips take their topic by English name (the topics of `000020`), else the oldest active topic.
+- Articles and videos take their goal by English name (Language, Motor skills, Thinking, Social
+  skills, Emotions), else the oldest active goal; with no goals they are skipped. Their topic is
+  set by English name when such a topic exists.
+- Videos need a video file, and a migration cannot upload one: all 10 reuse the oldest uploaded
+  `media` row with a `video/*` content type. With no uploaded video they are skipped; upload one
+  in the dashboard and run the migration again by hand
+  (`psql "$POSTGRES_URL" -f migrations/000024_sample_content.up.sql`), or make the videos there.
 
 ## Conventions
 

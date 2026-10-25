@@ -14,6 +14,9 @@ type Application struct {
 	// When empty, those endpoints are disabled.
 	AdminAPIKey string `env:"ADMIN_API_KEY"`
 
+	// ProPriceUZS is the monthly Birga Pro price in so'm shown by GET /v1/pro.
+	ProPriceUZS int `env:"PRO_PRICE_UZS, default=16000"`
+
 	Postgres *DB `env:", prefix=POSTGRES_"`
 
 	// SMSProvider picks the SMS driver: "playmobile" sends real SMS, "log" only logs them

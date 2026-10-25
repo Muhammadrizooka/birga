@@ -20,6 +20,12 @@ type Activity struct {
 	MainIdeaUz      string // optional "Katta g'oya" text; empty means the app hides the box
 	MainIdeaRu      string
 	MainIdeaEn      string
+	EasierUz        string // optional "Osonroq" variant (Pro); empty means none
+	EasierRu        string
+	EasierEn        string
+	HarderUz        string // optional "Qiyinroq" variant (Pro); empty means none
+	HarderRu        string
+	HarderEn        string
 	GoalIDs         []string // ids of the goals table rows the activity serves, at least one
 	MinAge          int
 	MaxAge          int
@@ -47,8 +53,10 @@ type ActivityFilter struct {
 	// Status is ActivityStatusPublished or ActivityStatusDraft; empty lists both.
 	Status        string
 	PublishedOnly bool
-	Limit         int
-	Offset        int
+	// MaxMinutes keeps activities of at most this many minutes ("10 daqiqagacha").
+	MaxMinutes int
+	Limit      int
+	Offset     int
 }
 
 // MaxActivityGoals caps how many goals one activity can serve.
@@ -68,6 +76,12 @@ type ActivityUpdate struct {
 	MainIdeaUz      *string
 	MainIdeaRu      *string
 	MainIdeaEn      *string
+	EasierUz        *string
+	EasierRu        *string
+	EasierEn        *string
+	HarderUz        *string
+	HarderRu        *string
+	HarderEn        *string
 	GoalIDs         []string // nil keeps the goals; a non-nil list replaces them
 	MinAge          *int
 	MaxAge          *int
@@ -79,5 +93,6 @@ type ActivityUpdate struct {
 func (u ActivityUpdate) IsEmpty() bool {
 	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.DescriptionUz == nil && u.DescriptionRu == nil &&
 		u.DescriptionEn == nil && u.MainIdeaUz == nil && u.MainIdeaRu == nil && u.MainIdeaEn == nil &&
+		u.EasierUz == nil && u.EasierRu == nil && u.EasierEn == nil && u.HarderUz == nil && u.HarderRu == nil && u.HarderEn == nil &&
 		u.GoalIDs == nil && u.MinAge == nil && u.MaxAge == nil && u.DurationMinutes == nil && u.IsPublished == nil
 }

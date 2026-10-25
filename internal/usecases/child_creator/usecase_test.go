@@ -18,6 +18,11 @@ type fakeRepo struct {
 	linked    [2]string
 	createErr error
 	linkErr   error
+	existing  int
+}
+
+func (f *fakeRepo) List(context.Context, domain.ChildFilter) ([]domain.Child, int, error) {
+	return nil, f.existing, nil
 }
 
 func (f *fakeRepo) Create(_ context.Context, c domain.Child) (domain.Child, error) {
@@ -68,8 +73,8 @@ func TestExecute(t *testing.T) {
 
 	plans := &fakePlans{}
 
-	got, err := newUseCase(repo, plans, -1).Execute(context.Background(), "u1",
-		domain.Child{Name: " Amir ", Age: 3, Gender: " Male", PhotoID: &blank, GoalIDs: []string{goalID, goalID}})
+	got, err := newUseCase(repo, plans, -1).Execute(context.Background(), "u1", false,
+		domain.Child{Name: " Amir ", AgeMonths: 36, Gender: " Male", PhotoID: &blank, GoalIDs: []string{goalID, goalID}})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -87,16 +92,16 @@ func TestExecute_Invalid(t *testing.T) {
 	bad := "x"
 
 	for name, c := range map[string]domain.Child{
-		"no name":  {Age: 3, Gender: domain.GenderMale, GoalIDs: goals},
-		"old":      {Name: "A", Age: 19, Gender: domain.GenderMale, GoalIDs: goals},
-		"negative": {Name: "A", Age: -1, Gender: domain.GenderMale, GoalIDs: goals},
-		"gender":   {Name: "A", Age: 3, Gender: "other", GoalIDs: goals},
-		"photo id": {Name: "A", Age: 3, Gender: domain.GenderFemale, PhotoID: &bad, GoalIDs: goals},
-		"no goals": {Name: "A", Age: 3, Gender: domain.GenderFemale},
-		"bad goal": {Name: "A", Age: 3, Gender: domain.GenderFemale, GoalIDs: []string{"speech"}},
+		"no name":  {AgeMonths: 36, Gender: domain.GenderMale, GoalIDs: goals},
+		"old":      {Name: "A", AgeMonths: 156, Gender: domain.GenderMale, GoalIDs: goals},
+		"negative": {Name: "A", AgeMonths: -1, Gender: domain.GenderMale, GoalIDs: goals},
+		"gender":   {Name: "A", AgeMonths: 36, Gender: "other", GoalIDs: goals},
+		"photo id": {Name: "A", AgeMonths: 36, Gender: domain.GenderFemale, PhotoID: &bad, GoalIDs: goals},
+		"no goals": {Name: "A", AgeMonths: 36, Gender: domain.GenderFemale},
+		"bad goal": {Name: "A", AgeMonths: 36, Gender: domain.GenderFemale, GoalIDs: []string{"speech"}},
 	} {
 		repo := &fakeRepo{}
-		if _, err := newUseCase(repo, &fakePlans{}, -1).Execute(context.Background(), "u1", c); !errors.Is(err, errs.ErrValidation) {
+		if _, err := newUseCase(repo, &fakePlans{}, -1).Execute(context.Background(), "u1", false, c); !errors.Is(err, errs.ErrValidation) {
 			t.Errorf("%s: expected validation error, got %v", name, err)
 		}
 
@@ -109,8 +114,8 @@ func TestExecute_Invalid(t *testing.T) {
 func TestExecute_LinkFails(t *testing.T) {
 	repo := &fakeRepo{linkErr: errs.ErrUserNotFound}
 
-	if _, err := newUseCase(repo, &fakePlans{}, -1).Execute(context.Background(), "u1",
-		domain.Child{Name: "A", Age: 3, Gender: domain.GenderMale, GoalIDs: goals}); !errors.Is(err, errs.ErrUserNotFound) {
+	if _, err := newUseCase(repo, &fakePlans{}, -1).Execute(context.Background(), "u1", false,
+		domain.Child{Name: "A", AgeMonths: 36, Gender: domain.GenderMale, GoalIDs: goals}); !errors.Is(err, errs.ErrUserNotFound) {
 		t.Fatalf("expected user not found, got %v", err)
 	}
 }
@@ -118,8 +123,20 @@ func TestExecute_LinkFails(t *testing.T) {
 func TestExecute_UnknownGoal(t *testing.T) {
 	repo := &fakeRepo{}
 
-	if _, err := newUseCase(repo, &fakePlans{}, 0).Execute(context.Background(), "u1",
-		domain.Child{Name: "A", Age: 3, Gender: domain.GenderMale, GoalIDs: goals}); !errors.Is(err, errs.ErrUnknownGoals) || repo.got.Name != "" {
+	if _, err := newUseCase(repo, &fakePlans{}, 0).Execute(context.Background(), "u1", false,
+		domain.Child{Name: "A", AgeMonths: 36, Gender: domain.GenderMale, GoalIDs: goals}); !errors.Is(err, errs.ErrUnknownGoals) || repo.got.Name != "" {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestExecute_FreePlanOneChild(t *testing.T) {
+	child := domain.Child{Name: "Aziz", AgeMonths: 24, Gender: "male", GoalIDs: goals}
+
+	if _, err := newUseCase(&fakeRepo{existing: 1}, &fakePlans{}, -1).Execute(context.Background(), "u1", false, child); !errors.Is(err, errs.ErrNeedsPro) {
+		t.Errorf("free plan, second child: %v", err)
+	}
+
+	if _, err := newUseCase(&fakeRepo{existing: 1}, &fakePlans{}, -1).Execute(context.Background(), "u1", true, child); err != nil {
+		t.Errorf("pro, second child: %v", err)
 	}
 }

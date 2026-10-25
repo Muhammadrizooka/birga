@@ -40,8 +40,10 @@ type User struct {
 	// Uzbekistan time.
 	ReminderEnabled bool
 	ReminderTime    string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// ProUntil is when Birga Pro given by date ends; nil means never given. See IsPro.
+	ProUntil  *time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // UserUpdate is a partial update. A nil field is left unchanged; a non-nil
