@@ -455,8 +455,12 @@ successful payment. Real payments are on the project to-do list; the endpoint an
 stay the same then, only `paid` becomes `true` after a confirmed payment.
 
 `PUT /v1/admin/users/{id}/pro` body: `{"until": "2026-11-25T00:00:00+05:00"}` (RFC 3339) gives Pro
-until then; `{"until": null}` or a past date ends it. Response: the [user object](#user-object).
-404 for an unknown or deleted user.
+until then; `{"until": null}` or a past date ends it. Ending Pro also turns role `paid_user` into
+`user`, so nothing keeps the user Pro; an `admin` stays Pro. Response: the [user object](#user-object)
+(its `role` and `plan` show the result). 404 for an unknown or deleted user.
+
+Removing Pro by username (dashboard only): find the user with `GET /v1/admin/users?q=<username>`
+(an exact username match is the first item), then send `{"until": null}` for that user's `id`.
 
 What the free plan allows, and what Pro opens:
 
@@ -775,12 +779,15 @@ like `GET .../plan`.
 `POST /v1/children/{id}/today/extras` (Birga Pro) adds an activity to today's list. Send one of:
 
 - `{"goal_id": "..."}`: "Qaysi maqsad uchun yangi mashg‘ulot?" (40a). The backend picks a
-  published activity for the child's age (2 to 6) that serves that goal and is not in today's
-  list yet. Activities the child never did come first, then the one done longest ago. 404
+  published activity for the child's age (2 to 6) that serves that goal, is not a day of the
+  child's current 7-day plan (so it is never done early and then again on its plan day) and is
+  not in today's list yet. Activities the child never did come first, then the one done longest ago. 404
   `no other published activity serves this goal at the child's age` when none is left, 422 for a
   goal that is not active.
 - `{"activity_id": "..."}`: "Bugungi rejaga qo‘shish" and "Yana bittasi" (42). 404 for an
-  unknown or unpublished activity.
+  unknown or unpublished activity. 409 `this activity is a day of the child's 7-day plan, do it on
+  its plan day` when it is today's plan activity or a later plan day not done yet (done plan days
+  may be repeated).
 
 Response: the new item `{"activity", "done", "added_at"}`. Adding an activity that is already
 in the list returns it unchanged. A day holds at most 10 added activities (422). Without Pro the
@@ -794,8 +801,8 @@ Mark an extra done with the normal [Complete](#complete) call. It goes into the 
 `GET /v1/activities/{id}/similar?child_id=&limit=3` (signed in, Birga Pro): "O‘xshash
 mashg‘ulotlar" on the activity page (42). It returns an array of published activities that share
 a goal with this one, without the activity itself. With `child_id` (one of the caller's
-children, else 404) they fit the child's age, and the ones the child never did, then did longest
-ago, come first. Without it they overlap the activity's age range. Then come those sharing more
+children, else 404) they fit the child's age, leave out the days of the child's current 7-day
+plan, and the ones the child never did, then did longest ago, come first. Without it they overlap the activity's age range. Then come those sharing more
 goals, then the newest. `limit` is 1 to 10 (default 3, 422 outside). It is 404 for an unknown or
 unpublished activity and 403 without Pro.
 
@@ -1409,7 +1416,7 @@ user also deletes their children that have no other parent, and unlinks them fro
 | Method | Path | Description |
 |---|---|---|
 | POST | `/v1/admin/users` | create a user |
-| GET | `/v1/admin/users` | list users, newest first ([Pagination](#pagination)) |
+| GET | `/v1/admin/users` | list users, newest first ([Pagination](#pagination)); `?q=` searches |
 | GET | `/v1/admin/users/{id}` | one user |
 | PATCH | `/v1/admin/users/{id}` | change some fields of a user |
 | DELETE | `/v1/admin/users/{id}` | soft-delete a user; `data` is `null` |
@@ -1425,6 +1432,11 @@ Create body (only `phone_number` is required):
   "photo_id": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
 }
 ```
+
+List search: `GET /v1/admin/users?q=dilnoza&limit=20&offset=0` keeps users whose username starts
+with `q`, or whose name or phone number contains it (case-insensitive; a leading `@` and spaces are
+ignored; `%` and `_` are plain characters). An exact username match comes first, then newest
+first. `total` counts the matches.
 
 Update body: the same fields, all optional.
 
@@ -1472,7 +1484,8 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `agreed_on_conditions` | bool | consent given at sign-up (or later through `PATCH /v1/me`); `false` for older users and users created by an admin |
 | `reminder_enabled` | bool | daily reminder on or off, `false` by default |
 | `reminder_time` | string | daily reminder time, `HH:MM` in Uzbekistan time, `"18:00"` by default |
-| `plan` | string | `pro` while the user has [Birga Pro](#birga-pro), otherwise `free`. On `/v1/me` it also counts the `paid_user` and `admin` roles; in admin user lists it follows `pro_until` only |
+| `role` | string or `null` | sign-in role: `unverified_user`, `user`, `paid_user` or `admin`; `null` for a user without a sign-in account (created by an admin) |
+| `plan` | string | `pro` while the user has [Birga Pro](#birga-pro) (role `paid_user` or `admin`, or `pro_until` in the future), otherwise `free` |
 | `pro_until` | RFC 3339 timestamp or `null` | when Pro given by date ends; `null` when never given |
 | `created_at`, `updated_at` | RFC 3339 timestamp | `updated_at` changes on every update and on delete |
 

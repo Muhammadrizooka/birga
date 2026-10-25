@@ -133,6 +133,11 @@ func TestActivityRepo_Similar(t *testing.T) {
 			t.Fatalf("for child: %+v %v", got, err)
 		}
 
+		got, err = s.Activity().Similar(ctx, domain.SimilarFilter{ActivityID: base.ID, GoalIDs: base.GoalIDs, ChildID: child.ID, Age: 4, Limit: 3, ExcludeIDs: []string{fresh.ID}})
+		if err != nil || len(got) != 1 || got[0].ID != done.ID {
+			t.Fatalf("plan activities left out: %+v %v", got, err)
+		}
+
 		got, err = s.Activity().Similar(ctx, domain.SimilarFilter{ActivityID: base.ID, GoalIDs: base.GoalIDs, MinAge: 2, MaxAge: 6, Limit: 10})
 		if err != nil || len(got) != 3 {
 			t.Fatalf("by age range: %+v %v", got, err)

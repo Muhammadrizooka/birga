@@ -198,7 +198,7 @@ func (r *childRepo) Parents(ctx context.Context, childID string) ([]domain.User,
 	l := logger.FromCtx(ctx, "childRepo.Parents").With(zap.String("child_id", childID))
 
 	q := `
-		SELECT ` + prefixColumns("u", userColumns) + `
+		SELECT ` + prefixColumns("u", userColumns) + `, ` + userRoleColumn("u") + `
 		FROM user_children uc
 		JOIN users u ON u.id = uc.user_id AND u.deleted_at IS NULL
 		JOIN children c ON c.id = uc.child_id AND c.deleted_at IS NULL

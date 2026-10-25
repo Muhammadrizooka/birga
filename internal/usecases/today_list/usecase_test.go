@@ -17,6 +17,7 @@ const (
 	planAct  = "44444444-4444-4444-4444-444444444444"
 	otherAct = "55555555-5555-5555-5555-555555555555"
 	draftAct = "66666666-6666-6666-6666-666666666666"
+	laterAct = "88888888-8888-8888-8888-888888888888"
 )
 
 var now = time.Date(2026, 10, 25, 9, 0, 0, 0, time.UTC)
@@ -48,6 +49,8 @@ func (fakeActivities) Get(_ context.Context, id string) (domain.Activity, error)
 		return domain.Activity{ID: id, IsPublished: true, GoalIDs: []string{goalID}, MinAge: 3, MaxAge: 5}, nil
 	case draftAct:
 		return domain.Activity{ID: id}, nil
+	case laterAct, planAct:
+		return domain.Activity{ID: id, IsPublished: true}, nil
 	}
 
 	return domain.Activity{}, errs.ErrActivityNotFound
@@ -150,7 +153,10 @@ func TestExecute(t *testing.T) {
 }
 
 func TestAddExtra(t *testing.T) {
-	plans := fakePlans{days: []domain.PlanDay{{PlanItem: domain.PlanItem{Day: 1, Activity: domain.Activity{ID: planAct}}, Status: domain.PlanDayToday}}}
+	plans := fakePlans{days: []domain.PlanDay{
+		{PlanItem: domain.PlanItem{Day: 1, Activity: domain.Activity{ID: planAct}}, Status: domain.PlanDayToday},
+		{PlanItem: domain.PlanItem{Day: 2, Activity: domain.Activity{ID: laterAct}}, Status: domain.PlanDayLocked},
+	}}
 	req := ExtraRequest{UserID: parentID, Pro: true, ChildID: childID}
 
 	t.Run("free", func(t *testing.T) {
@@ -172,7 +178,8 @@ func TestAddExtra(t *testing.T) {
 			t.Fatalf("%+v %v", got, err)
 		}
 
-		if p := extras.picked; p.Age != domain.MaxChildAge || len(p.ExcludeIDs) != 2 || p.ExcludeIDs[0] != planAct {
+		if p := extras.picked; p.Age != domain.MaxChildAge || len(p.ExcludeIDs) != 3 || p.ExcludeIDs[0] != planAct ||
+			p.ExcludeIDs[1] != laterAct || p.ExcludeIDs[2] != draftAct {
 			t.Errorf("pick %+v", p)
 		}
 	})
@@ -186,6 +193,8 @@ func TestAddExtra(t *testing.T) {
 		"unknown goal": {"77777777-7777-7777-7777-777777777777", "", errs.ErrUnknownGoals},
 		"unpublished":  {"", draftAct, errs.ErrActivityNotFound},
 		"bad uuid":     {"", "nope", errs.ErrValidation},
+		"later plan":   {"", laterAct, errs.ErrActivityInPlan},
+		"today's plan": {"", planAct, errs.ErrActivityInPlan},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := req
@@ -220,7 +229,7 @@ func TestAddExtra(t *testing.T) {
 
 func TestSimilar(t *testing.T) {
 	acts := &fakeActivities{}
-	uc := newUC(fakePlans{}, &fakeExtras{}, acts)
+	uc := newUC(fakePlans{days: []domain.PlanDay{{PlanItem: domain.PlanItem{Day: 1, Activity: domain.Activity{ID: laterAct}}}}}, &fakeExtras{}, acts)
 	ctx := context.Background()
 
 	if _, err := uc.Similar(ctx, parentID, false, otherAct, "", 0); !errors.Is(err, errs.ErrNeedsPro) {
@@ -232,7 +241,8 @@ func TestSimilar(t *testing.T) {
 		t.Errorf("by activity: %+v %v", acts.similar, err)
 	}
 
-	if _, err := uc.Similar(ctx, parentID, true, otherAct, childID, 2); err != nil || acts.similar.ChildID != childID || acts.similar.Age != domain.MaxChildAge || acts.similar.Limit != 2 {
+	if _, err := uc.Similar(ctx, parentID, true, otherAct, childID, 2); err != nil || acts.similar.ChildID != childID || acts.similar.Age != domain.MaxChildAge || acts.similar.Limit != 2 ||
+		len(acts.similar.ExcludeIDs) != 1 || acts.similar.ExcludeIDs[0] != laterAct {
 		t.Errorf("for child: %+v %v", acts.similar, err)
 	}
 

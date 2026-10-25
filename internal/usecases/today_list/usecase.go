@@ -72,16 +72,23 @@ func New(l logger.Logger, children childRepo, plans planGetter, activities activ
 // today; nil when neither exists (the plan is done, or no activity fits the child's age). Only
 // the child's parents may ask (errs.ErrChildNotFound otherwise).
 func (uc *UseCase) Execute(ctx context.Context, userID, childID string) (domain.Today, error) {
+	out, _, err := uc.load(ctx, userID, childID)
+
+	return out, err
+}
+
+// load returns the child's list for today and the child's current plan.
+func (uc *UseCase) load(ctx context.Context, userID, childID string) (domain.Today, domain.Plan, error) {
 	if _, err := uc.children.GetForParent(ctx, childID, userID); err != nil {
-		return domain.Today{}, err
+		return domain.Today{}, domain.Plan{}, err
 	}
 
 	today := domain.LocalDay(uc.now())
 	out := domain.Today{Day: today}
 
-	plan, err := uc.plans.Execute(ctx, userID, childID)
-	if err != nil && !errors.Is(err, errs.ErrNoRecommendation) {
-		return domain.Today{}, err
+	plan, err := uc.currentPlan(ctx, userID, childID)
+	if err != nil {
+		return domain.Today{}, domain.Plan{}, err
 	}
 
 	for _, d := range plan.Days {
@@ -97,7 +104,7 @@ func (uc *UseCase) Execute(ctx context.Context, userID, childID string) (domain.
 	}
 
 	if out.Extras, err = uc.extras.ListDay(ctx, childID, today); err != nil {
-		return domain.Today{}, err
+		return domain.Today{}, domain.Plan{}, err
 	}
 
 	for _, e := range out.Extras {
@@ -106,13 +113,34 @@ func (uc *UseCase) Execute(ctx context.Context, userID, childID string) (domain.
 		}
 	}
 
-	return out, nil
+	return out, plan, nil
+}
+
+// currentPlan returns the child's plan; a child with no plan (no activity fits) has no days.
+func (uc *UseCase) currentPlan(ctx context.Context, userID, childID string) (domain.Plan, error) {
+	plan, err := uc.plans.Execute(ctx, userID, childID)
+	if errors.Is(err, errs.ErrNoRecommendation) {
+		return domain.Plan{}, nil
+	}
+
+	return plan, err
+}
+
+// planActivityIDs returns the activities of all days of the plan.
+func planActivityIDs(plan domain.Plan) []string {
+	ids := make([]string, 0, len(plan.Days))
+	for _, d := range plan.Days {
+		ids = append(ids, d.Activity.ID)
+	}
+
+	return ids
 }
 
 // AddExtra adds an activity to the child's day and returns it. It needs Birga Pro
 // (errs.ErrNeedsPro). With GoalID it picks a published activity for the child's age serving that
-// goal and not yet in today's list (errs.ErrNoExtra when none is left); with ActivityID it adds
-// that published activity. Adding an activity already in the list returns it unchanged; a day
+// goal, not in the child's plan and not yet in today's list (errs.ErrNoExtra when none is left);
+// with ActivityID it adds that published activity, unless it is a plan day not done yet
+// (errs.ErrActivityInPlan: done early it would have to be done again on its day). Adding an activity already in the list returns it unchanged; a day
 // holds at most domain.MaxDayExtras added activities (errs.ErrTooManyExtras).
 func (uc *UseCase) AddExtra(ctx context.Context, req ExtraRequest) (domain.DayExtra, error) {
 	if !req.Pro {
@@ -133,7 +161,7 @@ func (uc *UseCase) AddExtra(ctx context.Context, req ExtraRequest) (domain.DayEx
 		return domain.DayExtra{}, err
 	}
 
-	cur, err := uc.Execute(ctx, req.UserID, req.ChildID)
+	cur, plan, err := uc.load(ctx, req.UserID, req.ChildID)
 	if err != nil {
 		return domain.DayExtra{}, err
 	}
@@ -141,7 +169,7 @@ func (uc *UseCase) AddExtra(ctx context.Context, req ExtraRequest) (domain.DayEx
 	var a domain.Activity
 
 	if req.GoalID != "" {
-		if a, err = uc.pick(ctx, child, cur, req.GoalID); err != nil {
+		if a, err = uc.pick(ctx, child, cur, plan, req.GoalID); err != nil {
 			return domain.DayExtra{}, err
 		}
 	} else {
@@ -151,6 +179,12 @@ func (uc *UseCase) AddExtra(ctx context.Context, req ExtraRequest) (domain.DayEx
 
 		if !a.IsPublished {
 			return domain.DayExtra{}, errs.ErrActivityNotFound
+		}
+
+		if slices.ContainsFunc(plan.Days, func(d domain.PlanDay) bool {
+			return d.Activity.ID == a.ID && d.Status != domain.PlanDayDone
+		}) {
+			return domain.DayExtra{}, errs.ErrActivityInPlan
 		}
 	}
 
@@ -178,7 +212,7 @@ func (uc *UseCase) AddExtra(ctx context.Context, req ExtraRequest) (domain.DayEx
 	return domain.DayExtra{Activity: a, AddedAt: uc.now()}, nil
 }
 
-func (uc *UseCase) pick(ctx context.Context, child domain.Child, cur domain.Today, goalID string) (domain.Activity, error) {
+func (uc *UseCase) pick(ctx context.Context, child domain.Child, cur domain.Today, plan domain.Plan, goalID string) (domain.Activity, error) {
 	n, err := uc.goals.CountActive(ctx, []string{goalID})
 	if err != nil {
 		return domain.Activity{}, err
@@ -188,10 +222,7 @@ func (uc *UseCase) pick(ctx context.Context, child domain.Child, cur domain.Toda
 		return domain.Activity{}, errs.ErrUnknownGoals
 	}
 
-	p := domain.ExtraPick{ChildID: child.ID, Age: childAge(child), GoalID: goalID}
-	if cur.Plan != nil {
-		p.ExcludeIDs = append(p.ExcludeIDs, cur.Plan.Activity.ID)
-	}
+	p := domain.ExtraPick{ChildID: child.ID, Age: childAge(child), GoalID: goalID, ExcludeIDs: planActivityIDs(plan)}
 
 	for _, e := range cur.Extras {
 		p.ExcludeIDs = append(p.ExcludeIDs, e.Activity.ID)
@@ -202,7 +233,8 @@ func (uc *UseCase) pick(ctx context.Context, child domain.Child, cur domain.Toda
 
 // Similar returns up to limit published activities like activityID ("O‘xshash mashg‘ulotlar",
 // Figma 42); it needs Birga Pro. With childID (one of the user's children) they fit the child's
-// age and the ones the child never did come first; without it they overlap the activity's ages.
+// age, leave out the activities of the child's plan, and the ones the child never did come first;
+// without it they overlap the activity's ages.
 func (uc *UseCase) Similar(ctx context.Context, userID string, pro bool, activityID, childID string, limit int) ([]domain.Activity, error) {
 	if !pro {
 		return nil, errs.ErrNeedsPro
@@ -240,7 +272,12 @@ func (uc *UseCase) Similar(ctx context.Context, userID string, pro bool, activit
 			return nil, err
 		}
 
-		f.ChildID, f.Age = child.ID, childAge(child)
+		plan, err := uc.currentPlan(ctx, userID, child.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		f.ChildID, f.Age, f.ExcludeIDs = child.ID, childAge(child), planActivityIDs(plan)
 	}
 
 	return uc.activities.Similar(ctx, f)
