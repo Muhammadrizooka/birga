@@ -60,3 +60,8 @@ var (
 	ErrMediaEmpty                  = Errf(ErrValidation, "file is empty")
 	ErrMediaNotFound               = Errf(ErrNotFound, "media not found")
 )
+
+var (
+	ErrTooManyExtras = Errf(ErrValidation, "a child's day holds at most 10 added activities")
+	ErrNoExtra       = Errf(ErrNotFound, "no other published activity serves this goal at the child's age")
+)

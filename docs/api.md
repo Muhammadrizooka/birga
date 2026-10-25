@@ -187,6 +187,8 @@ Validation (`usecases/activity_creator`), all returning 422:
 
 - titles and descriptions are required in all three languages, Uzbek, Russian and English (whitespace is trimmed first);
 - `main_idea_uz`, `main_idea_ru`, `main_idea_en` are optional (trimmed, default `""`);
+- `easier_uz/ru/en` and `harder_uz/ru/en` are optional (trimmed, default `""`): the "Osonroq" and
+  "Qiyinroq" variants ("Odatdagi" is the description);
 - `goal_ids` must hold 1 to 5 UUIDs (repeats are stored once), and each must be an active goal
   from [`GET /v1/goals`](#goals) (`goals contains ids that are not active goals, ...`);
 - `2 <= min_age <= max_age <= 6`;
@@ -201,7 +203,7 @@ curl -X POST localhost:8080/v1/admin/activities \
 ```
 
 Update (`PATCH`) takes the same fields, all optional. Omitted or `null` fields are kept. Each
-given field follows the create rules (titles and descriptions cannot be emptied, `main_idea_*` can; `goal_ids`, when sent, replaces the
+given field follows the create rules (titles and descriptions cannot be emptied, `main_idea_*`, `easier_*` and `harder_*` can; `goal_ids`, when sent, replaces the
 whole list and cannot be emptied); an age that is valid alone but
 not together with the stored one, such as `min_age` above the stored `max_age`, is rejected
 by the database check, also with 422. An empty body is 422 (`nothing to update`).
@@ -444,7 +446,7 @@ What the free plan allows, and what Pro opens:
 
 | | Free | Pro |
 |---|---|---|
-| activities | the child's plan activity of the day: `POST /v1/children/{id}/completions` for any other activity is 403 `this needs Birga Pro` (repeating today's completion to change its note still works) | any activity |
+| activities | the child's plan activity of the day; no added activities in today's list, no similar activities; `POST /v1/children/{id}/completions` for any other activity is 403 `this needs Birga Pro` (repeating today's completion to change its note still works) | any activity |
 | children | one: a second `POST /v1/children` is 403 `this needs Birga Pro: the free plan has 1 child` | any number |
 | articles | the daily article, today or earlier; others `locked` and 403 ([rule](#one-article-a-day-on-the-free-plan)) | every published article |
 | videos | the daily video, today or earlier; others `locked` and 403 | every published post |
@@ -718,6 +720,55 @@ child: a parent with three children has three plans and three streaks.
 | GET | `/v1/children/{id}/completions` | the child's completions, newest first (paged) |
 | GET | `/v1/children/{id}/streak` | streak and progress counters |
 | GET | `/v1/children/{id}/streak/days` | the streak calendar: done and missed days |
+| GET | `/v1/children/{id}/today` | today's list: plan activity and added activities |
+| POST | `/v1/children/{id}/today/extras` | add an activity to today's list (Birga Pro) |
+
+#### Today's list
+
+`GET /v1/children/{id}/today`: the "Bugungi reja" list (Figma 40-42), the plan activity of the
+day and the activities a Pro parent added. It makes the child's first plan when it has none,
+like `GET .../plan`.
+
+```json
+{"day": "2026-10-25",
+ "plan": {"plan_day": 3, "status": "today", "done": false, "activity": {activity object}},
+ "extras": [{"activity": {activity object}, "done": true, "added_at": "2026-10-25T09:12:00Z"}],
+ "done_count": 1}
+```
+
+- `plan` is the open plan day (`status` `today`, `done` false) or the plan day done today
+  (`status` `done`, `done` true). It is `null` when neither exists: the plan was finished on an
+  earlier day (start the next one with `POST /v1/children/{id}/plan`), or no activity fits the
+  child's age.
+- `extras` are the added activities, oldest first. `done` means the child completed it today.
+- `done_count` counts the done items ("2 tasi bajarildi").
+
+`POST /v1/children/{id}/today/extras` (Birga Pro) adds an activity to today's list. Send one of:
+
+- `{"goal_id": "..."}`: "Qaysi maqsad uchun yangi mashg‘ulot?" (40a). The backend picks a
+  published activity for the child's age (2 to 6) that serves that goal and is not in today's
+  list yet. Activities the child never did come first, then the one done longest ago. 404
+  `no other published activity serves this goal at the child's age` when none is left, 422 for a
+  goal that is not active.
+- `{"activity_id": "..."}`: "Bugungi rejaga qo‘shish" and "Yana bittasi" (42). 404 for an
+  unknown or unpublished activity.
+
+Response: the new item `{"activity", "done", "added_at"}`. Adding an activity that is already
+in the list returns it unchanged. A day holds at most 10 added activities (422). Without Pro the
+call is 403 `this needs Birga Pro`; sending both fields or neither is 422.
+
+Mark an extra done with the normal [Complete](#complete) call. It goes into the history and
+`done_count`, but not the streak: only plan days keep the streak.
+
+#### Similar activities
+
+`GET /v1/activities/{id}/similar?child_id=&limit=3` (signed in, Birga Pro): "O‘xshash
+mashg‘ulotlar" on the activity page (42). It returns an array of published activities that share
+a goal with this one, without the activity itself. With `child_id` (one of the caller's
+children, else 404) they fit the child's age, and the ones the child never did, then did longest
+ago, come first. Without it they overlap the activity's age range. Then come those sharing more
+goals, then the newest. `limit` is 1 to 10 (default 3, 422 outside). It is 404 for an unknown or
+unpublished activity and 403 without Pro.
 
 #### Recommendation
 
@@ -1326,6 +1377,8 @@ Deleted goals are never returned, so `deleted_at` is not part of the object.
 | `title_uz`, `title_ru`, `title_en` | string | the API returns every language; the app and dashboard show the one the user picked |
 | `description_uz`, `description_ru`, `description_en` | string | `title_en` and `description_en` are `""` for activities created before English was added (`000015`) until an admin fills them in |
 | `main_idea_uz`, `main_idea_ru`, `main_idea_en` | string | the "Katta g'oya" / "Главная идея" / "Big idea" box on the activity page: what the activity teaches. Optional, `""` until an admin fills it in; the app hides the box when the text for the user's language is empty |
+| `easier_uz`, `easier_ru`, `easier_en` | string | the "Osonroq" variant (Figma 41, a Birga Pro box in the app); `""` when there is none |
+| `harder_uz`, `harder_ru`, `harder_en` | string | the "Qiyinroq" variant; `""` when there is none. The API always returns both; the app shows them to Pro users and a locked box to the others |
 | `goal_ids` | array of UUID strings | the [goals](#goals) the activity serves; normally 1 to 5, empty only if its goals were deleted |
 | `min_age`, `max_age` | int | years, inclusive |
 | `duration_minutes` | int | |

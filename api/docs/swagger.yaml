@@ -12,6 +12,15 @@ definitions:
     - UserRoleAdmin
     - UserRolePaidUser
     - UserRoleUnverifiedUser
+  rest.AddTodayExtraRequest:
+    properties:
+      activity_id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      goal_id:
+        example: 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        type: string
+    type: object
   rest.BadRequestResponse:
     properties:
       data: {}
@@ -68,12 +77,30 @@ definitions:
         maximum: 60
         minimum: 1
         type: integer
+      easier_en:
+        example: Start with only two colours
+        type: string
+      easier_ru:
+        example: Начните только с двух цветов
+        type: string
+      easier_uz:
+        example: Faqat ikki rangdan boshlang
+        type: string
       goal_ids:
         example:
         - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
         items:
           type: string
         type: array
+      harder_en:
+        example: Also sort the stones by size
+        type: string
+      harder_ru:
+        example: Сортируйте камни ещё и по размеру
+        type: string
+      harder_uz:
+        example: Toshlarni o'lchami bo'yicha ham saralang
+        type: string
       is_published:
         example: true
         type: boolean
@@ -554,12 +581,30 @@ definitions:
         maximum: 60
         minimum: 1
         type: integer
+      easier_en:
+        example: Start with only two colours
+        type: string
+      easier_ru:
+        example: Начните только с двух цветов
+        type: string
+      easier_uz:
+        example: Faqat ikki rangdan boshlang
+        type: string
       goal_ids:
         example:
         - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
         items:
           type: string
         type: array
+      harder_en:
+        example: Also sort the stones by size
+        type: string
+      harder_ru:
+        example: Сортируйте камни ещё и по размеру
+        type: string
+      harder_uz:
+        example: Toshlarni o'lchami bo'yicha ham saralang
+        type: string
       is_published:
         example: true
         type: boolean
@@ -868,12 +913,24 @@ definitions:
       duration_minutes:
         example: 10
         type: integer
+      easier_en:
+        type: string
+      easier_ru:
+        type: string
+      easier_uz:
+        type: string
       goal_ids:
         example:
         - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
         items:
           type: string
         type: array
+      harder_en:
+        type: string
+      harder_ru:
+        type: string
+      harder_uz:
+        type: string
       id:
         example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
         type: string
@@ -1667,6 +1724,48 @@ definitions:
       updated_at:
         type: string
     type: object
+  rest.todayExtraView:
+    properties:
+      activity:
+        $ref: '#/definitions/rest.activityView'
+      added_at:
+        type: string
+      done:
+        example: true
+        type: boolean
+    type: object
+  rest.todayPlanView:
+    properties:
+      activity:
+        $ref: '#/definitions/rest.activityView'
+      done:
+        example: false
+        type: boolean
+      plan_day:
+        example: 3
+        type: integer
+      status:
+        enum:
+        - today
+        - done
+        example: today
+        type: string
+    type: object
+  rest.todayView:
+    properties:
+      day:
+        example: "2026-10-25"
+        type: string
+      done_count:
+        example: 2
+        type: integer
+      extras:
+        items:
+          $ref: '#/definitions/rest.todayExtraView'
+        type: array
+      plan:
+        $ref: '#/definitions/rest.todayPlanView'
+    type: object
   rest.tokenPairView:
     properties:
       access_token:
@@ -1986,6 +2085,69 @@ paths:
           schema:
             $ref: '#/definitions/rest.InternalServerErrorResponse'
       summary: returns a published activity
+      tags:
+      - activities
+  /v1/activities/{id}/similar:
+    get:
+      description: |-
+        "O‘xshash mashg‘ulotlar": published activities sharing a goal with this one. With child_id
+        they fit the child's age and the ones the child never did come first; without it they
+        overlap the activity's age range. 403 without Birga Pro.
+      parameters:
+      - description: activity id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: one of the caller's children
+        in: query
+        name: child_id
+        type: string
+      - description: how many (default 3, max 10)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/rest.activityView'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: lists activities similar to one (Birga Pro)
       tags:
       - activities
   /v1/admin/activities:
@@ -4551,6 +4713,118 @@ paths:
       security:
       - BearerAuth: []
       summary: 'a child''s streak calendar: done and missed days'
+      tags:
+      - children
+  /v1/children/{id}/today:
+    get:
+      description: |-
+        "Bugungi reja": the plan activity of the day and the activities a Pro parent added.
+        - plan is the open plan day (status today) or the plan day done today (status done);
+        null when neither exists (the plan is done, or no activity fits the child's age)
+        - extras are the added activities, oldest first, each with done
+        - done_count counts the done items of the list
+        - only the child's parents can ask (404 otherwise)
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.todayView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: returns a child's list for today
+      tags:
+      - children
+  /v1/children/{id}/today/extras:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - goal_id: picks a published activity for the child's age that serves the goal and is
+        not in today's list yet, never-done ones first (404 when none is left)
+        - activity_id: adds that published activity (404 for an unknown or unpublished one)
+        - adding an activity already in the list returns it; at most 10 a day (422)
+        - mark it done with POST /v1/children/{id}/completions; it does not count toward the streak
+        - 403 without Birga Pro
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: goal_id or activity_id
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.AddTodayExtraRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.todayExtraView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: adds an activity to a child's list for today (Birga Pro)
       tags:
       - children
   /v1/goals:

@@ -199,6 +199,103 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/activities/{id}/similar": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "\"O‘xshash mashg‘ulotlar\": published activities sharing a goal with this one. With child_id\nthey fit the child's age and the ones the child never did come first; without it they\noverlap the activity's age range. 403 without Birga Pro.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "activities"
+                ],
+                "summary": "lists activities similar to one (Birga Pro)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "activity id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "one of the caller's children",
+                        "name": "child_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "how many (default 3, max 10)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/rest.activityView"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/activities": {
             "get": {
                 "security": [
@@ -4125,6 +4222,170 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/children/{id}/today": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "\"Bugungi reja\": the plan activity of the day and the activities a Pro parent added.\n- plan is the open plan day (status today) or the plan day done today (status done);\nnull when neither exists (the plan is done, or no activity fits the child's age)\n- extras are the added activities, oldest first, each with done\n- done_count counts the done items of the list\n- only the child's parents can ask (404 otherwise)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "returns a child's list for today",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.todayView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/children/{id}/today/extras": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- goal_id: picks a published activity for the child's age that serves the goal and is\nnot in today's list yet, never-done ones first (404 when none is left)\n- activity_id: adds that published activity (404 for an unknown or unpublished one)\n- adding an activity already in the list returns it; at most 10 a day (422)\n- mark it done with POST /v1/children/{id}/completions; it does not count toward the streak\n- 403 without Birga Pro",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "adds an activity to a child's list for today (Birga Pro)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "goal_id or activity_id",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.AddTodayExtraRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.todayExtraView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/goals": {
             "get": {
                 "description": "- open without a token; every active goal, oldest first, not paginated",
@@ -5481,6 +5742,19 @@ const docTemplate = `{
                 "UserRoleUnverifiedUser"
             ]
         },
+        "rest.AddTodayExtraRequest": {
+            "type": "object",
+            "properties": {
+                "activity_id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "goal_id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                }
+            }
+        },
         "rest.BadRequestResponse": {
             "type": "object",
             "properties": {
@@ -5568,6 +5842,18 @@ const docTemplate = `{
                     "minimum": 1,
                     "example": 10
                 },
+                "easier_en": {
+                    "type": "string",
+                    "example": "Start with only two colours"
+                },
+                "easier_ru": {
+                    "type": "string",
+                    "example": "Начните только с двух цветов"
+                },
+                "easier_uz": {
+                    "type": "string",
+                    "example": "Faqat ikki rangdan boshlang"
+                },
                 "goal_ids": {
                     "type": "array",
                     "items": {
@@ -5576,6 +5862,18 @@ const docTemplate = `{
                     "example": [
                         "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
                     ]
+                },
+                "harder_en": {
+                    "type": "string",
+                    "example": "Also sort the stones by size"
+                },
+                "harder_ru": {
+                    "type": "string",
+                    "example": "Сортируйте камни ещё и по размеру"
+                },
+                "harder_uz": {
+                    "type": "string",
+                    "example": "Toshlarni o'lchami bo'yicha ham saralang"
                 },
                 "is_published": {
                     "type": "boolean",
@@ -6249,6 +6547,18 @@ const docTemplate = `{
                     "minimum": 1,
                     "example": 10
                 },
+                "easier_en": {
+                    "type": "string",
+                    "example": "Start with only two colours"
+                },
+                "easier_ru": {
+                    "type": "string",
+                    "example": "Начните только с двух цветов"
+                },
+                "easier_uz": {
+                    "type": "string",
+                    "example": "Faqat ikki rangdan boshlang"
+                },
                 "goal_ids": {
                     "type": "array",
                     "items": {
@@ -6257,6 +6567,18 @@ const docTemplate = `{
                     "example": [
                         "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
                     ]
+                },
+                "harder_en": {
+                    "type": "string",
+                    "example": "Also sort the stones by size"
+                },
+                "harder_ru": {
+                    "type": "string",
+                    "example": "Сортируйте камни ещё и по размеру"
+                },
+                "harder_uz": {
+                    "type": "string",
+                    "example": "Toshlarni o'lchami bo'yicha ham saralang"
                 },
                 "is_published": {
                     "type": "boolean",
@@ -6674,6 +6996,15 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 10
                 },
+                "easier_en": {
+                    "type": "string"
+                },
+                "easier_ru": {
+                    "type": "string"
+                },
+                "easier_uz": {
+                    "type": "string"
+                },
                 "goal_ids": {
                     "type": "array",
                     "items": {
@@ -6682,6 +7013,15 @@ const docTemplate = `{
                     "example": [
                         "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
                     ]
+                },
+                "harder_en": {
+                    "type": "string"
+                },
+                "harder_ru": {
+                    "type": "string"
+                },
+                "harder_uz": {
+                    "type": "string"
                 },
                 "id": {
                     "type": "string",
@@ -7745,6 +8085,67 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "rest.todayExtraView": {
+            "type": "object",
+            "properties": {
+                "activity": {
+                    "$ref": "#/definitions/rest.activityView"
+                },
+                "added_at": {
+                    "type": "string"
+                },
+                "done": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "rest.todayPlanView": {
+            "type": "object",
+            "properties": {
+                "activity": {
+                    "$ref": "#/definitions/rest.activityView"
+                },
+                "done": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "plan_day": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "today",
+                        "done"
+                    ],
+                    "example": "today"
+                }
+            }
+        },
+        "rest.todayView": {
+            "type": "object",
+            "properties": {
+                "day": {
+                    "type": "string",
+                    "example": "2026-10-25"
+                },
+                "done_count": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "extras": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.todayExtraView"
+                    }
+                },
+                "plan": {
+                    "$ref": "#/definitions/rest.todayPlanView"
                 }
             }
         },

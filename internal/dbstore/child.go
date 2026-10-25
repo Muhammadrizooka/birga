@@ -306,9 +306,9 @@ func childSet(upd domain.ChildUpdate) (string, []any) {
 
 // prefixColumns qualifies a comma-separated column list with a table alias.
 func prefixColumns(alias, columns string) string {
-	parts := strings.Split(columns, ", ")
+	parts := strings.Split(columns, ",")
 	for i := range parts {
-		parts[i] = alias + "." + parts[i]
+		parts[i] = alias + "." + strings.TrimSpace(parts[i])
 	}
 
 	return strings.Join(parts, ", ")

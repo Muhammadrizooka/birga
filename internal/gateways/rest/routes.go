@@ -38,6 +38,7 @@ func (s *Server) endpoints() {
 	v1.POST("/auth/logout", s.userAuth(), s.Logout())
 	v1.GET("/pro", s.userAuth(), s.GetProOffer())
 	v1.GET("/tips", s.userAuth(), s.ListTips())
+	v1.GET("/activities/:id/similar", s.userAuth(), s.GetSimilarActivities())
 
 	// Every signed-in role may manage its own children; ownership is checked per child in the use cases.
 	v1.POST("/children",
@@ -79,6 +80,8 @@ func (s *Server) endpoints() {
 		child.GET("/plan", s.GetPlan())
 		child.POST("/plan", s.RestartPlan())
 		child.GET("/recommendation", s.RecommendActivity())
+		child.GET("/today", s.GetToday())
+		child.POST("/today/extras", s.AddTodayExtra())
 		child.POST("/completions", s.CompleteActivity())
 		child.GET("/completions", s.ListCompletions())
 		child.GET("/streak", s.GetStreak())

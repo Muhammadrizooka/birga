@@ -34,6 +34,7 @@ func New(db *pgxpool.Pool) *DBStore {
 	s.postRepo = &postRepo{store: s}
 	s.topicRepo = &topicRepo{store: s}
 	s.tipRepo = &tipRepo{store: s}
+	s.extraRepo = &extraRepo{store: s}
 
 	return s
 }
@@ -54,6 +55,7 @@ type DBStore struct {
 	postRepo       *postRepo
 	topicRepo      *topicRepo
 	tipRepo        *tipRepo
+	extraRepo      *extraRepo
 }
 
 func (s *DBStore) Activity() *activityRepo {
@@ -102,6 +104,10 @@ func (s *DBStore) Topic() *topicRepo {
 
 func (s *DBStore) Tip() *tipRepo {
 	return s.tipRepo
+}
+
+func (s *DBStore) Extra() *extraRepo {
+	return s.extraRepo
 }
 
 // Ping checks database connectivity (used by the health endpoint).

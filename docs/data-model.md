@@ -25,6 +25,8 @@ Rows are soft-deleted by setting `deleted_at`.
 | `main_idea_uz` | `TEXT` | no | `''` | Uzbek "Katta g'oya" text, optional (added by `000018_add_activity_main_idea`) |
 | `main_idea_ru` | `TEXT` | no | `''` | Russian main idea, optional (`000018`) |
 | `main_idea_en` | `TEXT` | no | `''` | English main idea, optional (`000018`) |
+| `easier_uz`, `easier_ru`, `easier_en` | `TEXT` | no | `''` | the "Osonroq" variant (Birga Pro), optional (added by `000021_activity_variants_today_extras`) |
+| `harder_uz`, `harder_ru`, `harder_en` | `TEXT` | no | `''` | the "Qiyinroq" variant (Birga Pro), optional (`000021`) |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) the activity serves; no foreign key, see below |
 | `min_age` | `SMALLINT` | no | | youngest suitable age, years |
 | `max_age` | `SMALLINT` | no | | oldest suitable age, years |
@@ -497,6 +499,27 @@ matched.
 
 Repository (`store.Tip()`): `Create`, `Get`, `Update`, `Delete`, `List`, `LockDaily`,
 `DailyTipID`, `PickDaily`, `SetDailyTip`.
+
+### `child_day_extras`
+
+Activities a Pro parent added to a child's list for one local day, next to the plan activity
+("Bugungi reja", Figma 40a and 42). Created by `000021_activity_variants_today_extras`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `child_id` | `UUID` | no | | `REFERENCES children(id) ON DELETE CASCADE` |
+| `day` | `DATE` | no | | the local day (Uzbekistan time) |
+| `activity_id` | `UUID` | no | | `REFERENCES activities(id)`; activities are only soft-deleted |
+| `added_at` | `TIMESTAMPTZ` | no | `clock_timestamp()` | orders the list; `clock_timestamp()` so rows added in one transaction keep their order |
+
+Primary key `(child_id, day, activity_id)`: an activity is on a day's list once. Whether an extra
+is done comes from [`activity_completions`](#activity_completions) on the same day; extras never
+mark a plan day done, so they do not count toward the streak. At most 10 a day, checked by the
+use case.
+
+Repository (`store.Extra()`): `ListDay`, `Add`, `Pick` (a published activity for the child's
+age serving one goal, not in today's list, never done or done longest ago first).
+`store.Activity().Similar` serves `GET /v1/activities/{id}/similar`.
 
 ## Conventions
 

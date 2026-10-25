@@ -45,7 +45,8 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.ActivityUp
 	}
 
 	for _, s := range []**string{&upd.TitleUz, &upd.TitleRu, &upd.TitleEn, &upd.DescriptionUz, &upd.DescriptionRu, &upd.DescriptionEn,
-		&upd.MainIdeaUz, &upd.MainIdeaRu, &upd.MainIdeaEn} {
+		&upd.MainIdeaUz, &upd.MainIdeaRu, &upd.MainIdeaEn,
+		&upd.EasierUz, &upd.EasierRu, &upd.EasierEn, &upd.HarderUz, &upd.HarderRu, &upd.HarderEn} {
 		if *s != nil {
 			v := strings.TrimSpace(**s)
 			*s = &v

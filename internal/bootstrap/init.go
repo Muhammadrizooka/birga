@@ -57,6 +57,7 @@ import (
 	profileupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/profile_updater"
 	streakgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/streak_getter"
 	tipmanager "gitlab.com/loyihalar/birga/backend/internal/usecases/tip_manager"
+	todaylist "gitlab.com/loyihalar/birga/backend/internal/usecases/today_list"
 	tokenchecker "gitlab.com/loyihalar/birga/backend/internal/usecases/token_checker"
 	tokenrefresher "gitlab.com/loyihalar/birga/backend/internal/usecases/token_refresher"
 	topicmanager "gitlab.com/loyihalar/birga/backend/internal/usecases/topic_manager"
@@ -258,6 +259,7 @@ type useCases struct {
 	completionRecorder *completionrecorder.UseCase
 	completionLister   *completionlister.UseCase
 	streakGetter       *streakgetter.UseCase
+	todayList          *todaylist.UseCase
 
 	userCreator *usercreator.UseCase
 	userLister  *userlister.UseCase
@@ -340,6 +342,8 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 			store, store.Child(), store.Activity(), store.Completion(), store.Plan()),
 		completionLister: completionlister.New(l.Named("usecase.completion_lister"), store.Child(), store.Completion()),
 		streakGetter:     streakgetter.New(l.Named("usecase.streak_getter"), store.Child(), store.Plan()),
+		todayList: todaylist.New(l.Named("usecase.today_list"),
+			store.Child(), planGetter, store.Activity(), store.Extra(), store.Goal()),
 
 		userCreator: usercreator.New(l.Named("usecase.user_creator"), store.User()),
 		userLister:  userlister.New(l.Named("usecase.user_lister"), store.User()),
@@ -421,6 +425,7 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Recorder: ucs.completionRecorder,
 			Lister:   ucs.completionLister,
 			Streak:   ucs.streakGetter,
+			Today:    ucs.todayList,
 		},
 		rest.UserUseCases{
 			Creator: ucs.userCreator,

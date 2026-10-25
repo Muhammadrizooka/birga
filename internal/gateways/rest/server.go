@@ -12,6 +12,7 @@ import (
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
+	todaylist "gitlab.com/loyihalar/birga/backend/internal/usecases/today_list"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger/ginlog"
 	"gitlab.com/loyihalar/birga/backend/pkg/metrics"
@@ -116,6 +117,12 @@ type planGetter interface {
 	Next(ctx context.Context, userID, childID string) (domain.Plan, error)
 }
 
+type todayList interface {
+	Execute(ctx context.Context, userID, childID string) (domain.Today, error)
+	AddExtra(ctx context.Context, req todaylist.ExtraRequest) (domain.DayExtra, error)
+	Similar(ctx context.Context, userID string, pro bool, activityID, childID string, limit int) ([]domain.Activity, error)
+}
+
 // ChildActivityUseCases groups the use cases behind the signed-in /v1/children endpoints.
 type ChildActivityUseCases struct {
 	Creator  childCreator
@@ -125,6 +132,7 @@ type ChildActivityUseCases struct {
 	Recorder completionRecorder
 	Lister   completionLister
 	Streak   streakGetter
+	Today    todayList
 }
 
 type userCreator interface {
@@ -370,6 +378,7 @@ type Server struct {
 	completionRecorder completionRecorder
 	completionLister   completionLister
 	streakGetter       streakGetter
+	today              todayList
 
 	userCreator userCreator
 	userLister  userLister
@@ -483,6 +492,7 @@ func New(cfg config.Application,
 		completionRecorder: childActivities.Recorder,
 		completionLister:   childActivities.Lister,
 		streakGetter:       childActivities.Streak,
+		today:              childActivities.Today,
 
 		userCreator: users.Creator,
 		userLister:  users.Lister,

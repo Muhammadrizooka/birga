@@ -62,6 +62,12 @@ type CreateActivityRequest struct {
 	MainIdeaUz      string   `json:"main_idea_uz" example:"Bola ranglarni nomlab, ularni farqlashni o'rganadi."`
 	MainIdeaRu      string   `json:"main_idea_ru" example:"Называя цвета, ребёнок учится их различать."`
 	MainIdeaEn      string   `json:"main_idea_en" example:"Naming colours helps the child tell them apart."`
+	EasierUz        string   `json:"easier_uz" example:"Faqat ikki rangdan boshlang"`
+	EasierRu        string   `json:"easier_ru" example:"Начните только с двух цветов"`
+	EasierEn        string   `json:"easier_en" example:"Start with only two colours"`
+	HarderUz        string   `json:"harder_uz" example:"Toshlarni o'lchami bo'yicha ham saralang"`
+	HarderRu        string   `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
+	HarderEn        string   `json:"harder_en" example:"Also sort the stones by size"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int      `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          int      `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -106,6 +112,12 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 			MainIdeaUz:      req.MainIdeaUz,
 			MainIdeaRu:      req.MainIdeaRu,
 			MainIdeaEn:      req.MainIdeaEn,
+			EasierUz:        req.EasierUz,
+			EasierRu:        req.EasierRu,
+			EasierEn:        req.EasierEn,
+			HarderUz:        req.HarderUz,
+			HarderRu:        req.HarderRu,
+			HarderEn:        req.HarderEn,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -275,6 +287,12 @@ type UpdateActivityRequest struct {
 	MainIdeaUz      *string  `json:"main_idea_uz" example:"Bola ranglarni nomlab, ularni farqlashni o'rganadi."`
 	MainIdeaRu      *string  `json:"main_idea_ru" example:"Называя цвета, ребёнок учится их различать."`
 	MainIdeaEn      *string  `json:"main_idea_en" example:"Naming colours helps the child tell them apart."`
+	EasierUz        *string  `json:"easier_uz" example:"Faqat ikki rangdan boshlang"`
+	EasierRu        *string  `json:"easier_ru" example:"Начните только с двух цветов"`
+	EasierEn        *string  `json:"easier_en" example:"Start with only two colours"`
+	HarderUz        *string  `json:"harder_uz" example:"Toshlarni o'lchami bo'yicha ham saralang"`
+	HarderRu        *string  `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
+	HarderEn        *string  `json:"harder_en" example:"Also sort the stones by size"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          *int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          *int     `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -327,6 +345,12 @@ func (s *Server) UpdateActivity() gin.HandlerFunc {
 			MainIdeaUz:      req.MainIdeaUz,
 			MainIdeaRu:      req.MainIdeaRu,
 			MainIdeaEn:      req.MainIdeaEn,
+			EasierUz:        req.EasierUz,
+			EasierRu:        req.EasierRu,
+			EasierEn:        req.EasierEn,
+			HarderUz:        req.HarderUz,
+			HarderRu:        req.HarderRu,
+			HarderEn:        req.HarderEn,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -381,6 +405,12 @@ type activityView struct {
 	MainIdeaUz      string    `json:"main_idea_uz"`
 	MainIdeaRu      string    `json:"main_idea_ru"`
 	MainIdeaEn      string    `json:"main_idea_en"`
+	EasierUz        string    `json:"easier_uz"`
+	EasierRu        string    `json:"easier_ru"`
+	EasierEn        string    `json:"easier_en"`
+	HarderUz        string    `json:"harder_uz"`
+	HarderRu        string    `json:"harder_ru"`
+	HarderEn        string    `json:"harder_en"`
 	GoalIDs         []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int       `json:"min_age" example:"3"`
 	MaxAge          int       `json:"max_age" example:"5"`
@@ -409,6 +439,12 @@ func toActivityView(a domain.Activity) activityView {
 		MainIdeaUz:      a.MainIdeaUz,
 		MainIdeaRu:      a.MainIdeaRu,
 		MainIdeaEn:      a.MainIdeaEn,
+		EasierUz:        a.EasierUz,
+		EasierRu:        a.EasierRu,
+		EasierEn:        a.EasierEn,
+		HarderUz:        a.HarderUz,
+		HarderRu:        a.HarderRu,
+		HarderEn:        a.HarderEn,
 		GoalIDs:         a.GoalIDs,
 		MinAge:          a.MinAge,
 		MaxAge:          a.MaxAge,
