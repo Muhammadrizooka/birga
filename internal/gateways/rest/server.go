@@ -136,6 +136,7 @@ type childMilestones interface {
 type todayList interface {
 	Execute(ctx context.Context, userID, childID string) (domain.Today, error)
 	AddExtra(ctx context.Context, req todaylist.ExtraRequest) (domain.DayExtra, error)
+	ChangeDifficulty(ctx context.Context, req domain.DifficultyChange) (domain.Activity, error)
 	Similar(ctx context.Context, userID string, pro bool, activityID, childID string, limit int) ([]domain.Activity, error)
 }
 

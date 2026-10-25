@@ -29,13 +29,25 @@ type Today struct {
 	DoneCount int
 }
 
-// ExtraPick asks for a new activity for a child's day serving GoalID, within Age and not in
-// ExcludeIDs.
+// ExtraPick asks for a new activity for a child's day serving one of GoalIDs (any goal when
+// empty), within Age and not in ExcludeIDs. With Difficulty set only activities of that level
+// match; otherwise normal ones come first.
 type ExtraPick struct {
 	ChildID    string
 	Age        int
-	GoalID     string
+	GoalIDs    []string
+	Difficulty string
 	ExcludeIDs []string
+}
+
+// DifficultyChange asks to swap ActivityID, an item of a child's list for today (the open plan
+// day or an added activity), for another activity of level Difficulty.
+type DifficultyChange struct {
+	UserID     string
+	Pro        bool
+	ChildID    string
+	ActivityID string
+	Difficulty string
 }
 
 // SimilarFilter asks for activities like ActivityID: sharing one of GoalIDs, not the activity

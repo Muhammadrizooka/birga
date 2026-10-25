@@ -30,6 +30,13 @@ func TestPlanRepo(t *testing.T) {
 			t.Fatalf("Pick: %+v %v", got, err)
 		}
 
+		// Normal activities before easy or difficult ones, even ones serving more goals.
+		easyBoth := activity(goal, 2, 6, true)
+		easyBoth.GoalIDs, easyBoth.Difficulty = append(easyBoth.GoalIDs, other), domain.DifficultyEasy
+		if _, err := s.Activity().Create(ctx, easyBoth); err != nil {
+			t.Fatalf("Create easy: %v", err)
+		}
+
 		pick.ExcludeIDs = []string{both.ID}
 		if got, err := s.Plan().Pick(ctx, pick); err != nil || got.ID != served.ID {
 			t.Fatalf("Pick without both: %+v %v", got, err)

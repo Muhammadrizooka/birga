@@ -65,6 +65,10 @@ var (
 	ErrTooManyExtras  = Errf(ErrValidation, "a child's day holds at most 10 added activities")
 	ErrNoExtra        = Errf(ErrNotFound, "no other published activity serves this goal at the child's age")
 	ErrActivityInPlan = Errf(ErrConflict, "this activity is a day of the child's 7-day plan, do it on its plan day")
+
+	ErrNotInToday        = Errf(ErrNotFound, "this activity is not in the child's list for today")
+	ErrTodayItemDone     = Errf(ErrConflict, "this activity is already done today, it cannot be changed")
+	ErrNoDifficultyMatch = Errf(ErrNotFound, "no other published activity of this difficulty serves the goal at the child's age")
 )
 
 var (

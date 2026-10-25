@@ -106,6 +106,68 @@ func (s *Server) AddTodayExtra() gin.HandlerFunc {
 	}
 }
 
+// ChangeTodayDifficultyRequest names the item of today's list to swap and the level wanted.
+type ChangeTodayDifficultyRequest struct {
+	ActivityID string `json:"activity_id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
+	Difficulty string `json:"difficulty" example:"easy" enums:"easy,normal,difficult"`
+}
+
+// ChangeTodayDifficulty godoc swagger
+// @Summary swaps an activity of today's list for one of another difficulty (Birga Pro)
+// @Description "Osonroq / Odatdagi / Qiyinroq" on the activity page. activity_id is today's open plan
+// @Description activity or an added activity not done yet. The backend picks another published
+// @Description activity of that difficulty for the child's age and the same goal (the plan day's goal,
+// @Description or one of the added activity's goals), never the current one, a plan day or one already in
+// @Description today's list, so asking for the level it already has gives another activity of that level.
+// @Description The new activity takes the item's place: done on the plan day it keeps the streak.
+// @Description - 403 without Birga Pro
+// @Description - 404 when the activity is not in today's list, or no activity of that difficulty is left
+// @Description - 409 when the item is already done today
+// @Description - 422 for a difficulty other than easy, normal, difficult
+// @Tags children
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "child id (UUID)"
+// @Param body body ChangeTodayDifficultyRequest true "activity and level"
+// @Success 200 {object} rest.R{data=rest.activityView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 403 {object} rest.ForbiddenResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 409 {object} rest.ConflictResponse
+// @Failure 422 {object} rest.UnprocessableContentResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/children/{id}/today/difficulty [POST]
+func (s *Server) ChangeTodayDifficulty() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		childID := c.Param("id")
+		if err := ValidateUUID(childID); err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		var req ChangeTodayDifficultyRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			Return(c, nil, errs.Errf(errs.ErrBadRequest, "invalid JSON body: %s", err.Error()))
+
+			return
+		}
+
+		a, err := s.today.ChangeDifficulty(c.Request.Context(), domain.DifficultyChange{
+			UserID: currentUserID(c), Pro: currentUserPro(c), ChildID: childID, ActivityID: req.ActivityID, Difficulty: req.Difficulty,
+		})
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, toActivityView(a), nil)
+	}
+}
+
 // GetSimilarActivities godoc swagger
 // @Summary lists activities similar to one (Birga Pro)
 // @Description "O‘xshash mashg‘ulotlar": published activities sharing a goal with this one. With child_id

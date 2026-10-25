@@ -82,6 +82,17 @@
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "easy",
+                            "normal",
+                            "difficult"
+                        ],
+                        "type": "string",
+                        "description": "only activities of this level",
+                        "name": "difficulty",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "page size (default 20, max 100)",
                         "name": "limit",
@@ -324,6 +335,17 @@
                     },
                     {
                         "enum": [
+                            "easy",
+                            "normal",
+                            "difficult"
+                        ],
+                        "type": "string",
+                        "description": "only activities of this level",
+                        "name": "difficulty",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
                             "published",
                             "draft"
                         ],
@@ -396,7 +418,7 @@
                         "AdminKey": []
                     }
                 ],
-                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6\n- main_idea_uz/ru/en are optional (the \"Katta g'oya\" box); empty hides the box in the app",
+                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6\n- main_idea_uz/ru/en are optional (the \"Katta g'oya\" box); empty hides the box in the app\n- difficulty is easy, normal or difficult (default normal); plans pick normal ones first",
                 "consumes": [
                     "application/json"
                 ],
@@ -4977,6 +4999,106 @@
                 }
             }
         },
+        "/v1/children/{id}/today/difficulty": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "\"Osonroq / Odatdagi / Qiyinroq\" on the activity page. activity_id is today's open plan\nactivity or an added activity not done yet. The backend picks another published\nactivity of that difficulty for the child's age and the same goal (the plan day's goal,\nor one of the added activity's goals), never the current one, a plan day or one already in\ntoday's list, so asking for the level it already has gives another activity of that level.\nThe new activity takes the item's place: done on the plan day it keeps the streak.\n- 403 without Birga Pro\n- 404 when the activity is not in today's list, or no activity of that difficulty is left\n- 409 when the item is already done today\n- 422 for a difficulty other than easy, normal, difficult",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "swaps an activity of today's list for one of another difficulty (Birga Pro)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "activity and level",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.ChangeTodayDifficultyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.activityView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/children/{id}/today/extras": {
             "post": {
                 "security": [
@@ -6617,6 +6739,24 @@
                 }
             }
         },
+        "rest.ChangeTodayDifficultyRequest": {
+            "type": "object",
+            "properties": {
+                "activity_id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "difficulty": {
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "normal",
+                        "difficult"
+                    ],
+                    "example": "easy"
+                }
+            }
+        },
         "rest.CompleteActivityRequest": {
             "type": "object",
             "properties": {
@@ -6671,6 +6811,15 @@
                 "description_uz": {
                     "type": "string",
                     "example": "Toshlarni rangi bo'yicha saralang"
+                },
+                "difficulty": {
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "normal",
+                        "difficult"
+                    ],
+                    "example": "normal"
                 },
                 "duration_minutes": {
                     "type": "integer",
@@ -7478,6 +7627,15 @@
                     "type": "string",
                     "example": "Toshlarni rangi bo'yicha saralang"
                 },
+                "difficulty": {
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "normal",
+                        "difficult"
+                    ],
+                    "example": "easy"
+                },
                 "duration_minutes": {
                     "type": "integer",
                     "maximum": 60,
@@ -7934,6 +8092,15 @@
                 },
                 "description_uz": {
                     "type": "string"
+                },
+                "difficulty": {
+                    "type": "string",
+                    "enum": [
+                        "easy",
+                        "normal",
+                        "difficult"
+                    ],
+                    "example": "normal"
                 },
                 "duration_minutes": {
                     "type": "integer",

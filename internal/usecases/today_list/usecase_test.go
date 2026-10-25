@@ -38,7 +38,7 @@ type fakePlans struct {
 }
 
 func (f fakePlans) Execute(context.Context, string, string) (domain.Plan, error) {
-	return domain.Plan{Days: f.days}, f.err
+	return domain.Plan{ID: "plan-1", Days: f.days}, f.err
 }
 
 type fakeActivities struct{ similar domain.SimilarFilter }
@@ -63,8 +63,10 @@ func (f *fakeActivities) Similar(_ context.Context, fl domain.SimilarFilter) ([]
 }
 
 type fakeExtras struct {
-	list   []domain.DayExtra
-	picked domain.ExtraPick
+	list     []domain.DayExtra
+	picked   domain.ExtraPick
+	pickErr  error
+	replaced [2]string
 }
 
 func (f *fakeExtras) ListDay(context.Context, string, time.Time) ([]domain.DayExtra, error) {
@@ -77,10 +79,30 @@ func (f *fakeExtras) Add(_ context.Context, _ string, _ time.Time, id string) er
 	return nil
 }
 
+func (f *fakeExtras) Replace(_ context.Context, _ string, _ time.Time, oldID, newID string) error {
+	f.replaced = [2]string{oldID, newID}
+
+	return nil
+}
+
 func (f *fakeExtras) Pick(_ context.Context, p domain.ExtraPick, _ time.Time) (domain.Activity, error) {
 	f.picked = p
+	if f.pickErr != nil {
+		return domain.Activity{}, f.pickErr
+	}
 
 	return domain.Activity{ID: otherAct}, nil
+}
+
+type fakePlanDays struct {
+	planID, activityID string
+	day                int
+}
+
+func (f *fakePlanDays) SetActivity(_ context.Context, planID string, day int, activityID string) error {
+	f.planID, f.day, f.activityID = planID, day, activityID
+
+	return nil
 }
 
 type fakeGoals struct{}
@@ -94,7 +116,7 @@ func (fakeGoals) CountActive(_ context.Context, ids []string) (int, error) {
 }
 
 func newUC(plans fakePlans, extras *fakeExtras, acts *fakeActivities) *UseCase {
-	uc := New(nil, fakeChildren{}, plans, acts, extras, fakeGoals{})
+	uc := New(nil, fakeChildren{}, plans, acts, extras, fakeGoals{}, &fakePlanDays{})
 	uc.now = func() time.Time { return now }
 
 	return uc
@@ -178,7 +200,7 @@ func TestAddExtra(t *testing.T) {
 			t.Fatalf("%+v %v", got, err)
 		}
 
-		if p := extras.picked; p.Age != domain.MaxChildAge || len(p.ExcludeIDs) != 3 || p.ExcludeIDs[0] != planAct ||
+		if p := extras.picked; p.Age != domain.MaxChildAge || len(p.GoalIDs) != 1 || p.GoalIDs[0] != goalID || p.Difficulty != "" || len(p.ExcludeIDs) != 3 || p.ExcludeIDs[0] != planAct ||
 			p.ExcludeIDs[1] != laterAct || p.ExcludeIDs[2] != draftAct {
 			t.Errorf("pick %+v", p)
 		}
@@ -262,3 +284,97 @@ func TestSimilar(t *testing.T) {
 		}
 	}
 }
+
+func TestChangeDifficulty(t *testing.T) {
+	const (
+		dayGoal  = "99999999-9999-9999-9999-999999999999"
+		extraAct = "77777777-7777-7777-7777-777777777777"
+	)
+
+	today := domain.LocalDay(now)
+	plans := fakePlans{days: []domain.PlanDay{
+		{PlanItem: domain.PlanItem{Day: 1, GoalID: ptr(dayGoal), Activity: domain.Activity{ID: planAct, GoalIDs: []string{goalID, dayGoal}}}, Status: domain.PlanDayToday},
+		{PlanItem: domain.PlanItem{Day: 2, Activity: domain.Activity{ID: laterAct}}, Status: domain.PlanDayLocked},
+	}}
+	extrasList := func() []domain.DayExtra {
+		return []domain.DayExtra{
+			{Activity: domain.Activity{ID: extraAct, GoalIDs: []string{goalID}}},
+			{Activity: domain.Activity{ID: draftAct}, Done: true},
+		}
+	}
+	req := domain.DifficultyChange{UserID: parentID, Pro: true, ChildID: childID, Difficulty: domain.DifficultyEasy}
+	ctx := context.Background()
+
+	t.Run("plan day", func(t *testing.T) {
+		extras, days := &fakeExtras{list: extrasList()}, &fakePlanDays{}
+		uc := newUC(plans, extras, &fakeActivities{})
+		uc.planDays = days
+
+		r := req
+		r.ActivityID = planAct
+
+		got, err := uc.ChangeDifficulty(ctx, r)
+		if err != nil || got.ID != otherAct || days.planID != "plan-1" || days.day != 1 || days.activityID != otherAct {
+			t.Fatalf("%+v %v %+v", got, err, days)
+		}
+
+		p := extras.picked
+		if len(p.GoalIDs) != 1 || p.GoalIDs[0] != dayGoal || p.Difficulty != domain.DifficultyEasy || p.Age != domain.MaxChildAge ||
+			len(p.ExcludeIDs) != 4 || p.ExcludeIDs[0] != planAct || p.ExcludeIDs[2] != extraAct {
+			t.Errorf("pick %+v", p)
+		}
+
+		if extras.replaced != [2]string{} {
+			t.Errorf("extra replaced %v", extras.replaced)
+		}
+	})
+
+	t.Run("added activity", func(t *testing.T) {
+		extras, days := &fakeExtras{list: extrasList()}, &fakePlanDays{}
+		uc := newUC(plans, extras, &fakeActivities{})
+		uc.planDays = days
+
+		r := req
+		r.ActivityID, r.Difficulty = extraAct, domain.DifficultyDifficult
+
+		got, err := uc.ChangeDifficulty(ctx, r)
+		if err != nil || got.ID != otherAct || extras.replaced != [2]string{extraAct, otherAct} || days.planID != "" {
+			t.Fatalf("%+v %v %v", got, err, extras.replaced)
+		}
+
+		if p := extras.picked; len(p.GoalIDs) != 1 || p.GoalIDs[0] != goalID || p.Difficulty != domain.DifficultyDifficult {
+			t.Errorf("pick %+v", p)
+		}
+	})
+
+	donePlan := fakePlans{days: []domain.PlanDay{
+		{PlanItem: domain.PlanItem{Day: 1, CompletedOn: &today, Activity: domain.Activity{ID: planAct}}, Status: domain.PlanDayDone},
+	}}
+
+	for name, tc := range map[string]struct {
+		plans           fakePlans
+		pro             bool
+		activity, level string
+		pickErr, want   error
+	}{
+		"free":              {plans, false, planAct, domain.DifficultyEasy, nil, errs.ErrNeedsPro},
+		"bad level":         {plans, true, planAct, "hard", nil, errs.ErrValidation},
+		"bad uuid":          {plans, true, "nope", domain.DifficultyEasy, nil, errs.ErrValidation},
+		"not in today":      {plans, true, laterAct, domain.DifficultyEasy, nil, errs.ErrNotInToday},
+		"done extra":        {plans, true, draftAct, domain.DifficultyEasy, nil, errs.ErrTodayItemDone},
+		"done plan day":     {donePlan, true, planAct, domain.DifficultyEasy, nil, errs.ErrTodayItemDone},
+		"none of the level": {plans, true, planAct, domain.DifficultyEasy, errs.ErrNoExtra, errs.ErrNoDifficultyMatch},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := req
+			r.Pro, r.ActivityID, r.Difficulty = tc.pro, tc.activity, tc.level
+
+			uc := newUC(tc.plans, &fakeExtras{list: extrasList(), pickErr: tc.pickErr}, &fakeActivities{})
+			if _, err := uc.ChangeDifficulty(ctx, r); !errors.Is(err, tc.want) {
+				t.Fatalf("got %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }

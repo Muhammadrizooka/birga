@@ -14,6 +14,9 @@ import (
 
 const maxDurationMinutes = domain.MaxActivityDurationMinutes
 
+var errDifficulty = errs.Errf(errs.ErrValidation, "difficulty must be %s, %s or %s",
+	domain.DifficultyEasy, domain.DifficultyNormal, domain.DifficultyDifficult)
+
 type activityRepo interface {
 	Create(ctx context.Context, a domain.Activity) (domain.Activity, error)
 }
@@ -54,6 +57,10 @@ func (uc *UseCase) Execute(ctx context.Context, a domain.Activity) (domain.Activ
 		*s = strings.TrimSpace(*s)
 	}
 	a.GoalIDs = domain.NormalizeIDs(a.GoalIDs)
+	a.Difficulty = strings.ToLower(strings.TrimSpace(a.Difficulty))
+	if a.Difficulty == "" {
+		a.Difficulty = domain.DifficultyNormal
+	}
 
 	if err := validate(a); err != nil {
 		return domain.Activity{}, err
@@ -91,6 +98,8 @@ func validate(a domain.Activity) error {
 			domain.MinChildAge, domain.MaxChildAge)
 	case a.DurationMinutes <= 0 || a.DurationMinutes > maxDurationMinutes:
 		return errs.Errf(errs.ErrValidation, "duration_minutes must be between 1 and %d", maxDurationMinutes)
+	case !domain.ValidDifficulty(a.Difficulty):
+		return errDifficulty
 	}
 
 	for _, id := range a.GoalIDs {

@@ -14,6 +14,7 @@ import (
 
 type fakeToday struct {
 	gotExtra   todaylist.ExtraRequest
+	gotLevel   domain.DifficultyChange
 	gotSimilar struct {
 		pro             bool
 		activity, child string
@@ -39,6 +40,12 @@ func (f *fakeToday) AddExtra(_ context.Context, req todaylist.ExtraRequest) (dom
 	return domain.DayExtra{Activity: domain.Activity{ID: testID}}, nil
 }
 
+func (f *fakeToday) ChangeDifficulty(_ context.Context, req domain.DifficultyChange) (domain.Activity, error) {
+	f.gotLevel = req
+
+	return domain.Activity{ID: testID, Difficulty: req.Difficulty}, nil
+}
+
 func (f *fakeToday) Similar(_ context.Context, _ string, pro bool, activityID, childID string, limit int) ([]domain.Activity, error) {
 	f.gotSimilar.pro, f.gotSimilar.activity, f.gotSimilar.child, f.gotSimilar.limit = pro, activityID, childID, limit
 
@@ -62,6 +69,12 @@ func TestToday(t *testing.T) {
 	if code, _ := do(t, s, http.MethodPost, "/v1/children/"+testID+"/today/extras", `{"activity_id":"`+testID+`"}`, proBearer); code != http.StatusOK ||
 		d.today.gotExtra.ActivityID != testID || d.today.gotExtra.ChildID != testID || !d.today.gotExtra.Pro {
 		t.Errorf("pro extra: %d %+v", code, d.today.gotExtra)
+	}
+
+	code, r = do(t, s, http.MethodPost, "/v1/children/"+testID+"/today/difficulty", `{"activity_id":"`+testID+`","difficulty":"easy"}`, proBearer)
+	if code != http.StatusOK || d.today.gotLevel.ActivityID != testID || d.today.gotLevel.Difficulty != "easy" || !d.today.gotLevel.Pro ||
+		string(mustJSON(t, r.Data)["difficulty"]) != `"easy"` {
+		t.Errorf("difficulty: %d %+v", code, d.today.gotLevel)
 	}
 
 	if code, _ := do(t, s, http.MethodGet, "/v1/activities/"+testID+"/similar?child_id="+testID+"&limit=5", "", proBearer); code != http.StatusOK ||

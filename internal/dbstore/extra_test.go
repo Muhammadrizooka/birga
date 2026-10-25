@@ -18,7 +18,7 @@ func TestActivityRepo_Variants(t *testing.T) {
 		in.EasierUz, in.HarderEn = "oson", "harder"
 
 		a, err := s.Activity().Create(ctx, in)
-		if err != nil || a.EasierUz != "oson" || a.HarderEn != "harder" || a.EasierRu != "" {
+		if err != nil || a.EasierUz != "oson" || a.HarderEn != "harder" || a.EasierRu != "" || a.Difficulty != domain.DifficultyNormal {
 			t.Fatalf("Create: %+v, %v", a, err)
 		}
 
@@ -61,7 +61,7 @@ func TestExtraRepo(t *testing.T) {
 			t.Fatalf("Create completion: %v", err)
 		}
 
-		pick := domain.ExtraPick{ChildID: child.ID, Age: 3, GoalID: goal}
+		pick := domain.ExtraPick{ChildID: child.ID, Age: 3, GoalIDs: []string{goal}}
 		if a, err := repo.Pick(ctx, pick, day); err != nil || a.ID != fresh.ID {
 			t.Fatalf("never-done first: %s %v", a.ID, err)
 		}
@@ -91,8 +91,95 @@ func TestExtraRepo(t *testing.T) {
 			t.Fatalf("ListDay: %+v %v", list, err)
 		}
 
+		swapped := create(goal, 3, 3)
+		if err := repo.Replace(ctx, child.ID, day, fresh.ID, swapped.ID); err != nil {
+			t.Fatalf("Replace: %v", err)
+		}
+
+		if list, err := repo.ListDay(ctx, child.ID, day); err != nil || len(list) != 2 || list[0].Activity.ID != swapped.ID {
+			t.Fatalf("after Replace: %+v %v", list, err)
+		}
+
 		if list, err := repo.ListDay(ctx, child.ID, day.AddDate(0, 0, 1)); err != nil || len(list) != 0 {
 			t.Fatalf("other day: %+v %v", list, err)
+		}
+	})
+}
+
+func TestExtraRepo_PickDifficulty(t *testing.T) {
+	s := newTestStore(t)
+
+	inRollbackTx(t, s, func(ctx context.Context) {
+		hideOtherActivities(t, s, ctx)
+
+		var (
+			goal     = testGoal(t, s, ctx, "level goal")
+			other    = testGoal(t, s, ctx, "level other")
+			_, child = parentAndChild(t, s, ctx, 3)
+			day      = domain.LocalDay(time.Now())
+			repo     = s.Extra()
+		)
+
+		create := func(goalID, level string) domain.Activity {
+			in := activity(goalID, 2, 4, true)
+			in.Difficulty = level
+
+			a, err := s.Activity().Create(ctx, in)
+			if err != nil || a.Difficulty != level {
+				t.Fatalf("Create activity: %+v %v", a, err)
+			}
+
+			return a
+		}
+
+		easy := create(goal, domain.DifficultyEasy)
+		easy2 := create(goal, domain.DifficultyEasy)
+		normal := create(goal, domain.DifficultyNormal)
+		hard := create(goal, domain.DifficultyDifficult)
+		create(other, domain.DifficultyEasy)
+
+		if _, _, err := s.Completion().Create(ctx, domain.Completion{ChildID: child.ID, ActivityID: easy2.ID, CompletedOn: day.AddDate(0, 0, -1)}); err != nil {
+			t.Fatalf("Create completion: %v", err)
+		}
+
+		pick := domain.ExtraPick{ChildID: child.ID, Age: 3, GoalIDs: []string{goal}}
+		if a, err := repo.Pick(ctx, pick, day); err != nil || a.ID != normal.ID {
+			t.Fatalf("normal first: %s %v", a.ID, err)
+		}
+
+		pick.Difficulty = domain.DifficultyEasy
+		if a, err := repo.Pick(ctx, pick, day); err != nil || a.ID != easy.ID {
+			t.Fatalf("easy: %s %v", a.ID, err)
+		}
+
+		pick.ExcludeIDs = []string{easy.ID}
+		if a, err := repo.Pick(ctx, pick, day); err != nil || a.ID != easy2.ID {
+			t.Fatalf("easy again gives another easy one: %s %v", a.ID, err)
+		}
+
+		pick.ExcludeIDs = []string{easy.ID, easy2.ID}
+		if _, err := repo.Pick(ctx, pick, day); !errors.Is(err, errs.ErrNoExtra) {
+			t.Fatalf("no easy left: %v", err)
+		}
+
+		pick.Difficulty, pick.ExcludeIDs = domain.DifficultyDifficult, nil
+		if a, err := repo.Pick(ctx, pick, day); err != nil || a.ID != hard.ID {
+			t.Fatalf("difficult: %s %v", a.ID, err)
+		}
+
+		pick.GoalIDs, pick.Difficulty = nil, domain.DifficultyEasy
+		if _, err := repo.Pick(ctx, pick, day); err != nil {
+			t.Fatalf("any goal: %v", err)
+		}
+
+		got, total, err := s.Activity().List(ctx, domain.ActivityFilter{Difficulty: domain.DifficultyEasy, GoalID: goal, Limit: 10})
+		if err != nil || total != 2 || len(got) != 2 {
+			t.Fatalf("list by difficulty: %d %v", total, err)
+		}
+
+		upd, err := s.Activity().Update(ctx, hard.ID, domain.ActivityUpdate{Difficulty: strPtr(domain.DifficultyEasy)})
+		if err != nil || upd.Difficulty != domain.DifficultyEasy {
+			t.Fatalf("Update difficulty: %+v %v", upd, err)
 		}
 	})
 }

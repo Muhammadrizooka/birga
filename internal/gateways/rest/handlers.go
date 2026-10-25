@@ -68,6 +68,7 @@ type CreateActivityRequest struct {
 	HarderUz        string   `json:"harder_uz" example:"Toshlarni o'lchami bo'yicha ham saralang"`
 	HarderRu        string   `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
 	HarderEn        string   `json:"harder_en" example:"Also sort the stones by size"`
+	Difficulty      string   `json:"difficulty" example:"normal" enums:"easy,normal,difficult"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int      `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          int      `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -82,6 +83,7 @@ type CreateActivityRequest struct {
 // @Description   active goal (422), repeats are stored once
 // @Description - min_age/max_age are child ages in years, within 2..6
 // @Description - main_idea_uz/ru/en are optional (the "Katta g'oya" box); empty hides the box in the app
+// @Description - difficulty is easy, normal or difficult (default normal); plans pick normal ones first
 // @Tags admin
 // @Security AdminKey
 // @Accept json
@@ -118,6 +120,7 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 			HarderUz:        req.HarderUz,
 			HarderRu:        req.HarderRu,
 			HarderEn:        req.HarderEn,
+			Difficulty:      req.Difficulty,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -141,6 +144,7 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 // @Param age query int false "child age in years (2..6)"
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param q query string false "text the Uzbek or Russian title contains, ignoring case (at most 100 characters)"
+// @Param difficulty query string false "only activities of this level" Enums(easy, normal, difficult)
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.activityListView}
@@ -160,6 +164,7 @@ func (s *Server) ListActivities() gin.HandlerFunc {
 // @Param age query int false "child age in years (2..6)"
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param q query string false "text the Uzbek or Russian title contains, ignoring case (at most 100 characters)"
+// @Param difficulty query string false "only activities of this level" Enums(easy, normal, difficult)
 // @Param status query string false "published or draft; omitted lists both" Enums(published, draft)
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
@@ -201,6 +206,7 @@ func (s *Server) listActivities(publishedOnly bool) gin.HandlerFunc {
 			Age:           age,
 			GoalID:        c.Query("goal_id"),
 			Search:        c.Query("q"),
+			Difficulty:    c.Query("difficulty"),
 			PublishedOnly: publishedOnly,
 			Limit:         limit,
 			Offset:        offset,
@@ -293,6 +299,7 @@ type UpdateActivityRequest struct {
 	HarderUz        *string  `json:"harder_uz" example:"Toshlarni o'lchami bo'yicha ham saralang"`
 	HarderRu        *string  `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
 	HarderEn        *string  `json:"harder_en" example:"Also sort the stones by size"`
+	Difficulty      *string  `json:"difficulty" example:"easy" enums:"easy,normal,difficult"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          *int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          *int     `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -351,6 +358,7 @@ func (s *Server) UpdateActivity() gin.HandlerFunc {
 			HarderUz:        req.HarderUz,
 			HarderRu:        req.HarderRu,
 			HarderEn:        req.HarderEn,
+			Difficulty:      req.Difficulty,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -411,6 +419,7 @@ type activityView struct {
 	HarderUz        string    `json:"harder_uz"`
 	HarderRu        string    `json:"harder_ru"`
 	HarderEn        string    `json:"harder_en"`
+	Difficulty      string    `json:"difficulty" example:"normal" enums:"easy,normal,difficult"`
 	GoalIDs         []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int       `json:"min_age" example:"3"`
 	MaxAge          int       `json:"max_age" example:"5"`
@@ -445,6 +454,7 @@ func toActivityView(a domain.Activity) activityView {
 		HarderUz:        a.HarderUz,
 		HarderRu:        a.HarderRu,
 		HarderEn:        a.HarderEn,
+		Difficulty:      a.Difficulty,
 		GoalIDs:         a.GoalIDs,
 		MinAge:          a.MinAge,
 		MaxAge:          a.MaxAge,
