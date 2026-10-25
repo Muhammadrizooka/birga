@@ -41,7 +41,10 @@ type User struct {
 	ReminderEnabled bool
 	ReminderTime    string
 	// ProUntil is when Birga Pro given by date ends; nil means never given. See IsPro.
-	ProUntil  *time.Time
+	ProUntil *time.Time
+	// Role is the sign-in role from user_auth; "" for a user without a sign-in account (created
+	// by an admin and never signed up).
+	Role      UserRole
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -70,6 +73,9 @@ func (u UserUpdate) IsEmpty() bool {
 type UserFilter struct {
 	Limit  int
 	Offset int
+	// Query, when not empty, keeps users whose username starts with it, whose name contains it
+	// (both case-insensitive) or whose phone number contains it. An exact username match comes first.
+	Query string
 }
 
 // IsValidUsername reports whether username matches the allowed format.

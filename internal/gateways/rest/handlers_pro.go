@@ -102,8 +102,9 @@ type SetProRequest struct {
 
 // SetUserPro godoc swagger
 // @Summary gives Birga Pro to a user until a date, or ends it
-// @Description Sets users.pro_until. The user is Pro while it is in the future; {"until": null} ends Pro.
-// @Description It takes effect on the user's next request. Roles paid_user and admin are always Pro.
+// @Description Sets users.pro_until. The user is Pro while it is in the future; {"until": null} (or a
+// @Description past date) ends Pro, and also turns role paid_user into user. Admins stay Pro.
+// @Description It takes effect on the user's next request. Find the user by username with GET /v1/admin/users?q=.
 // @Tags admin
 // @Security AdminKey
 // @Accept json

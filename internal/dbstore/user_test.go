@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
@@ -149,6 +150,54 @@ func TestUserRepo_ExistsByPhone(t *testing.T) {
 
 		if ok, err := s.User().ExistsByPhone(ctx, phone); err != nil || ok {
 			t.Fatalf("after delete: %v, %v", ok, err)
+		}
+	})
+}
+
+func TestUserRepo_SearchAndEndPro(t *testing.T) {
+	s := newTestStore(t)
+
+	inRollbackTx(t, s, func(ctx context.Context) {
+		paid, err := s.User().Create(ctx, domain.User{Name: strPtr("Aziza"), Username: strPtr("pro_find"), PhoneNumber: strPtr("+998900000071")})
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+
+		if _, err := s.User().Create(ctx, domain.User{Name: strPtr("Pro_Findo"), Username: strPtr("pro_findo"), PhoneNumber: strPtr("+998900000072")}); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+
+		if _, err := s.sqlClientByCtx(ctx).Exec(ctx, `INSERT INTO user_auth (id, role) VALUES ($1, 'paid_user')`, paid.ID); err != nil {
+			t.Fatalf("insert user_auth: %v", err)
+		}
+
+		// The exact username comes first although it is older; "_" is not a wildcard.
+		got, total, err := s.User().List(ctx, domain.UserFilter{Limit: 10, Query: "pro_find"})
+		if err != nil || total != 2 || len(got) != 2 || got[0].ID != paid.ID || got[0].Role != domain.UserRolePaidUser || got[1].Role != "" {
+			t.Fatalf("search: %+v %d %v", got, total, err)
+		}
+
+		if _, total, _ := s.User().List(ctx, domain.UserFilter{Limit: 10, Query: "proxfind"}); total != 0 {
+			t.Fatalf("underscore matched as a wildcard: %d", total)
+		}
+
+		if _, total, _ := s.User().List(ctx, domain.UserFilter{Limit: 10, Query: "000071"}); total != 1 {
+			t.Fatalf("by phone: %d", total)
+		}
+
+		// A future date keeps the role; ending Pro turns paid_user into user.
+		future := time.Now().Add(time.Hour)
+		if u, err := s.User().SetProUntil(ctx, paid.ID, &future); err != nil || u.Role != domain.UserRolePaidUser {
+			t.Fatalf("grant: %+v %v", u, err)
+		}
+
+		u, err := s.User().SetProUntil(ctx, paid.ID, nil)
+		if err != nil || u.Role != domain.UserRoleUser || u.ProUntil != nil {
+			t.Fatalf("end: %+v %v", u, err)
+		}
+
+		if got, _ := s.User().Get(ctx, paid.ID); got.Role != domain.UserRoleUser {
+			t.Fatalf("role after end: %q", got.Role)
 		}
 	})
 }

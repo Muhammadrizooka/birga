@@ -39,7 +39,7 @@ type ExtraPick struct {
 }
 
 // SimilarFilter asks for activities like ActivityID: sharing one of GoalIDs, not the activity
-// itself. With ChildID set they fit Age and the ones the child never did come first; otherwise
+// itself and not in ExcludeIDs. With ChildID set they fit Age and the ones the child never did come first; otherwise
 // they overlap MinAge..MaxAge.
 type SimilarFilter struct {
 	ActivityID string
@@ -49,4 +49,5 @@ type SimilarFilter struct {
 	MinAge     int
 	MaxAge     int
 	Limit      int
+	ExcludeIDs []string
 }

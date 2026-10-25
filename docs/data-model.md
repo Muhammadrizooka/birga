@@ -101,7 +101,7 @@ setting `deleted_at`.
 | `agreed_on_conditions` | `BOOLEAN` | no | `FALSE` | consent to the terms, the tick on the sign-up screen (added by `000012_add_user_consent_and_reminder`); FALSE for older users and users created by an admin |
 | `reminder_enabled` | `BOOLEAN` | no | `FALSE` | daily reminder on or off (`000012`) |
 | `reminder_time` | `VARCHAR(5)` | no | `'18:00'` | daily reminder time, `HH:MM` 24-hour, Uzbekistan time (`000012`); check `users_reminder_time_chk` |
-| `pro_until` | `TIMESTAMPTZ` | yes | | Birga Pro given by date ends at this time (added by `000020_pro_topics_tips`); NULL means never given. Set by `PUT /v1/admin/users/{id}/pro`; read with the auth row on every request (`authRepo.Get`) |
+| `pro_until` | `TIMESTAMPTZ` | yes | | Birga Pro given by date ends at this time (added by `000020_pro_topics_tips`); NULL means never given. Set by `PUT /v1/admin/users/{id}/pro`, which also turns `user_auth.role` `paid_user` into `user` when it ends Pro; read with the auth row on every request (`authRepo.Get`) |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |

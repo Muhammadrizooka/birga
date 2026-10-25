@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -71,9 +72,12 @@ func (s *Server) CreateUser() gin.HandlerFunc {
 
 // ListUsers godoc swagger
 // @Summary lists users (soft-deleted users are excluded)
+// @Description - q finds users: username starts with it, or name / phone number contains it
+// @Description (case-insensitive, a leading @ is ignored); an exact username match comes first
 // @Tags admin
 // @Security AdminKey
 // @Produce json
+// @Param q query string false "search text (username, name or phone number)"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.userListView}
@@ -90,7 +94,9 @@ func (s *Server) ListUsers() gin.HandlerFunc {
 			return
 		}
 
-		items, total, err := s.userLister.Execute(c.Request.Context(), domain.UserFilter{Limit: limit, Offset: offset})
+		items, total, err := s.userLister.Execute(c.Request.Context(), domain.UserFilter{
+			Limit: limit, Offset: offset, Query: strings.TrimPrefix(strings.TrimSpace(c.Query("q")), "@"),
+		})
 		if err != nil {
 			Return(c, nil, err)
 
@@ -231,8 +237,10 @@ type userView struct {
 	// ReminderEnabled and ReminderTime are the daily reminder setting (HH:MM, Uzbekistan time).
 	ReminderEnabled bool   `json:"reminder_enabled" example:"true"`
 	ReminderTime    string `json:"reminder_time" example:"18:00"`
-	// Plan is "pro" while the user has Birga Pro, otherwise "free". On /v1/me it also counts the
-	// paid_user and admin roles; in admin user lists it follows pro_until only.
+	// Role is the sign-in role; null for a user without a sign-in account (created by an admin).
+	Role *string `json:"role" example:"user" enums:"unverified_user,user,paid_user,admin"`
+	// Plan is "pro" while the user has Birga Pro, otherwise "free": roles paid_user and admin, or
+	// pro_until in the future.
 	Plan string `json:"plan" example:"free" enums:"free,pro"`
 	// ProUntil is when Birga Pro given by date ends; null when it was never given.
 	ProUntil  *time.Time `json:"pro_until"`
@@ -260,11 +268,22 @@ func toUserView(u domain.User) userView {
 		AgreedOnConditions: u.AgreedOnConditions,
 		ReminderEnabled:    u.ReminderEnabled,
 		ReminderTime:       u.ReminderTime,
-		Plan:               planName(domain.IsPro("", u.ProUntil, time.Now())),
+		Role:               roleView(u.Role),
+		Plan:               planName(domain.IsPro(u.Role, u.ProUntil, time.Now())),
 		ProUntil:           u.ProUntil,
 		CreatedAt:          u.CreatedAt,
 		UpdatedAt:          u.UpdatedAt,
 	}
+}
+
+func roleView(r domain.UserRole) *string {
+	if r == "" {
+		return nil
+	}
+
+	s := string(r)
+
+	return &s
 }
 
 func planName(pro bool) string {

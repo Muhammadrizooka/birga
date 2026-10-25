@@ -37,6 +37,7 @@ type dbUser struct {
 	ReminderEnabled    bool       `db:"reminder_enabled"`
 	ReminderTime       string     `db:"reminder_time"`
 	ProUntil           *time.Time `db:"pro_until"`
+	Role               *string    `db:"role"`
 	CreatedAt          time.Time  `db:"created_at"`
 	UpdatedAt          time.Time  `db:"updated_at"`
 }
@@ -44,13 +45,21 @@ type dbUser struct {
 const userColumns = `id, name, username, phone_number, photo_id, relationship, ` +
 	`agreed_on_conditions, reminder_enabled, reminder_time, pro_until, created_at, updated_at`
 
+// userSelect is userColumns plus the user's role from user_auth, for queries on the users table.
+var userSelect = userColumns + ", " + userRoleColumn("users")
+
+// userRoleColumn selects the role of the user row aliased alias; NULL without a user_auth row.
+func userRoleColumn(alias string) string {
+	return `(SELECT ua.role::text FROM user_auth ua WHERE ua.id = ` + alias + `.id) AS role`
+}
+
 func (r *userRepo) Create(ctx context.Context, u domain.User) (domain.User, error) {
 	l := logger.FromCtx(ctx, "userRepo.Create")
 
 	q := `
 		INSERT INTO users (name, username, phone_number, photo_id, relationship, agreed_on_conditions)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING ` + userColumns
+		RETURNING ` + userSelect
 
 	return r.one(ctx, l, q, u.Name, u.Username, u.PhoneNumber, u.PhotoID, u.Relationship, u.AgreedOnConditions)
 }
@@ -58,7 +67,7 @@ func (r *userRepo) Create(ctx context.Context, u domain.User) (domain.User, erro
 func (r *userRepo) Get(ctx context.Context, id string) (domain.User, error) {
 	l := logger.FromCtx(ctx, "userRepo.Get").With(zap.String("id", id))
 
-	return r.one(ctx, l, `SELECT `+userColumns+` FROM users WHERE id = $1 AND deleted_at IS NULL`, id)
+	return r.one(ctx, l, `SELECT `+userSelect+` FROM users WHERE id = $1 AND deleted_at IS NULL`, id)
 }
 
 // List returns one page of active users and the total number of active users.
@@ -67,19 +76,22 @@ func (r *userRepo) List(ctx context.Context, f domain.UserFilter) ([]domain.User
 
 	var (
 		sqlClient = r.store.sqlClientByCtx(ctx)
-		countQ    = `SELECT COUNT(*) FROM users WHERE deleted_at IS NULL`
-		listQ     = `SELECT ` + userColumns + ` FROM users WHERE deleted_at IS NULL
-			ORDER BY created_at DESC, id LIMIT $1 OFFSET $2`
+		where     = `deleted_at IS NULL AND ($1 = '' OR username ILIKE $1 || '%' OR name ILIKE '%' || $1 || '%'
+			OR phone_number LIKE '%' || $1 || '%')`
+		countQ = `SELECT COUNT(*) FROM users WHERE ` + where
+		listQ  = `SELECT ` + userSelect + ` FROM users WHERE ` + where + `
+			ORDER BY username IS NOT DISTINCT FROM lower($2) DESC, created_at DESC, id LIMIT $3 OFFSET $4`
+		q = likeEscaper.Replace(f.Query)
 	)
 
 	var total int
-	if err := sqlClient.QueryRow(ctx, countQ).Scan(&total); err != nil {
+	if err := sqlClient.QueryRow(ctx, countQ, q).Scan(&total); err != nil {
 		l.Error("sqlClient.QueryRow", zap.Error(err))
 
 		return nil, 0, errs.Errf(errs.ErrInternal, "%s", err.Error())
 	}
 
-	rows, err := sqlClient.Query(ctx, listQ, f.Limit, f.Offset)
+	rows, err := sqlClient.Query(ctx, listQ, q, f.Query, f.Limit, f.Offset)
 	if err != nil {
 		l.Error("sqlClient.Query", zap.Error(err))
 
@@ -108,17 +120,28 @@ func (r *userRepo) Update(ctx context.Context, id string, upd domain.UserUpdate)
 	var (
 		sets, args = userSet(upd)
 		q          = `UPDATE users SET ` + sets +
-			` WHERE id = $` + strconv.Itoa(len(args)+1) + ` AND deleted_at IS NULL RETURNING ` + userColumns
+			` WHERE id = $` + strconv.Itoa(len(args)+1) + ` AND deleted_at IS NULL RETURNING ` + userSelect
 	)
 
 	return r.one(ctx, l, q, append(args, id)...)
 }
 
-// SetProUntil sets or clears (nil) the date Birga Pro given by hand ends.
+// SetProUntil sets or clears (nil) the date Birga Pro given by hand ends. When until is not after
+// now, Pro ends: a paid_user role becomes user too, so nothing keeps the user Pro (admins stay).
 func (r *userRepo) SetProUntil(ctx context.Context, id string, until *time.Time) (domain.User, error) {
 	l := logger.FromCtx(ctx, "userRepo.SetProUntil").With(zap.String("id", id))
 
-	q := `UPDATE users SET pro_until = $1, ` + setUpdatedAt + ` WHERE id = $2 AND deleted_at IS NULL RETURNING ` + userColumns
+	q := `
+		WITH role_end AS (
+			UPDATE user_auth SET role = 'user'
+			WHERE id = $2 AND role = 'paid_user' AND ($1::timestamptz IS NULL OR $1::timestamptz <= now())
+			RETURNING id
+		)
+		UPDATE users SET pro_until = $1, ` + setUpdatedAt + `
+		WHERE id = $2 AND deleted_at IS NULL
+		RETURNING ` + userColumns + `,
+			CASE WHEN EXISTS (SELECT 1 FROM role_end) THEN 'user' ELSE ` +
+		`(SELECT ua.role::text FROM user_auth ua WHERE ua.id = users.id) END AS role`
 
 	return r.one(ctx, l, q, until, id)
 }
@@ -263,6 +286,7 @@ func (u dbUser) toDomain() domain.User {
 		ReminderEnabled:    u.ReminderEnabled,
 		ReminderTime:       u.ReminderTime,
 		ProUntil:           u.ProUntil,
+		Role:               domain.UserRole(deref(u.Role)),
 		CreatedAt:          u.CreatedAt,
 		UpdatedAt:          u.UpdatedAt,
 	}
@@ -288,5 +312,13 @@ func (r *userRepo) ExistsByPhone(ctx context.Context, phone string) (bool, error
 func (r *userRepo) GetByPhone(ctx context.Context, phone string) (domain.User, error) {
 	l := logger.FromCtx(ctx, "userRepo.GetByPhone")
 
-	return r.one(ctx, l, `SELECT `+userColumns+` FROM users WHERE phone_number = $1 AND deleted_at IS NULL`, phone)
+	return r.one(ctx, l, `SELECT `+userSelect+` FROM users WHERE phone_number = $1 AND deleted_at IS NULL`, phone)
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+
+	return *s
 }

@@ -2830,6 +2830,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
+                "description": "- q finds users: username starts with it, or name / phone number contains it\n(case-insensitive, a leading @ is ignored); an exact username match comes first",
                 "produces": [
                     "application/json"
                 ],
@@ -2838,6 +2839,12 @@ const docTemplate = `{
                 ],
                 "summary": "lists users (soft-deleted users are excluded)",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "search text (username, name or phone number)",
+                        "name": "q",
+                        "in": "query"
+                    },
                     {
                         "type": "integer",
                         "description": "page size (default 20, max 100)",
@@ -3194,7 +3201,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "Sets users.pro_until. The user is Pro while it is in the future; {\"until\": null} ends Pro.\nIt takes effect on the user's next request. Roles paid_user and admin are always Pro.",
+                "description": "Sets users.pro_until. The user is Pro while it is in the future; {\"until\": null} (or a\npast date) ends Pro, and also turns role paid_user into user. Admins stay Pro.\nIt takes effect on the user's next request. Find the user by username with GET /v1/admin/users?q=.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9199,7 +9206,7 @@ const docTemplate = `{
                     "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 },
                 "plan": {
-                    "description": "Plan is \"pro\" while the user has Birga Pro, otherwise \"free\". On /v1/me it also counts the\npaid_user and admin roles; in admin user lists it follows pro_until only.",
+                    "description": "Plan is \"pro\" while the user has Birga Pro, otherwise \"free\": roles paid_user and admin, or\npro_until in the future.",
                     "type": "string",
                     "enum": [
                         "free",
@@ -9705,7 +9712,7 @@ const docTemplate = `{
                     "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 },
                 "plan": {
-                    "description": "Plan is \"pro\" while the user has Birga Pro, otherwise \"free\". On /v1/me it also counts the\npaid_user and admin roles; in admin user lists it follows pro_until only.",
+                    "description": "Plan is \"pro\" while the user has Birga Pro, otherwise \"free\": roles paid_user and admin, or\npro_until in the future.",
                     "type": "string",
                     "enum": [
                         "free",
@@ -9736,6 +9743,17 @@ const docTemplate = `{
                 "reminder_time": {
                     "type": "string",
                     "example": "18:00"
+                },
+                "role": {
+                    "description": "Role is the sign-in role; null for a user without a sign-in account (created by an admin).",
+                    "type": "string",
+                    "enum": [
+                        "unverified_user",
+                        "user",
+                        "paid_user",
+                        "admin"
+                    ],
+                    "example": "user"
                 },
                 "updated_at": {
                     "type": "string"

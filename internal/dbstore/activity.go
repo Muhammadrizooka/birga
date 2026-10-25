@@ -366,7 +366,8 @@ func nonNil(ids []string) []string {
 	return ids
 }
 
-// Similar returns published activities sharing a goal with f.ActivityID, not that activity. With
+// Similar returns published activities sharing a goal with f.ActivityID, not that activity and
+// not in f.ExcludeIDs. With
 // f.ChildID they fit f.Age and the ones the child never did (then did longest ago) come first;
 // without it they overlap f.MinAge..f.MaxAge. Then more shared goals, then newest first.
 func (r *activityRepo) Similar(ctx context.Context, f domain.SimilarFilter) ([]domain.Activity, error) {
@@ -386,7 +387,7 @@ func (r *activityRepo) Similar(ctx context.Context, f domain.SimilarFilter) ([]d
 			GROUP BY activity_id
 		) done ON done.activity_id = a.id
 		WHERE a.is_published AND a.deleted_at IS NULL AND a.id <> $2::uuid AND a.goal_ids && $3::uuid[]
-			AND a.min_age <= $5 AND a.max_age >= $4
+			AND a.min_age <= $5 AND a.max_age >= $4 AND NOT (a.id = ANY($7::uuid[]))
 		ORDER BY done.last_on NULLS FIRST,
 			(SELECT COUNT(*) FROM unnest(a.goal_ids) g WHERE g = ANY($3::uuid[])) DESC,
 			a.created_at DESC, a.id
@@ -397,7 +398,7 @@ func (r *activityRepo) Similar(ctx context.Context, f domain.SimilarFilter) ([]d
 		childID = &f.ChildID
 	}
 
-	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q, childID, f.ActivityID, nonNil(f.GoalIDs), minAge, maxAge, f.Limit)
+	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q, childID, f.ActivityID, nonNil(f.GoalIDs), minAge, maxAge, f.Limit, nonNil(f.ExcludeIDs))
 	if err != nil {
 		l.Error("sqlClient.Query", zap.Error(err))
 

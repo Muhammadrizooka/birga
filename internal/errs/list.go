@@ -62,8 +62,9 @@ var (
 )
 
 var (
-	ErrTooManyExtras = Errf(ErrValidation, "a child's day holds at most 10 added activities")
-	ErrNoExtra       = Errf(ErrNotFound, "no other published activity serves this goal at the child's age")
+	ErrTooManyExtras  = Errf(ErrValidation, "a child's day holds at most 10 added activities")
+	ErrNoExtra        = Errf(ErrNotFound, "no other published activity serves this goal at the child's age")
+	ErrActivityInPlan = Errf(ErrConflict, "this activity is a day of the child's 7-day plan, do it on its plan day")
 )
 
 var (

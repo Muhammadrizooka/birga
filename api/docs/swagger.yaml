@@ -1916,8 +1916,8 @@ definitions:
         type: string
       plan:
         description: |-
-          Plan is "pro" while the user has Birga Pro, otherwise "free". On /v1/me it also counts the
-          paid_user and admin roles; in admin user lists it follows pro_until only.
+          Plan is "pro" while the user has Birga Pro, otherwise "free": roles paid_user and admin, or
+          pro_until in the future.
         enum:
         - free
         - pro
@@ -2293,8 +2293,8 @@ definitions:
         type: string
       plan:
         description: |-
-          Plan is "pro" while the user has Birga Pro, otherwise "free". On /v1/me it also counts the
-          paid_user and admin roles; in admin user lists it follows pro_until only.
+          Plan is "pro" while the user has Birga Pro, otherwise "free": roles paid_user and admin, or
+          pro_until in the future.
         enum:
         - free
         - pro
@@ -2321,6 +2321,16 @@ definitions:
         type: boolean
       reminder_time:
         example: "18:00"
+        type: string
+      role:
+        description: Role is the sign-in role; null for a user without a sign-in account
+          (created by an admin).
+        enum:
+        - unverified_user
+        - user
+        - paid_user
+        - admin
+        example: user
         type: string
       updated_at:
         type: string
@@ -4134,7 +4144,14 @@ paths:
       - admin
   /v1/admin/users:
     get:
+      description: |-
+        - q finds users: username starts with it, or name / phone number contains it
+        (case-insensitive, a leading @ is ignored); an exact username match comes first
       parameters:
+      - description: search text (username, name or phone number)
+        in: query
+        name: q
+        type: string
       - description: page size (default 20, max 100)
         in: query
         name: limit
@@ -4368,8 +4385,9 @@ paths:
       consumes:
       - application/json
       description: |-
-        Sets users.pro_until. The user is Pro while it is in the future; {"until": null} ends Pro.
-        It takes effect on the user's next request. Roles paid_user and admin are always Pro.
+        Sets users.pro_until. The user is Pro while it is in the future; {"until": null} (or a
+        past date) ends Pro, and also turns role paid_user into user. Admins stay Pro.
+        It takes effect on the user's next request. Find the user by username with GET /v1/admin/users?q=.
       parameters:
       - description: user id (UUID)
         in: path
