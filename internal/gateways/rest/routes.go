@@ -39,6 +39,7 @@ func (s *Server) endpoints() {
 	v1.GET("/pro", s.userAuth(), s.GetProOffer())
 	v1.GET("/tips", s.userAuth(), s.ListTips())
 	v1.GET("/activities/:id/similar", s.userAuth(), s.GetSimilarActivities())
+	v1.GET("/milestones/:id", s.userAuth(), s.GetMilestone())
 
 	// Every signed-in role may manage its own children; ownership is checked per child in the use cases.
 	v1.POST("/children",
@@ -82,6 +83,10 @@ func (s *Server) endpoints() {
 		child.GET("/recommendation", s.RecommendActivity())
 		child.GET("/today", s.GetToday())
 		child.POST("/today/extras", s.AddTodayExtra())
+		child.GET("/milestones", s.GetChildMilestones())
+		child.PUT("/milestones/:milestone_id", s.MarkMilestone())
+		child.DELETE("/milestones/:milestone_id", s.UnmarkMilestone())
+		child.GET("/report", s.GetMonthlyReport())
 		child.POST("/completions", s.CompleteActivity())
 		child.GET("/completions", s.ListCompletions())
 		child.GET("/streak", s.GetStreak())
@@ -113,6 +118,12 @@ func (s *Server) endpoints() {
 		admin.GET("/tips/:id", s.AdminGetTip())
 		admin.PATCH("/tips/:id", s.UpdateTip())
 		admin.DELETE("/tips/:id", s.DeleteTip())
+
+		admin.POST("/milestones", s.CreateMilestone())
+		admin.GET("/milestones", s.AdminListMilestones())
+		admin.GET("/milestones/:id", s.AdminGetMilestone())
+		admin.PATCH("/milestones/:id", s.UpdateMilestone())
+		admin.DELETE("/milestones/:id", s.DeleteMilestone())
 
 		admin.POST("/topics", s.CreateTopic())
 		admin.PATCH("/topics/:id", s.UpdateTopic())

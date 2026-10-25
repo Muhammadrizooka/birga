@@ -32,6 +32,7 @@ import (
 	childcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/child_creator"
 	childgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/child_getter"
 	childlister "gitlab.com/loyihalar/birga/backend/internal/usecases/child_lister"
+	childmilestones "gitlab.com/loyihalar/birga/backend/internal/usecases/child_milestones"
 	childupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/child_updater"
 	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
@@ -44,6 +45,7 @@ import (
 	goallister "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_lister"
 	goalupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_updater"
 	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
+	milestonemanager "gitlab.com/loyihalar/birga/backend/internal/usecases/milestone_manager"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
 	passwordresetter "gitlab.com/loyihalar/birga/backend/internal/usecases/password_resetter"
@@ -260,6 +262,8 @@ type useCases struct {
 	completionLister   *completionlister.UseCase
 	streakGetter       *streakgetter.UseCase
 	todayList          *todaylist.UseCase
+	milestoneManager   *milestonemanager.UseCase
+	childMilestones    *childmilestones.UseCase
 
 	userCreator *usercreator.UseCase
 	userLister  *userlister.UseCase
@@ -344,6 +348,9 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		streakGetter:     streakgetter.New(l.Named("usecase.streak_getter"), store.Child(), store.Plan()),
 		todayList: todaylist.New(l.Named("usecase.today_list"),
 			store.Child(), planGetter, store.Activity(), store.Extra(), store.Goal()),
+		milestoneManager: milestonemanager.New(l.Named("usecase.milestone_manager"), store.Milestone(), store.Activity()),
+		childMilestones: childmilestones.New(l.Named("usecase.child_milestones"),
+			store.Child(), store.Milestone(), store.Activity(), store.Completion()),
 
 		userCreator: usercreator.New(l.Named("usecase.user_creator"), store.User()),
 		userLister:  userlister.New(l.Named("usecase.user_lister"), store.User()),
@@ -426,6 +433,9 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Lister:   ucs.completionLister,
 			Streak:   ucs.streakGetter,
 			Today:    ucs.todayList,
+
+			Milestones:      ucs.milestoneManager,
+			ChildMilestones: ucs.childMilestones,
 		},
 		rest.UserUseCases{
 			Creator: ucs.userCreator,

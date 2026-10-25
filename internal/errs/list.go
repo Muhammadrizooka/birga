@@ -65,3 +65,8 @@ var (
 	ErrTooManyExtras = Errf(ErrValidation, "a child's day holds at most 10 added activities")
 	ErrNoExtra       = Errf(ErrNotFound, "no other published activity serves this goal at the child's age")
 )
+
+var (
+	ErrMilestoneNotFound = Errf(ErrNotFound, "milestone not found")
+	ErrUnknownActivities = Errf(ErrValidation, "activity_ids contains ids that are not activities")
+)

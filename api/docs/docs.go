@@ -1419,6 +1419,394 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/admin/milestones": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Ordered by stage, then domain (communication, social, thinking, movement), then sort_order.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "lists milestones in every status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "text the milestone (any language) contains, ignoring case (at most 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "communication, social, thinking or movement",
+                        "name": "domain",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "stage, 2..72",
+                        "name": "age_months",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "published",
+                            "in_review",
+                            "unpublished"
+                        ],
+                        "type": "string",
+                        "description": "published, in_review or unpublished; omitted lists all",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.milestoneListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- domain is communication, social, thinking or movement; age_months is the stage, 2..72\n- text_uz, text_ru and text_en are required, at most 300 characters each\n- the advice texts (meaning_*, how_to_* one step per line, specialist_*) are optional, at most 3000 characters\n- activity_ids: up to 10 activities (\"Mos mashg‘ulotlar\"); unknown ids are 422\n- status is published, in_review or unpublished; omitted means in_review",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "creates a development milestone (skill)",
+                "parameters": [
+                    {
+                        "description": "milestone",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.MilestoneRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.milestoneView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/milestones/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "returns a milestone in any status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "milestone id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.milestoneView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "It leaves every list; children's ticks of it are kept but no longer shown or counted.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "soft-deletes a milestone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "milestone id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Each given field follows the create rules; the required texts cannot be emptied, the advice texts can.\nactivity_ids, when sent, replaces the list.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "changes some fields of a milestone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "milestone id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.MilestoneRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.milestoneView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/posts": {
             "get": {
                 "security": [
@@ -3847,6 +4235,215 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/children/{id}/milestones": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- age_months picks the stage; omitted means the child's stage, the highest stage at or below the child's age\n- stages lists the stages that have published milestones, for the stage picker\n- domains come in the order communication, social, thinking, movement; each milestone says achieved\n- without Birga Pro the advice fields are empty (has_advice still tells whether advice exists)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "returns a child's milestones of one stage (\"Ko‘nikmalar\")",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "stage, 2..72",
+                        "name": "age_months",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.childMilestonesView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/children/{id}/milestones/{milestone_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Any parent of the child may mark, on any plan. Marking again keeps the first time. 404 for an unknown or unpublished milestone.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "marks a milestone achieved for the child (\"O‘zlashtirdi\")",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "milestone id (UUID)",
+                        "name": "milestone_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "removes the child's mark of a milestone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "milestone id (UUID)",
+                        "name": "milestone_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/children/{id}/plan": {
             "get": {
                 "security": [
@@ -4050,6 +4647,94 @@ const docTemplate = `{
                         "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/children/{id}/report": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "new_milestones counts the milestones marked in the month, completions the activities done (Uzbekistan time).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "returns a child's monthly report (Birga Pro)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "YYYY-MM; omitted means this month",
+                        "name": "month",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.monthlyReportView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
                         }
                     },
                     "500": {
@@ -5215,6 +5900,82 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/milestones/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "With child_id (one of the caller's children) it says whether the child achieved it. activities are the\nrelated published activities. Without Birga Pro the advice fields are empty and activities is [].",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "milestones"
+                ],
+                "summary": "returns one published milestone with its advice (\"Maslahat\")",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "milestone id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "one of the caller's children",
+                        "name": "child_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.milestoneDetailView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/otp/send": {
             "post": {
                 "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or\nreset_password (the number must belong to a user, 404 otherwise; used by forgot password and\nPUT /v1/me/password)\n- the User-Agent header is required (422 if empty) and identifies the client for rate limits;\nan old client's ip_address field is ignored\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new\ncode replaces the previous one for the same phone and purpose\n- rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour\nat most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_USER_AGENT_HOUR per User-Agent",
@@ -6272,6 +7033,88 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.MilestoneRequest": {
+            "type": "object",
+            "properties": {
+                "activity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                    ]
+                },
+                "age_months": {
+                    "type": "integer",
+                    "maximum": 72,
+                    "minimum": 2,
+                    "example": 48
+                },
+                "domain": {
+                    "type": "string",
+                    "enum": [
+                        "communication",
+                        "social",
+                        "thinking",
+                        "movement"
+                    ],
+                    "example": "communication"
+                },
+                "how_to_en": {
+                    "type": "string"
+                },
+                "how_to_ru": {
+                    "type": "string"
+                },
+                "how_to_uz": {
+                    "type": "string"
+                },
+                "meaning_en": {
+                    "type": "string"
+                },
+                "meaning_ru": {
+                    "type": "string"
+                },
+                "meaning_uz": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "specialist_en": {
+                    "type": "string"
+                },
+                "specialist_ru": {
+                    "type": "string"
+                },
+                "specialist_uz": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "published",
+                        "in_review",
+                        "unpublished"
+                    ],
+                    "example": "in_review"
+                },
+                "text_en": {
+                    "type": "string",
+                    "example": "Says sentences with four or more words"
+                },
+                "text_ru": {
+                    "type": "string",
+                    "example": "Говорит предложениями из 4 и более слов"
+                },
+                "text_uz": {
+                    "type": "string",
+                    "example": "4 va undan ko‘p so‘zli gaplar tuzadi"
+                }
+            }
+        },
         "rest.NotFoundResponse": {
             "type": "object",
             "properties": {
@@ -7221,6 +8064,133 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.childMilestoneView": {
+            "type": "object",
+            "properties": {
+                "achieved": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "achieved_at": {
+                    "type": "string"
+                },
+                "activity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "advice_locked": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "age_months": {
+                    "type": "integer",
+                    "example": 48
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "domain": {
+                    "type": "string",
+                    "example": "communication"
+                },
+                "has_advice": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "how_to_en": {
+                    "type": "string"
+                },
+                "how_to_ru": {
+                    "type": "string"
+                },
+                "how_to_uz": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "5d1c9e2a-7b3f-4a6e-9c0d-2e8f1a7b4c3d"
+                },
+                "meaning_en": {
+                    "type": "string"
+                },
+                "meaning_ru": {
+                    "type": "string"
+                },
+                "meaning_uz": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "specialist_en": {
+                    "type": "string"
+                },
+                "specialist_ru": {
+                    "type": "string"
+                },
+                "specialist_uz": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "published"
+                },
+                "text_en": {
+                    "type": "string",
+                    "example": "Says sentences with four or more words"
+                },
+                "text_ru": {
+                    "type": "string",
+                    "example": "Говорит предложениями из 4 и более слов"
+                },
+                "text_uz": {
+                    "type": "string",
+                    "example": "4 va undan ko‘p so‘zli gaplar tuzadi"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "rest.childMilestonesView": {
+            "type": "object",
+            "properties": {
+                "achieved": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "age_months": {
+                    "type": "integer",
+                    "example": 48
+                },
+                "domains": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.milestoneDomainView"
+                    }
+                },
+                "stages": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        24,
+                        30,
+                        36,
+                        48,
+                        60
+                    ]
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 13
+                }
+            }
+        },
         "rest.childView": {
             "type": "object",
             "properties": {
@@ -7556,6 +8526,242 @@ const docTemplate = `{
                 "url": {
                     "type": "string",
                     "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                }
+            }
+        },
+        "rest.milestoneDetailView": {
+            "type": "object",
+            "properties": {
+                "achieved": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "achieved_at": {
+                    "type": "string"
+                },
+                "activities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.activityView"
+                    }
+                },
+                "activity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "advice_locked": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "age_months": {
+                    "type": "integer",
+                    "example": 48
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "domain": {
+                    "type": "string",
+                    "example": "communication"
+                },
+                "has_advice": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "how_to_en": {
+                    "type": "string"
+                },
+                "how_to_ru": {
+                    "type": "string"
+                },
+                "how_to_uz": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "5d1c9e2a-7b3f-4a6e-9c0d-2e8f1a7b4c3d"
+                },
+                "meaning_en": {
+                    "type": "string"
+                },
+                "meaning_ru": {
+                    "type": "string"
+                },
+                "meaning_uz": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "specialist_en": {
+                    "type": "string"
+                },
+                "specialist_ru": {
+                    "type": "string"
+                },
+                "specialist_uz": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "published"
+                },
+                "text_en": {
+                    "type": "string",
+                    "example": "Says sentences with four or more words"
+                },
+                "text_ru": {
+                    "type": "string",
+                    "example": "Говорит предложениями из 4 и более слов"
+                },
+                "text_uz": {
+                    "type": "string",
+                    "example": "4 va undan ko‘p so‘zli gaplar tuzadi"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "rest.milestoneDomainView": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "example": "communication"
+                },
+                "milestones": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.childMilestoneView"
+                    }
+                }
+            }
+        },
+        "rest.milestoneListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.milestoneView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 57
+                }
+            }
+        },
+        "rest.milestoneView": {
+            "type": "object",
+            "properties": {
+                "activity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "advice_locked": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "age_months": {
+                    "type": "integer",
+                    "example": 48
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "domain": {
+                    "type": "string",
+                    "example": "communication"
+                },
+                "has_advice": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "how_to_en": {
+                    "type": "string"
+                },
+                "how_to_ru": {
+                    "type": "string"
+                },
+                "how_to_uz": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "5d1c9e2a-7b3f-4a6e-9c0d-2e8f1a7b4c3d"
+                },
+                "meaning_en": {
+                    "type": "string"
+                },
+                "meaning_ru": {
+                    "type": "string"
+                },
+                "meaning_uz": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "specialist_en": {
+                    "type": "string"
+                },
+                "specialist_ru": {
+                    "type": "string"
+                },
+                "specialist_uz": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "published"
+                },
+                "text_en": {
+                    "type": "string",
+                    "example": "Says sentences with four or more words"
+                },
+                "text_ru": {
+                    "type": "string",
+                    "example": "Говорит предложениями из 4 и более слов"
+                },
+                "text_uz": {
+                    "type": "string",
+                    "example": "4 va undan ko‘p so‘zli gaplar tuzadi"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "rest.monthlyReportView": {
+            "type": "object",
+            "properties": {
+                "completions": {
+                    "type": "integer",
+                    "example": 26
+                },
+                "month": {
+                    "type": "string",
+                    "example": "2026-10"
+                },
+                "new_milestones": {
+                    "type": "integer",
+                    "example": 3
                 }
             }
         },

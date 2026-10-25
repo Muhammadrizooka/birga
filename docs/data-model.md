@@ -500,6 +500,48 @@ matched.
 Repository (`store.Tip()`): `Create`, `Get`, `Update`, `Delete`, `List`, `LockDaily`,
 `DailyTipID`, `PickDaily`, `SetDailyTip`.
 
+### `milestones`
+
+Development milestones ("Ko‘nikmalar"). Created by `000022_milestones`, which also seeds 57
+published milestones (2 to 5 years, after the CDC list, in all three languages, advice empty).
+Rows are soft-deleted by setting `deleted_at`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | `UUID` | no | `gen_random_uuid()` | primary key |
+| `domain` | `TEXT` | no | | `communication`, `social`, `thinking` or `movement` (`milestones_domain_chk`) |
+| `age_months` | `SMALLINT` | no | | the stage, 2 to 72 (`milestones_age_chk`) |
+| `sort_order` | `INTEGER` | no | `0` | order within a domain and stage |
+| `text_uz`, `text_ru`, `text_en` | `TEXT` | no | | the milestone |
+| `meaning_uz`, `meaning_ru`, `meaning_en` | `TEXT` | no | `''` | advice: "Bu nimani anglatadi" |
+| `how_to_uz`, `how_to_ru`, `how_to_en` | `TEXT` | no | `''` | advice: "Qanday rivojlantirish", one step per line |
+| `specialist_uz`, `specialist_ru`, `specialist_en` | `TEXT` | no | `''` | advice: when to see a specialist |
+| `activity_ids` | `UUID[]` | no | `'{}'` | related activities; no foreign key, checked by the use case, only published ones are shown |
+| `status` | `TEXT` | no | `'in_review'` | `published`, `in_review` or `unpublished` (`milestones_status_chk`) |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+| `deleted_at` | `TIMESTAMPTZ` | yes | | soft delete |
+
+Index `milestones_published_age_idx` on `(age_months, domain, sort_order)` for published,
+not-deleted rows.
+
+### `child_milestones`
+
+The milestones a parent marked for a child ("O‘zlashtirdi"). Created by `000022_milestones`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `child_id` | `UUID` | no | | `REFERENCES children(id) ON DELETE CASCADE` |
+| `milestone_id` | `UUID` | no | | `REFERENCES milestones(id)` |
+| `user_id` | `UUID` | yes | | the parent who marked it, `REFERENCES users(id) ON DELETE SET NULL` |
+| `achieved_at` | `TIMESTAMPTZ` | no | `NOW()` | when it was marked; the monthly report counts by it |
+
+Primary key `(child_id, milestone_id)`: marking again keeps the first row. Index
+`child_milestones_child_achieved_idx` on `(child_id, achieved_at)`.
+
+Repository (`store.Milestone()`): `Create`, `Get`, `Update`, `Delete`, `List`, `Stages`,
+`ForChild`, `GetForChild`, `Mark`, `Unmark`, `CountAchieved`. `store.Activity().ListByIDs` loads
+the related activities; `store.Completion().CountBetween` counts a month's completions.
+
 ### `child_day_extras`
 
 Activities a Pro parent added to a child's list for one local day, next to the plan activity

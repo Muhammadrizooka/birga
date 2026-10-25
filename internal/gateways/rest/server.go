@@ -117,6 +117,22 @@ type planGetter interface {
 	Next(ctx context.Context, userID, childID string) (domain.Plan, error)
 }
 
+type milestoneManager interface {
+	Create(ctx context.Context, m domain.Milestone) (domain.Milestone, error)
+	Get(ctx context.Context, id string) (domain.Milestone, error)
+	Update(ctx context.Context, id string, upd domain.MilestoneUpdate) (domain.Milestone, error)
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context, f domain.MilestoneFilter) ([]domain.Milestone, int, error)
+}
+
+type childMilestones interface {
+	List(ctx context.Context, userID string, pro bool, childID string, ageMonths int) (domain.ChildMilestones, error)
+	Get(ctx context.Context, userID string, pro bool, id, childID string) (domain.MilestoneDetail, error)
+	Mark(ctx context.Context, userID, childID, milestoneID string) error
+	Unmark(ctx context.Context, userID, childID, milestoneID string) error
+	Report(ctx context.Context, userID string, pro bool, childID, month string) (domain.MonthlyReport, error)
+}
+
 type todayList interface {
 	Execute(ctx context.Context, userID, childID string) (domain.Today, error)
 	AddExtra(ctx context.Context, req todaylist.ExtraRequest) (domain.DayExtra, error)
@@ -133,6 +149,9 @@ type ChildActivityUseCases struct {
 	Lister   completionLister
 	Streak   streakGetter
 	Today    todayList
+	// Milestones serves the admin milestone CRUD; ChildMilestones the app side.
+	Milestones      milestoneManager
+	ChildMilestones childMilestones
 }
 
 type userCreator interface {
@@ -379,6 +398,8 @@ type Server struct {
 	completionLister   completionLister
 	streakGetter       streakGetter
 	today              todayList
+	milestones         milestoneManager
+	childMilestones    childMilestones
 
 	userCreator userCreator
 	userLister  userLister
@@ -493,6 +514,8 @@ func New(cfg config.Application,
 		completionLister:   childActivities.Lister,
 		streakGetter:       childActivities.Streak,
 		today:              childActivities.Today,
+		milestones:         childActivities.Milestones,
+		childMilestones:    childActivities.ChildMilestones,
 
 		userCreator: users.Creator,
 		userLister:  users.Lister,

@@ -106,3 +106,19 @@ func (c dbCompletion) toDomain() domain.Completion {
 		CreatedAt:   c.CreatedAt,
 	}
 }
+
+// CountBetween counts the child's completions on the local days from..to, inclusive.
+func (r *completionRepo) CountBetween(ctx context.Context, childID string, from, to time.Time) (int, error) {
+	l := logger.FromCtx(ctx, "completionRepo.CountBetween").With(zap.String("child_id", childID))
+
+	var n int
+	if err := r.store.sqlClientByCtx(ctx).QueryRow(ctx,
+		`SELECT COUNT(*) FROM activity_completions WHERE child_id = $1 AND completed_on BETWEEN $2 AND $3`,
+		childID, from.Format(time.DateOnly), to.Format(time.DateOnly)).Scan(&n); err != nil {
+		l.Error("sqlClient.QueryRow", zap.Error(err))
+
+		return 0, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return n, nil
+}

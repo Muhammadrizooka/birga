@@ -418,3 +418,35 @@ func (r *activityRepo) Similar(ctx context.Context, f domain.SimilarFilter) ([]d
 
 	return out, nil
 }
+
+// ListByIDs returns the activities among ids that are not deleted, in the order of ids. With
+// publishedOnly, unpublished ones are left out too.
+func (r *activityRepo) ListByIDs(ctx context.Context, ids []string, publishedOnly bool) ([]domain.Activity, error) {
+	l := logger.FromCtx(ctx, "activityRepo.ListByIDs")
+
+	q := `SELECT ` + prefixColumns("a", activityColumns) + `
+		FROM activities a
+		WHERE a.id = ANY($1::uuid[]) AND a.deleted_at IS NULL AND (a.is_published OR NOT $2)
+		ORDER BY array_position($1::uuid[], a.id)`
+
+	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q, nonNil(ids), publishedOnly)
+	if err != nil {
+		l.Error("sqlClient.Query", zap.Error(err))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	dbRows, err := pgx.CollectRows(rows, pgx.RowToStructByName[dbActivity])
+	if err != nil {
+		l.Error("pgx.CollectRows", zap.Error(err))
+
+		return nil, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	out := make([]domain.Activity, 0, len(dbRows))
+	for i := range dbRows {
+		out = append(out, dbRows[i].toDomain())
+	}
+
+	return out, nil
+}

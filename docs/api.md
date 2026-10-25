@@ -451,6 +451,7 @@ What the free plan allows, and what Pro opens:
 | articles | the daily article, today or earlier; others `locked` and 403 ([rule](#one-article-a-day-on-the-free-plan)) | every published article |
 | videos | the daily video, today or earlier; others `locked` and 403 | every published post |
 | tips | the daily tip; others `locked` with empty texts | every tip |
+| milestones | the list and marks; advice is empty (`advice_locked`), no monthly report | advice, related activities, monthly report |
 
 Free-plan users get 403 (-21) `this needs Birga Pro` on Pro-only actions. Children added while a
 user had Pro stay after Pro ends; only adding more is blocked.
@@ -926,6 +927,96 @@ its name from [`GET /v1/goals`](#goals)); `null` when the child had no goals. `a
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
 curl -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/v1/children/$CHILD/plan
 ```
+
+### Development milestones ("Ko‘nikmalar")
+
+Milestones (skills) are what most children can do by an age, in four domains (Figma 27, 44, 45).
+Migration `000022` seeds 57 published milestones for 2 to 5 years, based on the CDC "Learn the Signs.
+Act Early." list, in Uzbek, Russian and English. Their advice texts are empty until the content team
+writes them.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/admin/milestones` | create a milestone |
+| GET | `/v1/admin/milestones` | milestones in every status: `domain`, `age_months`, `status`, `q`, `limit`, `offset` |
+| GET | `/v1/admin/milestones/{id}` | one milestone in any status |
+| PATCH | `/v1/admin/milestones/{id}` | change some fields, including the status |
+| DELETE | `/v1/admin/milestones/{id}` | soft-delete a milestone |
+| GET | `/v1/children/{id}/milestones` | the child's milestones of one stage with ticks (`age_months`) |
+| PUT | `/v1/children/{id}/milestones/{milestone_id}` | mark it achieved ("O‘zlashtirdi deb belgilash") |
+| DELETE | `/v1/children/{id}/milestones/{milestone_id}` | remove the mark |
+| GET | `/v1/milestones/{id}` | one published milestone with its advice and activities (`child_id`) |
+| GET | `/v1/children/{id}/report` | the monthly report (Birga Pro, `month=2026-10`) |
+
+Milestone object:
+
+```json
+{"id": "...", "domain": "communication", "age_months": 48, "sort_order": 1,
+ "text_uz": "4 va undan ko‘p so‘zli gaplar tuzadi", "text_ru": "Говорит предложениями из 4 и более слов",
+ "text_en": "Says sentences with four or more words",
+ "meaning_uz": "", "meaning_ru": "", "meaning_en": "",
+ "how_to_uz": "", "how_to_ru": "", "how_to_en": "",
+ "specialist_uz": "", "specialist_ru": "", "specialist_en": "",
+ "activity_ids": [], "has_advice": false, "advice_locked": false, "status": "published",
+ "created_at": "...", "updated_at": "..."}
+```
+
+| Field | Rules |
+|---|---|
+| `domain` | `communication` (Nutq va muloqot), `social` (His-tuyg‘ular va do‘stlik), `thinking` (Fikrlash) or `movement` (Harakat); the app holds the labels |
+| `age_months` | the stage, 2 to 72 (the seed uses 24, 30, 36, 48 and 60); the app makes the label ("3 yosh") |
+| `sort_order` | order within a domain and stage, default 0 |
+| `text_*` | required, trimmed, at most 300 characters |
+| `meaning_*` | "Bu nimani anglatadi", optional, at most 3000 characters |
+| `how_to_*` | "Qanday rivojlantirish", one step per line, optional, at most 3000 characters |
+| `specialist_*` | "Qachon mutaxassisga murojaat qilish kerak", optional, at most 3000 characters |
+| `activity_ids` | "Mos mashg‘ulotlar", up to 10 activity ids; unknown or deleted ids are 422 |
+| `status` | `published`, `in_review` (the default) or `unpublished`; only `published` reaches the app |
+| `has_advice` | read only: any advice text or activity is set, so the app shows the "Maslahat" link |
+| `advice_locked` | read only: the advice exists but was left out because the caller has no Birga Pro |
+
+Every list is ordered by stage, then domain in the order above, then `sort_order`. On `PATCH`
+the required texts cannot be emptied, the advice texts can; `activity_ids`, when sent, replaces
+the list. Deleting a milestone keeps the children's marks but no longer shows or counts them.
+
+#### A child's milestones
+
+`GET /v1/children/{id}/milestones?age_months=48`:
+
+```json
+{"age_months": 48, "stages": [24, 30, 36, 48, 60], "achieved": 5, "total": 13,
+ "domains": [{"domain": "communication", "milestones": [{milestone object, "achieved": true, "achieved_at": "2026-10-20T08:00:00Z"}]},
+             {"domain": "social", "milestones": []}, {"domain": "thinking", "milestones": []}, {"domain": "movement", "milestones": []}]}
+```
+
+- Without `age_months`, the stage is the child's: the highest stage at or below the child's age
+  (`age` × 12 months). A child younger than every stage gets the first one. `age_months` outside
+  2..72 is 422.
+- `stages` lists the stages that have published milestones, for the stage picker.
+- `domains` always holds the four domains in order. `achieved` and `total` count the stage.
+- Without Birga Pro the advice fields are empty and `activity_ids` is `[]`; `has_advice` and
+  `advice_locked` tell the app to show a locked "Maslahat".
+
+`PUT /v1/children/{id}/milestones/{milestone_id}` marks a published milestone for the child,
+on any plan; marking again keeps the first time. `DELETE` removes the mark. The marks are the
+child's, so every parent of the child sees them. 404 for a child that is not the caller's or a
+milestone that is unknown or not published.
+
+#### One milestone ("Maslahat")
+
+`GET /v1/milestones/{id}?child_id=` returns a published milestone with `achieved` and
+`achieved_at` for that child (`false` and `null` without `child_id`) and `activities`, the
+related published activities as [activity objects](#activity-object). Without Birga Pro the
+advice fields are empty and `activities` is `[]`. 404 for an unknown or unpublished milestone;
+`child_id` must be one of the caller's children (404) and a UUID (422).
+
+#### Monthly report
+
+`GET /v1/children/{id}/report?month=2026-10` (Birga Pro, Figma 44):
+`{"month": "2026-10", "new_milestones": 3, "completions": 26}`. `new_milestones` counts the
+milestones marked in that month and `completions` the activities done, both in Uzbekistan time.
+Without `month` it is the current month. A month not shaped like `2026-10` is 422; free users
+get 403.
 
 ### OTP (public)
 
