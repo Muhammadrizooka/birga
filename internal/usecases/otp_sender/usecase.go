@@ -143,12 +143,14 @@ func validate(req domain.OTPSendRequest) error {
 	switch {
 	case req.PhoneNumber == "":
 		return errs.Errf(errs.ErrValidation, "phone_number is required")
-	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
-		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+	case !domain.IsValidUserPhoneNumber(req.PhoneNumber):
+		return errs.Errf(errs.ErrValidation, "phone_number must be in E.164 format: + and the country code, then the number, e.g. +998901234567")
 	case !req.Purpose.IsKnown():
 		return errs.Errf(errs.ErrValidation, "purpose must be %s", domain.OTPPurposesHint)
 	case req.UserAgent == "":
 		return errs.Errf(errs.ErrValidation, "the User-Agent header is required")
+	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
+		return errs.ErrSMSCountryNotSupported
 	}
 
 	return nil

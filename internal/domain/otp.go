@@ -81,6 +81,9 @@ func HashOTPCode(phone string, purpose OTPPurpose, code string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// UzbekCountryCode is the E.164 prefix of Uzbek numbers, the only ones the SMS provider delivers to.
+const UzbekCountryCode = "+998"
+
 // IsUzbekPhoneNumber reports whether phone is an Uzbek number in E.164 (+998XXXXXXXXX).
 func IsUzbekPhoneNumber(phone string) bool {
 	return uzPhoneRegex.MatchString(phone)

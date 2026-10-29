@@ -3526,7 +3526,7 @@
         },
         "/v1/auth/forgot-password": {
             "post": {
-                "description": "- first POST /v1/otp/send and /v1/otp/verify with purpose reset_password for the\nuser's phone number; without that verification: 403. A successful reset uses it up\n- phone_number: +998 and 9 digits; password: 8 to 72 bytes, stored as a bcrypt hash (422)\n- no user has this phone number: 404\n- returns a new token pair (the user is signed in); every token issued before stops working",
+                "description": "- first POST /v1/otp/send and /v1/otp/verify with purpose reset_password for the\nuser's phone number; without that verification: 403. A successful reset uses it up\n- phone_number: E.164 (+998 numbers: 9 digits after +998); password: 8 to 72 bytes, stored as a bcrypt hash (422)\n- no user has this phone number: 404\n- returns a new token pair (the user is signed in); every token issued before stops working",
                 "consumes": [
                     "application/json"
                 ],
@@ -3779,7 +3779,7 @@
         },
         "/v1/auth/signup": {
             "post": {
-                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- relationship is required: father, mother, educator or nanny (422)\n- no goals here: goals belong to each child (POST /v1/children)\n- role is user (default, the account gets unverified_user) or admin; admin needs the\nX-Admin-Key header with ADMIN_API_KEY (401 wrong or missing key, 403 admin API disabled)\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- returns the new user's user_id with the tokens\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
+                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: E.164 from any country, +998 numbers with 9 digits after +998 (422)\n- relationship is required: father, mother, educator or nanny (422)\n- no goals here: goals belong to each child (POST /v1/children)\n- role is user (default, the account gets unverified_user) or admin; admin needs the\nX-Admin-Key header with ADMIN_API_KEY (401 wrong or missing key, 403 admin API disabled)\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- returns the new user's user_id with the tokens\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
                 "consumes": [
                     "application/json"
                 ],
@@ -5379,7 +5379,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "- only the fields present in the body change; omitted or null fields are kept\n- \"\" clears name, username or photo_id; phone_number cannot be cleared\n- name: at most 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\nphoto_id: an id from POST /v1/media (422 if unknown)\n- a new phone_number must be an Uzbek number (+998 and 9 digits) verified first:\nPOST /v1/otp/send and /v1/otp/verify with purpose update_user for the new number (403 otherwise);\nthe change uses the verification up. Sending the current number is not a change\n- username or phone number already used by someone else: 409",
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- \"\" clears name, username or photo_id; phone_number cannot be cleared\n- name: at most 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\nphoto_id: an id from POST /v1/media (422 if unknown)\n- a new phone_number must be E.164 (+998 numbers: 9 digits after +998) and verified first:\nPOST /v1/otp/send and /v1/otp/verify with purpose update_user for the new number (403 otherwise);\nthe change uses the verification up. Sending the current number is not a change\n- username or phone number already used by someone else: 409",
                 "consumes": [
                     "application/json"
                 ],
@@ -6100,7 +6100,7 @@
         },
         "/v1/otp/send": {
             "post": {
-                "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or\nreset_password (the number must belong to a user, 404 otherwise; used by forgot password and\nPUT /v1/me/password)\n- the User-Agent header is required (422 if empty) and identifies the client for rate limits;\nan old client's ip_address field is ignored\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new\ncode replaces the previous one for the same phone and purpose\n- rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour\nat most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_USER_AGENT_HOUR per User-Agent",
+                "description": "- phone_number: E.164 from any country, 7 to 14 digits after '+'; +998 numbers need 9 digits after\n+998 (422 -10 otherwise). SMS only goes to Uzbek (+998) numbers: any other number gets\n422 with error_code -12 \"SMS codes can only be sent to Uzbek (+998) numbers\"\n- purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or\nreset_password (the number must belong to a user, 404 otherwise; used by forgot password and\nPUT /v1/me/password)\n- the User-Agent header is required (422 if empty) and identifies the client for rate limits;\nan old client's ip_address field is ignored\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new\ncode replaces the previous one for the same phone and purpose\n- rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour\nat most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_USER_AGENT_HOUR per User-Agent",
                 "consumes": [
                     "application/json"
                 ],
@@ -8693,6 +8693,7 @@
                 0,
                 -10,
                 -11,
+                -12,
                 -20,
                 -21,
                 -30,
@@ -8709,6 +8710,7 @@
                 "_errCodeNoError": "Success code.",
                 "_errCodeNotFound": "for http 404",
                 "_errCodeRateLimited": "for http 429",
+                "_errCodeSMSCountry": "for http 422: SMS codes only go to Uzbek numbers",
                 "_errCodeUnauthorized": "for http 401",
                 "_errCodeUnavailable": "for http 503",
                 "_errCodeValidation": "for http 422"
@@ -8717,6 +8719,7 @@
                 "Success code.",
                 "for http 422",
                 "for http 400",
+                "for http 422: SMS codes only go to Uzbek numbers",
                 "for http 401",
                 "for http 403",
                 "for http 404",
@@ -8729,6 +8732,7 @@
                 "_errCodeNoError",
                 "_errCodeValidation",
                 "_errCodeBadRequest",
+                "_errCodeSMSCountry",
                 "_errCodeUnauthorized",
                 "_errCodeForbidden",
                 "_errCodeNotFound",

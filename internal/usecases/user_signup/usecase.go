@@ -138,8 +138,8 @@ func validate(req domain.SignUpRequest) error {
 		return errs.Errf(errs.ErrValidation, "username must be 3 to 32 characters: latin letters, digits, '_' or '.'")
 	case len(req.Password) < domain.MinPasswordLength || len(req.Password) > domain.MaxPasswordLength:
 		return errs.Errf(errs.ErrValidation, "password must be %d to %d bytes long", domain.MinPasswordLength, domain.MaxPasswordLength)
-	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
-		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+	case !domain.IsValidUserPhoneNumber(req.PhoneNumber):
+		return errs.Errf(errs.ErrValidation, "phone_number must be in E.164 format: + and the country code, then the number, e.g. +998901234567")
 	case !domain.IsKnownRelationship(req.Relationship):
 		return errs.Errf(errs.ErrValidation, "relationship must be one of: father, mother, educator, nanny")
 	}

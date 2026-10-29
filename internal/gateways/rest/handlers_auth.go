@@ -41,7 +41,7 @@ type tokenPairView struct {
 // @Description - no OTP step: the phone number is not verified, so every new user gets the role
 // @Description   unverified_user (stored in user_auth.role and written into the tokens as the role claim)
 // @Description - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
-// @Description   password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
+// @Description   password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: E.164 from any country, +998 numbers with 9 digits after +998 (422)
 // @Description - relationship is required: father, mother, educator or nanny (422)
 // @Description - no goals here: goals belong to each child (POST /v1/children)
 // @Description - role is user (default, the account gets unverified_user) or admin; admin needs the
@@ -243,7 +243,7 @@ type ForgotPasswordRequest struct {
 // @Summary sets a new password for a signed-out user, confirmed by an SMS code
 // @Description - first POST /v1/otp/send and /v1/otp/verify with purpose reset_password for the
 // @Description   user's phone number; without that verification: 403. A successful reset uses it up
-// @Description - phone_number: +998 and 9 digits; password: 8 to 72 bytes, stored as a bcrypt hash (422)
+// @Description - phone_number: E.164 (+998 numbers: 9 digits after +998); password: 8 to 72 bytes, stored as a bcrypt hash (422)
 // @Description - no user has this phone number: 404
 // @Description - returns a new token pair (the user is signed in); every token issued before stops working
 // @Tags auth

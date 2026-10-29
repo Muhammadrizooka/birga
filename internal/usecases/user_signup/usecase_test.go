@@ -121,7 +121,7 @@ func TestExecute_Validation(t *testing.T) {
 		"bad username":   func(r *domain.SignUpRequest) { r.Username = "a b" },
 		"short password": func(r *domain.SignUpRequest) { r.Password = "1234567" },
 		"long password":  func(r *domain.SignUpRequest) { r.Password = strings.Repeat("p", domain.MaxPasswordLength+1) },
-		"foreign phone":  func(r *domain.SignUpRequest) { r.PhoneNumber = "+77011234567" },
+		"short uzbek":    func(r *domain.SignUpRequest) { r.PhoneNumber = "+99890123456" },
 		"no relation":    func(r *domain.SignUpRequest) { r.Relationship = "" },
 		"bad relation":   func(r *domain.SignUpRequest) { r.Relationship = "uncle" },
 	}
@@ -157,5 +157,19 @@ func TestExecute_Admin(t *testing.T) {
 	pair, err := newUseCase(f).Execute(context.Background(), r)
 	if err != nil || f.auth.Role != domain.UserRoleAdmin || pair.AccessToken != "access."+userID+".admin" {
 		t.Fatalf("got %v, role %s, token %s", err, f.auth.Role, pair.AccessToken)
+	}
+}
+
+func TestExecute_ForeignPhone(t *testing.T) {
+	r := req()
+	r.PhoneNumber = "+77011234567"
+
+	f := &fakes{}
+	if _, err := newUseCase(f).Execute(context.Background(), r); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	if f.user.PhoneNumber == nil || *f.user.PhoneNumber != "+77011234567" {
+		t.Fatalf("phone not stored: %+v", f.user)
 	}
 }

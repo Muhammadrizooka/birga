@@ -25,6 +25,7 @@ Every response, success or failure, has the same shape:
 | 0 | 200 | success | |
 | -10 | 422 | validation error | business rule broken, e.g. `duration_minutes must be between 1 and 60`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
+| -12 | 422 | SMS country not supported | `POST /v1/otp/send` for a number outside Uzbekistan: `SMS codes can only be sent to Uzbek (+998) numbers`. Forgot password and phone change need an SMS code, so they only work for `+998` numbers for now |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
 | -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification; a free-plan user opening a video or article that was not their daily one; a free-plan user calling a Pro feature (`this needs Birga Pro`) |
 | -30 | 404 | not found | unknown id, unpublished or soft-deleted activity or article on an app endpoint, no published article or video for the daily article or video, soft-deleted user, a child that is not the caller's, no activity to recommend, no plan day open today, OTP expired or not requested, `reset_password` OTP for a number no user has |
@@ -627,10 +628,12 @@ The server only stores the reminder setting; the app schedules the notification 
 `_`, `.` (lowercased), `photo_id` an id from `POST /v1/media` (422 if unknown), 409 when the
 username or phone number belongs to someone else. Response `data` is the same as Get profile.
 
-A new `phone_number` must be an Uzbek number (`+998` and 9 digits) verified first: send and
+A new `phone_number` must be E.164 from any country (a `+998` number with 9 digits after `+998`) and verified first: send and
 verify an OTP with purpose `update_user` **for the new number**. Without that mark: 403
 `new phone number is not verified, ...`. A successful change deletes the mark. Sending the
 current number is not a change and needs no code. `phone_number` cannot be cleared (422).
+SMS codes only go to Uzbek numbers (`POST /v1/otp/send` answers -12 for others), so for now a
+user can only change to a `+998` number.
 
 ```bash
 curl -X PATCH localhost:8080/v1/me -H "Authorization: Bearer $TOKEN" \
@@ -1131,7 +1134,7 @@ clients send is ignored.
 
 | Field | Rules |
 |---|---|
-| `phone_number` | Uzbek mobile number in E.164: `+998` and 9 digits (422). Play Mobile only delivers in Uzbekistan |
+| `phone_number` | E.164: `+`, the country code and the number, digits only, 7 to 14 digits after the `+` (for example `+998901234567`, `+79161234567`, `+12025550123`); a `+998` number must have exactly 9 digits after `+998` (422, -10). Play Mobile only delivers in Uzbekistan, so any other country gets 422 with **error_code -12** `SMS codes can only be sent to Uzbek (+998) numbers` and no code is made |
 | `purpose` | `sign_up` (registration; not required by sign-up for now), `update_user` (a new phone number for `PATCH /v1/me`) or `reset_password` (`POST /v1/auth/forgot-password` and `PUT /v1/me/password`) (422) |
 
 Response `data`:
@@ -1257,7 +1260,7 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
 | `name` | required, at most 100 characters, trimmed |
 | `username` | 3 to 32 of `a-z`, `0-9`, `_`, `.`; trimmed and lowercased |
 | `password` | 8 to 72 bytes (bcrypt reads at most 72); stored only as a bcrypt hash |
-| `phone_number` | Uzbek number, `+998` and 9 digits; not verified |
+| `phone_number` | E.164: `+`, the country code and the number, digits only, 7 to 14 digits after the `+` (for example `+998901234567`, `+79161234567`, `+12025550123`); a `+998` number must have exactly 9 digits after `+998`; not verified |
 | `relationship` | required: `father`, `mother`, `educator` or `nanny` (trimmed, case-insensitive) |
 | `role` | optional: `user` (default) or `admin`. `admin` needs the header `X-Admin-Key: <ADMIN_API_KEY>`: wrong or missing key 401 (-20), `ADMIN_API_KEY` not set on the server 403 (-21); any other value 422. The app never sends it; it is for creating dashboard admins |
 | `agreed_on_conditions` | optional boolean, the consent tick on the sign-up screen; stored in `users.agreed_on_conditions`, omitted means `false`. Sign-up does not refuse `false` yet; the app should only let the user continue once it is ticked |
@@ -1349,7 +1352,7 @@ Behaviour (`usecases/password_resetter`, `ExecuteByPhone`):
 
 | Result | HTTP | error_code | error_note |
 |---|---:|---:|---|
-| `phone_number` not `+998` and 9 digits, or `password` not 8 to 72 bytes | 422 | -10 | which field and why |
+| `phone_number` not E.164 (or a `+998` number without 9 digits after `+998`), or `password` not 8 to 72 bytes | 422 | -10 | which field and why |
 | no active user has the number | 404 | -30 | `phone number does not belong to a user` |
 | no `reset_password` verification for the number | 403 | -21 | `phone number is not verified, verify a reset_password code with /v1/otp/verify first` |
 
