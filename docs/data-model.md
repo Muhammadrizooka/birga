@@ -18,7 +18,7 @@ Rows are soft-deleted by setting `deleted_at`.
 | `id` | `UUID` | no | `gen_random_uuid()` | primary key |
 | `title_uz` | `TEXT` | no | | Uzbek title |
 | `title_ru` | `TEXT` | no | | Russian title |
-| `title_en` | `TEXT` | no | `''` | English title (added by `000015_add_activity_english`; `''` on older rows until an admin fills it) |
+| `title_en` | `TEXT` | no | `''` | English title (added by `000015_add_activity_english`; the starter activities get theirs from `000026`) |
 | `description_uz` | `TEXT` | no | | Uzbek instructions |
 | `description_ru` | `TEXT` | no | | Russian instructions |
 | `description_en` | `TEXT` | no | `''` | English instructions (added by `000015_add_activity_english`) |
@@ -86,6 +86,13 @@ Migration `000019_fill_activity_main_idea` writes the same main idea texts into 
 were seeded before `000018` added the columns (the server's), matched by `title_uz`. It only
 changes rows whose three `main_idea_*` fields are all empty, so texts an admin wrote are kept, and
 it does not touch activities added through the dashboard. Its down migration does nothing.
+
+Migration `000026_fill_activity_english` does the same for the English title and description
+(`title_en`, `description_en`) of those 20 activities: the server's database was seeded before
+`000015` added English, and the seed file only runs on an empty table, so they stayed `''`.
+Matched by `title_uz`, it fills only the English fields that are still empty and leaves the
+Uzbek and Russian texts, an admin's own English and dashboard-made activities alone. Its down
+migration does nothing.
 
 ### `users`
 

@@ -35,3 +35,22 @@ grep -ih -- "$GREP" /var/log/nginx/access.log /var/log/nginx/access.log.1 2>/dev
 
 echo "== nginx errors (last 20)"
 tail -20 /var/log/nginx/error.log 2>/dev/null | mask
+
+echo "== activities with Uzbek text but no English (id, title_uz, empty English fields)"
+set -a
+. /etc/birga/backend.env
+set +a
+psql "$POSTGRES_URL" -tA -F ' | ' -c "
+SELECT id, title_uz, concat_ws(',',
+	CASE WHEN title_en = '' AND title_uz <> '' THEN 'title' END,
+	CASE WHEN description_en = '' AND description_uz <> '' THEN 'description' END,
+	CASE WHEN main_idea_en = '' AND main_idea_uz <> '' THEN 'main_idea' END,
+	CASE WHEN easier_en = '' AND easier_uz <> '' THEN 'easier' END,
+	CASE WHEN harder_en = '' AND harder_uz <> '' THEN 'harder' END)
+FROM activities
+WHERE deleted_at IS NULL AND (
+	(title_en = '' AND title_uz <> '') OR (description_en = '' AND description_uz <> '') OR
+	(main_idea_en = '' AND main_idea_uz <> '') OR (easier_en = '' AND easier_uz <> '') OR
+	(harder_en = '' AND harder_uz <> ''))
+ORDER BY id" 2>&1 | mask
+echo "active activities: $(psql "$POSTGRES_URL" -tAc 'SELECT count(*) FROM activities WHERE deleted_at IS NULL')"
