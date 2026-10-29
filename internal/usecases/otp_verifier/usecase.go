@@ -85,8 +85,8 @@ func (uc *UseCase) isDefaultCode(code string) bool {
 
 func validate(req domain.OTPVerifyRequest) error {
 	switch {
-	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
-		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+	case !domain.IsValidUserPhoneNumber(req.PhoneNumber):
+		return errs.Errf(errs.ErrValidation, "phone_number must be in E.164 format: + and the country code, then the number, e.g. +998901234567")
 	case !req.Purpose.IsKnown():
 		return errs.Errf(errs.ErrValidation, "purpose must be %s", domain.OTPPurposesHint)
 	case !domain.IsValidOTPCode(req.Code):

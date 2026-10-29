@@ -78,8 +78,8 @@ func (uc *UseCase) Execute(ctx context.Context, userID, password string) (domain
 func (uc *UseCase) ExecuteByPhone(ctx context.Context, phone, password string) (domain.TokenPair, error) {
 	phone = strings.TrimSpace(phone)
 
-	if !domain.IsUzbekPhoneNumber(phone) {
-		return domain.TokenPair{}, errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+	if !domain.IsValidUserPhoneNumber(phone) {
+		return domain.TokenPair{}, errs.Errf(errs.ErrValidation, "phone_number must be in E.164 format: + and the country code, then the number, e.g. +998901234567")
 	}
 
 	if err := validatePassword(password); err != nil {

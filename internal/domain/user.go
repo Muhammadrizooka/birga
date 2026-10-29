@@ -2,6 +2,7 @@ package domain
 
 import (
 	"regexp"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -86,6 +87,16 @@ func IsValidUsername(username string) bool {
 // IsValidPhoneNumber reports whether phone is an E.164 number.
 func IsValidPhoneNumber(phone string) bool {
 	return phoneRegex.MatchString(phone)
+}
+
+// IsValidUserPhoneNumber reports whether phone is a user's phone number: E.164 from any country,
+// and a +998 (Uzbek) number must have exactly 9 digits after the country code.
+func IsValidUserPhoneNumber(phone string) bool {
+	if strings.HasPrefix(phone, UzbekCountryCode) {
+		return IsUzbekPhoneNumber(phone)
+	}
+
+	return IsValidPhoneNumber(phone)
 }
 
 // IsKnownRelationship reports whether relationship is one of the users.relationship enum values.

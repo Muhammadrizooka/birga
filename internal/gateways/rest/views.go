@@ -16,6 +16,7 @@ const (
 	_errCodeNoError      errCode = 0   // Success code.
 	_errCodeValidation   errCode = -10 // for http 422
 	_errCodeBadRequest   errCode = -11 // for http 400
+	_errCodeSMSCountry   errCode = -12 // for http 422: SMS codes only go to Uzbek numbers
 	_errCodeUnauthorized errCode = -20 // for http 401
 	_errCodeForbidden    errCode = -21 // for http 403
 	_errCodeNotFound     errCode = -30 // for http 404
@@ -124,6 +125,8 @@ func Return(c *gin.Context, data any, err error) {
 	}
 
 	switch {
+	case errors.Is(err, errs.ErrSMSCountryNotSupported):
+		code, r.ErrorCode = http.StatusUnprocessableEntity, _errCodeSMSCountry
 	case errors.Is(err, errs.ErrValidation):
 		code, r.ErrorCode = http.StatusUnprocessableEntity, _errCodeValidation
 	case errors.Is(err, errs.ErrBadRequest):

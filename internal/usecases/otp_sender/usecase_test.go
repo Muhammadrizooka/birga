@@ -94,6 +94,7 @@ func TestExecute_Validation(t *testing.T) {
 	cases := map[string]func(*domain.OTPSendRequest){
 		"no phone":      func(r *domain.OTPSendRequest) { r.PhoneNumber = "" },
 		"foreign phone": func(r *domain.OTPSendRequest) { r.PhoneNumber = "+79001234567" },
+		"short uzbek":   func(r *domain.OTPSendRequest) { r.PhoneNumber = "+99890123456" },
 		"local phone":   func(r *domain.OTPSendRequest) { r.PhoneNumber = "901234567" },
 		"bad purpose":   func(r *domain.OTPSendRequest) { r.Purpose = "login" },
 		"no purpose":    func(r *domain.OTPSendRequest) { r.Purpose = "" },
@@ -108,6 +109,16 @@ func TestExecute_Validation(t *testing.T) {
 		if _, err := New(nil, testCfg, &fakeOTPs{}, fakeUsers{}, &fakeSMS{}).Execute(context.Background(), req); !errors.Is(err, errs.ErrValidation) {
 			t.Fatalf("%s: expected validation error, got %v", name, err)
 		}
+	}
+}
+
+func TestExecute_ForeignPhoneNoSMS(t *testing.T) {
+	req := validReq()
+	req.PhoneNumber = "+12025550123"
+
+	sms := &fakeSMS{}
+	if _, err := New(nil, testCfg, &fakeOTPs{}, fakeUsers{}, sms).Execute(context.Background(), req); !errors.Is(err, errs.ErrSMSCountryNotSupported) {
+		t.Fatalf("expected ErrSMSCountryNotSupported, got %v", err)
 	}
 }
 

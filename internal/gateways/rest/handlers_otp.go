@@ -20,7 +20,9 @@ type sendOTPView struct {
 
 // SendOTP godoc swagger
 // @Summary sends a one-time code by SMS
-// @Description - phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)
+// @Description - phone_number: E.164 from any country, 7 to 14 digits after '+'; +998 numbers need 9 digits after
+// @Description   +998 (422 -10 otherwise). SMS only goes to Uzbek (+998) numbers: any other number gets
+// @Description   422 with error_code -12 "SMS codes can only be sent to Uzbek (+998) numbers"
 // @Description - purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or
 // @Description   reset_password (the number must belong to a user, 404 otherwise; used by forgot password and
 // @Description   PUT /v1/me/password)

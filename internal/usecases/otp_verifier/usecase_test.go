@@ -67,7 +67,7 @@ func TestExecute_Outcomes(t *testing.T) {
 
 func TestExecute_Validation(t *testing.T) {
 	cases := map[string]func(*domain.OTPVerifyRequest){
-		"bad phone":   func(r *domain.OTPVerifyRequest) { r.PhoneNumber = "+79001234567" },
+		"bad phone":   func(r *domain.OTPVerifyRequest) { r.PhoneNumber = "+99890123456" },
 		"bad purpose": func(r *domain.OTPVerifyRequest) { r.Purpose = "login" },
 		"short code":  func(r *domain.OTPVerifyRequest) { r.Code = "12345" },
 		"letters":     func(r *domain.OTPVerifyRequest) { r.Code = "12a456" },

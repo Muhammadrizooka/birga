@@ -68,7 +68,7 @@ func (s *Server) GetProfile() gin.HandlerFunc {
 // @Description - "" clears name, username or photo_id; phone_number cannot be cleared
 // @Description - name: at most 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
 // @Description   photo_id: an id from POST /v1/media (422 if unknown)
-// @Description - a new phone_number must be an Uzbek number (+998 and 9 digits) verified first:
+// @Description - a new phone_number must be E.164 (+998 numbers: 9 digits after +998) and verified first:
 // @Description   POST /v1/otp/send and /v1/otp/verify with purpose update_user for the new number (403 otherwise);
 // @Description   the change uses the verification up. Sending the current number is not a change
 // @Description - username or phone number already used by someone else: 409

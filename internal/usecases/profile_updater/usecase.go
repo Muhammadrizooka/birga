@@ -91,8 +91,8 @@ func (uc *UseCase) Execute(ctx context.Context, userID string, upd domain.UserUp
 }
 
 func (uc *UseCase) checkVerified(ctx context.Context, phone string) error {
-	if !domain.IsUzbekPhoneNumber(phone) {
-		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+	if !domain.IsValidUserPhoneNumber(phone) {
+		return errs.Errf(errs.ErrValidation, "phone_number must be in E.164 format: + and the country code, then the number, e.g. +998901234567")
 	}
 
 	ok, err := uc.verified.IsVerified(ctx, phone, domain.OTPPurposeUpdateUser)

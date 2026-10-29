@@ -101,7 +101,7 @@ func TestExecute_SamePhoneIsNoChange(t *testing.T) {
 func TestExecute_Invalid(t *testing.T) {
 	for name, upd := range map[string]domain.UserUpdate{
 		"empty":       {},
-		"not uzbek":   {PhoneNumber: ptr("+12025550123")},
+		"short uzbek": {PhoneNumber: ptr("+99890123456")},
 		"bad phone":   {PhoneNumber: ptr("123")},
 		"clear phone": {PhoneNumber: ptr("")},
 	} {

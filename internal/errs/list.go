@@ -45,6 +45,7 @@ var (
 
 	ErrPhoneNumberRegistered    = Errf(ErrConflict, "phone number is already registered")
 	ErrPhoneNumberNotRegistered = Errf(ErrNotFound, "phone number does not belong to a user")
+	ErrSMSCountryNotSupported   = Errf(ErrValidation, "SMS codes can only be sent to Uzbek (+998) numbers")
 	ErrOTPNotFound              = Errf(ErrNotFound, "code expired or was not requested, request a new one")
 	ErrOTPTooManyAttempts       = Errf(ErrRateLimited, "too many wrong codes, request a new one")
 
